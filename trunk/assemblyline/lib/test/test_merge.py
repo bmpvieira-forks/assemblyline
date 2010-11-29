@@ -158,10 +158,10 @@ class TestMergeTranscripts(unittest.TestCase):
             isoform_graph.collapse(trim=True, overhang_threshold=15)
             write_dot(isoform_graph, "merge_path6_after.dot")
             #write_dot(isoform_graph, "merge_path6.dot")
-            #self.compare_dot(isoform_graph, "merge_path6.dot")
-            nx.spring_layout(isoform_graph.G)
-            nx.draw(isoform_graph.G)
-            plt.show()
+            self.compare_dot(isoform_graph, "merge_path6.dot")
+            #nx.spring_layout(isoform_graph.G)
+            #nx.draw(isoform_graph.G)
+            #plt.show()
             break
 
     def testMergePath7(self):
@@ -205,7 +205,7 @@ class TestMergeTranscripts(unittest.TestCase):
             self.compare_dot(isoform_graph, "trim.dot")
 
     def testTrim2(self):
-        """test a trimming example where a node can merged directly
+        """test a trimming example where a node can either be merged directly
         or trimmed first before merging"""
         gtf_file = os.path.join(os.path.dirname(__file__), "trim2.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
