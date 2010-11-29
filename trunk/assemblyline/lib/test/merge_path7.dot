@@ -1,0 +1,32 @@
+strict digraph G {
+"NodeTuple(start=21129106, end=21129146, strand='+', node_type=0)" [scores="[14.331735572611999]"];
+"NodeTuple(start=21115193, end=21115363, strand='+', node_type=0)" [scores="[14.138142959808]"];
+"NodeTuple(start=21106058, end=21106209, strand='+', node_type=0)" [scores="[36.744578849550102]"];
+"NodeTuple(start=21117853, end=21129106, strand='+', node_type=1)" [scores="[695.80576205031252]"];
+"NodeTuple(start=21129146, end=21131550, strand='+', node_type=1)" [scores="[695.80576205031252]"];
+"NodeTuple(start=21116830, end=21116956, strand='+', node_type=0)" [scores="[107.71162004009531, 5.8401979628423994]"];
+"NodeTuple(start=21112409, end=21112564, strand='+', node_type=0)" [scores="[12.212203980760499]"];
+"NodeTuple(start=21110003, end=21110161, strand='+', node_type=0)" [scores="[19.710234596908798]"];
+"NodeTuple(start=21111002, end=21111135, strand='+', node_type=0)" [scores="[11.377046805299001]"];
+"NodeTuple(start=21131550, end=21133469, strand='+', node_type=0)" [scores="[705.03420227353354, 462.06170742262998, 568.6459140277716, 645.28639415685529]"];
+"NodeTuple(start=21117755, end=21117853, strand='+', node_type=0)" [scores="[28.4020807218972, 36.004873279211196, 23.832656488114601, 28.4020807218972, 36.187632320845296]"];
+"NodeTuple(start=21106209, end=21116830, strand='+', node_type=1)" [scores="[42.584776812392498]"];
+"NodeTuple(start=21116956, end=21117755, strand='+', node_type=1)" [scores="[805.33349212276482, 491.00136172962635]"];
+"NodeTuple(start=21115777, end=21115876, strand='+', node_type=0)" [scores="[148.20100443748711]"];
+"NodeTuple(start=21106058, end=21106232, strand='+', node_type=0)" [scores="[47.86382939696, 209.06505330934621, 148.38611777946599]"];
+"NodeTuple(start=21113551, end=21113650, strand='+', node_type=0)" [scores="[148.20100443748711]"];
+"NodeTuple(start=21116781, end=21116956, strand='+', node_type=0)" [scores="[107.71162004009531, 5.1069978188817, 64.29441657001999]"];
+"NodeTuple(start=21114032, end=21114202, strand='+', node_type=0)" [scores="[74.225250538975004]"];
+"NodeTuple(start=21117853, end=21131550, strand='+', node_type=1)" [scores="[805.33349212276482, 491.00136172962635, 597.04799474966876]"];
+"NodeTuple(start=21111931, end=21112141, strand='+', node_type=0)" [scores="[19.647860436791998]"];
+"NodeTuple(start=21129106, end=21129146, strand='+', node_type=0)" -> "NodeTuple(start=21129146, end=21131550, strand='+', node_type=1)";
+"NodeTuple(start=21106058, end=21106209, strand='+', node_type=0)" -> "NodeTuple(start=21106209, end=21116830, strand='+', node_type=1)";
+"NodeTuple(start=21117853, end=21129106, strand='+', node_type=1)" -> "NodeTuple(start=21129106, end=21129146, strand='+', node_type=0)";
+"NodeTuple(start=21129146, end=21131550, strand='+', node_type=1)" -> "NodeTuple(start=21131550, end=21133469, strand='+', node_type=0)";
+"NodeTuple(start=21117755, end=21117853, strand='+', node_type=0)" -> "NodeTuple(start=21117853, end=21129106, strand='+', node_type=1)";
+"NodeTuple(start=21117755, end=21117853, strand='+', node_type=0)" -> "NodeTuple(start=21117853, end=21131550, strand='+', node_type=1)";
+"NodeTuple(start=21106209, end=21116830, strand='+', node_type=1)" -> "NodeTuple(start=21116830, end=21116956, strand='+', node_type=0)";
+"NodeTuple(start=21116956, end=21117755, strand='+', node_type=1)" -> "NodeTuple(start=21117755, end=21117853, strand='+', node_type=0)";
+"NodeTuple(start=21116781, end=21116956, strand='+', node_type=0)" -> "NodeTuple(start=21116956, end=21117755, strand='+', node_type=1)";
+"NodeTuple(start=21117853, end=21131550, strand='+', node_type=1)" -> "NodeTuple(start=21131550, end=21133469, strand='+', node_type=0)";
+}

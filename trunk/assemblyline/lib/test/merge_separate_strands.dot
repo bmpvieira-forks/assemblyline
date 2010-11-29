@@ -1,0 +1,36 @@
+strict digraph G {
+"NodeTuple(start=700, end=800, strand='+', node_type=1)" [scores="[500.0]"];
+"NodeTuple(start=100, end=200, strand='-', node_type=1)" [scores="[500.0]"];
+"NodeTuple(start=800, end=900, strand='+', node_type=0)" [scores="[100.0]"];
+"NodeTuple(start=500, end=600, strand='+', node_type=1)" [scores="[500.0]"];
+"NodeTuple(start=400, end=500, strand='-', node_type=0)" [scores="[100.0]"];
+"NodeTuple(start=700, end=800, strand='-', node_type=1)" [scores="[500.0]"];
+"NodeTuple(start=200, end=300, strand='-', node_type=0)" [scores="[100.0]"];
+"NodeTuple(start=200, end=300, strand='+', node_type=0)" [scores="[100.0]"];
+"NodeTuple(start=800, end=900, strand='-', node_type=0)" [scores="[100.0]"];
+"NodeTuple(start=0, end=100, strand='+', node_type=0)" [scores="[100.0]"];
+"NodeTuple(start=500, end=600, strand='-', node_type=1)" [scores="[500.0]"];
+"NodeTuple(start=300, end=400, strand='-', node_type=1)" [scores="[500.0]"];
+"NodeTuple(start=300, end=400, strand='+', node_type=1)" [scores="[500.0]"];
+"NodeTuple(start=600, end=700, strand='-', node_type=0)" [scores="[100.0]"];
+"NodeTuple(start=100, end=200, strand='+', node_type=1)" [scores="[500.0]"];
+"NodeTuple(start=0, end=100, strand='-', node_type=0)" [scores="[100.0]"];
+"NodeTuple(start=600, end=700, strand='+', node_type=0)" [scores="[100.0]"];
+"NodeTuple(start=400, end=500, strand='+', node_type=0)" [scores="[100.0]"];
+"NodeTuple(start=700, end=800, strand='+', node_type=1)" -> "NodeTuple(start=800, end=900, strand='+', node_type=0)";
+"NodeTuple(start=100, end=200, strand='-', node_type=1)" -> "NodeTuple(start=200, end=300, strand='-', node_type=0)";
+"NodeTuple(start=500, end=600, strand='+', node_type=1)" -> "NodeTuple(start=600, end=700, strand='+', node_type=0)";
+"NodeTuple(start=400, end=500, strand='-', node_type=0)" -> "NodeTuple(start=500, end=600, strand='-', node_type=1)";
+"NodeTuple(start=700, end=800, strand='-', node_type=1)" -> "NodeTuple(start=800, end=900, strand='-', node_type=0)";
+"NodeTuple(start=200, end=300, strand='-', node_type=0)" -> "NodeTuple(start=300, end=400, strand='-', node_type=1)";
+"NodeTuple(start=200, end=300, strand='+', node_type=0)" -> "NodeTuple(start=300, end=400, strand='+', node_type=1)";
+"NodeTuple(start=0, end=100, strand='+', node_type=0)" -> "NodeTuple(start=100, end=200, strand='+', node_type=1)";
+"NodeTuple(start=500, end=600, strand='-', node_type=1)" -> "NodeTuple(start=600, end=700, strand='-', node_type=0)";
+"NodeTuple(start=300, end=400, strand='-', node_type=1)" -> "NodeTuple(start=400, end=500, strand='-', node_type=0)";
+"NodeTuple(start=300, end=400, strand='+', node_type=1)" -> "NodeTuple(start=400, end=500, strand='+', node_type=0)";
+"NodeTuple(start=600, end=700, strand='-', node_type=0)" -> "NodeTuple(start=700, end=800, strand='-', node_type=1)";
+"NodeTuple(start=100, end=200, strand='+', node_type=1)" -> "NodeTuple(start=200, end=300, strand='+', node_type=0)";
+"NodeTuple(start=0, end=100, strand='-', node_type=0)" -> "NodeTuple(start=100, end=200, strand='-', node_type=1)";
+"NodeTuple(start=600, end=700, strand='+', node_type=0)" -> "NodeTuple(start=700, end=800, strand='+', node_type=1)";
+"NodeTuple(start=400, end=500, strand='+', node_type=0)" -> "NodeTuple(start=500, end=600, strand='+', node_type=1)";
+}
