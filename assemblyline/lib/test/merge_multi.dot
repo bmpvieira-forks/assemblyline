@@ -1,0 +1,14 @@
+strict digraph G {
+"NodeTuple(start=100, end=400, strand='.', node_type=1)" [scores="[100.0]"];
+"NodeTuple(start=100, end=200, strand='+', node_type=1)" [scores="[300.0]"];
+"NodeTuple(start=200, end=300, strand='+', node_type=0)" [scores="[100.0]"];
+"NodeTuple(start=400, end=500, strand='+', node_type=0)" [scores="[50.0, 100.0]"];
+"NodeTuple(start=300, end=400, strand='+', node_type=1)" [scores="[300.0]"];
+"NodeTuple(start=0, end=100, strand='+', node_type=0)" [scores="[100.0, 50.0]"];
+"NodeTuple(start=100, end=400, strand='.', node_type=1)" -> "NodeTuple(start=400, end=500, strand='+', node_type=0)";
+"NodeTuple(start=100, end=200, strand='+', node_type=1)" -> "NodeTuple(start=200, end=300, strand='+', node_type=0)";
+"NodeTuple(start=200, end=300, strand='+', node_type=0)" -> "NodeTuple(start=300, end=400, strand='+', node_type=1)";
+"NodeTuple(start=300, end=400, strand='+', node_type=1)" -> "NodeTuple(start=400, end=500, strand='+', node_type=0)";
+"NodeTuple(start=0, end=100, strand='+', node_type=0)" -> "NodeTuple(start=100, end=200, strand='+', node_type=1)";
+"NodeTuple(start=0, end=100, strand='+', node_type=0)" -> "NodeTuple(start=100, end=400, strand='.', node_type=1)";
+}
