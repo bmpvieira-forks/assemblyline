@@ -12,7 +12,8 @@ import os
 
 from lib.transcript_parser import parse_gtf
 from lib.gtf import GTFFeature
-from lib.isoform_graph import IsoformGraph, EXON, node_strand_int_to_str
+from lib.cNode import strand_int_to_str
+from lib.isoform_graph import IsoformGraph, EXON
 
 def write_bed(chrom, name, strand, score, exons):
     #print "EXONS TO PRINT", exons
@@ -69,7 +70,7 @@ def find_consensus(gtf_file, overhang_threshold):
             gene_name = "G_%07d" % (gene_id)
             for path, score in path_score_tuples:            
                 tx_name = "TU_%07d" % (tx_id)
-                strand = node_strand_int_to_str(path[0].strand)            
+                strand = strand_int_to_str(path[0].strand)            
                 exons = [(node.start, node.end) for node in path if node.node_type == EXON]
                 if strand == "-":
                     exons.reverse()
@@ -80,8 +81,8 @@ def find_consensus(gtf_file, overhang_threshold):
 
 
 def main():
-    #logging.basicConfig(level=logging.DEBUG,
-    #                    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")    
+    logging.basicConfig(level=logging.DEBUG,
+                        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")    
     parser = argparse.ArgumentParser()
     parser.add_argument("--overhang", type=int, dest="overhang_threshold", default=15)
     parser.add_argument("--score-attr", dest="score_attr", default="FPKM")
