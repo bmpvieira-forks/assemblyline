@@ -102,7 +102,8 @@ class TestMergeTranscripts(unittest.TestCase):
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
             isoform_graph.collapse()
-            write_dot(isoform_graph, "merge_encompassing_path.dot")
+            write_dot(isoform_graph, "merge_encompassing_path_after.dot")            
+            #write_dot(isoform_graph, "merge_encompassing_path.dot")            
             self.compare_dot(isoform_graph, "merge_encompassing_path.dot")
 
     def testMergePath(self):
@@ -234,6 +235,14 @@ class TestMergeTranscripts(unittest.TestCase):
             #write_dot(isoform_graph, "threading1.dot")  
             self.compare_dot(isoform_graph, "threading1.dot")
             # TODO: need to test isoform generation
+
+    def testClusterSingleExonTranscripts(self):
+        gtf_file = os.path.join(os.path.dirname(__file__), "single_exon_transcripts1.gtf")
+        for locus_transcripts in parse_gtf(open(gtf_file)):
+            isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            #write_dot(isoform_graph, "single_exon_transcripts.dot")  
+            self.compare_dot(isoform_graph, "single_exon_transcripts.dot")
 
 #            nx.spring_layout(isoform_graph.G)
 #            nx.draw(isoform_graph.G)

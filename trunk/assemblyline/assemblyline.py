@@ -80,8 +80,8 @@ def find_consensus(gtf_file, overhang_threshold):
 
 
 def main():
-    logging.basicConfig(level=logging.DEBUG,
-                        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")    
+    #logging.basicConfig(level=logging.DEBUG,
+    #                    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")    
     parser = argparse.ArgumentParser()
     parser.add_argument("--overhang", type=int, dest="overhang_threshold", default=15)
     parser.add_argument("--score-attr", dest="score_attr", default="FPKM")

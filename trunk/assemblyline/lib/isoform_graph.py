@@ -10,6 +10,8 @@ import collections
 from bx.intervals.intersection import Interval, IntervalTree
 from bx.intervals.cluster import ClusterTree
 
+from cNode import Node
+
 EXON = 0
 INTRON = 1
 
@@ -41,37 +43,38 @@ def cmp_strand(a, b):
         return True
     return False
 
-class Node(object):
-    __slots__ = ('start', 'end', 'strand', 'node_type')
-    def __init__(self, start, end, strand, node_type):
-        self.start = start
-        self.end = end
-        self.strand = strand
-        self.node_type = node_type
-    def __str__(self):
-        return ("%s-%s(%s)[%s]" % (self.start, self.end, node_strand_int_to_str(self.strand), node_type_to_str(self.node_type)[0])) 
-    def __repr__(self):
-        return ("<%s(start=%d end=%d strand=%s node_type=%s>" %
-                (self.__class__.__name__, self.start, self.end, node_strand_int_to_str(self.strand), node_type_to_str(self.node_type)))
-    def __eq__(self, other):
-        return ((self.start == other.start) and
-                (self.end == other.end) and
-                (self.strand == other.strand) and
-                (self.node_type == other.node_type))
-    def __ne__(self, other):
-        return not self.__eq__(other)
-    def __hash__(self):
-        return (self.start << 18) | (self.end << 3) | (self.strand << 1) | (self.node_type)
 
-    def cmp_strand(self, other):
-        if self.strand == other.strand:
-            return True
-        elif (self.strand == NO_STRAND) or (other.strand == NO_STRAND):
-            return True
-        return False
-
-    def is_overlapping(self, other):
-        return (self.start < other.end) and (other.start < self.end) 
+#class Node(object):
+#    __slots__ = ('start', 'end', 'strand', 'node_type')
+#    def __init__(self, start, end, strand, node_type):
+#        self.start = start
+#        self.end = end
+#        self.strand = strand
+#        self.node_type = node_type
+#    def __str__(self):
+#        return ("%s-%s(%s)[%s]" % (self.start, self.end, node_strand_int_to_str(self.strand), node_type_to_str(self.node_type)[0])) 
+#    def __repr__(self):
+#        return ("<%s(start=%d end=%d strand=%s node_type=%s>" %
+#                (self.__class__.__name__, self.start, self.end, node_strand_int_to_str(self.strand), node_type_to_str(self.node_type)))
+#    def __eq__(self, other):
+#        return ((self.start == other.start) and
+#                (self.end == other.end) and
+#                (self.strand == other.strand) and
+#                (self.node_type == other.node_type))
+#    def __ne__(self, other):
+#        return not self.__eq__(other)
+#    def __hash__(self):
+#        return (self.start << 18) | (self.end << 3) | (self.strand << 1) | (self.node_type)
+#
+#    def cmp_strand(self, other):
+#        if self.strand == other.strand:
+#            return True
+#        elif (self.strand == NO_STRAND) or (other.strand == NO_STRAND):
+#            return True
+#        return False
+#
+#    def is_overlapping(self, other):
+#        return (self.start < other.end) and (other.start < self.end) 
 
 # information for merging transcripts
 MergeTuple = collections.namedtuple('MergeTuple', ['node', 'scores', 'predecessors', 'successors'])
@@ -232,6 +235,65 @@ def find_trimmable_nodes(G, leaf_nodes, internal_nodes, overhang_threshold):
                 newnode = Node(s, e, n1.strand, EXON)
                 logging.debug("trimmed node=%s" % str(newnode))
                 yield newnode, n1      
+
+def cluster_single_exon_transcripts(G, trim, overhang_threshold):
+    '''
+    optimize the merging by first clustering single exon transcripts
+    that do not overlap any multi-exon transcripts
+    '''
+    # build interval trees and find single exon
+    # nodes that are candidates for clustering
+    intron_tree = IntervalTree()
+    exon_tree = IntervalTree()
+    single_exon_nodes = []
+    for node in G.nodes_iter():
+        if node.node_type == INTRON:
+            intron_tree.insert_interval(Interval(node.start, node.end, strand=node.strand))
+        elif (node.strand != NO_STRAND) or (G.degree(node) > 0):
+            exon_tree.insert_interval(Interval(node.start, node.end, strand=node.strand))            
+        else:
+            # TODO: NO_STRAND is not required here, but single exon nodes
+            # that have strand information need to be separated and clustered
+            # separately using separate "free_nodes" lists
+            single_exon_nodes.append(node)
+    intronlist_exon_map = collections.defaultdict(lambda: [])
+    for node in single_exon_nodes:
+        # should only cluster nodes that are not candidates for trimming
+        # and eventual joining to graph
+        if trim:
+            overlapping_exons = exon_tree.find(node.start, node.end)
+            can_trim_left = any((0 <= (e.start - node.start) <= overhang_threshold) for e in overlapping_exons)
+            can_trim_right = any((0 <= (node.end - e.end) <= overhang_threshold) for e in overlapping_exons)
+            if can_trim_left or can_trim_right:
+                #logging.debug("pre-clustering skipping trim-able node=%s" % node)
+                continue
+        # organize exons by how they overlap introns by 
+        # building an (intron list) -> (single exon node) mapping
+        overlapping_introns = intron_tree.find(node.start, node.end)
+        intron_tuple = tuple((intron.start, intron.end, intron.strand)
+                             for intron in overlapping_introns)
+        intronlist_exon_map[intron_tuple].append(node)
+    # single exon transcript nodes that overlap identical 
+    # intron lists can be directly clustered without sacrificing 
+    # potential merging with multi-exon transcripts
+    for intronlist, exonlist in intronlist_exon_map.iteritems():
+        cluster_tree = ClusterTree(0, 1)
+        for index, node in enumerate(exonlist):
+            cluster_tree.insert(node.start, node.end, index)            
+        for start, end, exonlist_indexes in cluster_tree.getregions():
+            if len(exonlist_indexes) <= 1:
+                continue
+            # create a new node
+            orig_nodes = set(exonlist[index] for index in exonlist_indexes)
+            scores = []
+            for orig_node in orig_nodes:
+                scores.extend(G.node[orig_node]['scores'].items())
+            # add the new clustered node to the graph
+            new_node = Node(start, end, NO_STRAND, EXON)
+            merge_tuple = MergeTuple(new_node, tuple(scores), frozenset(), frozenset())
+            logging.debug("pre-clustering node=%s original nodes=%s" % (new_node, orig_nodes))
+            yield merge_tuple, orig_nodes
+
 
 def thread_transcript(G, exon_tree, strand, exons, exon_index=0, path=None):
     if path == None:
@@ -448,6 +510,13 @@ class IsoformGraph(object):
         logging.debug("/MERGING")
 
     def collapse(self, trim=False, overhang_threshold=0):
+        # perform a pre-clustering step to collapse single
+        # exon transcripts using a much simpler merge method
+        logging.info("COLLAPSE nodes=%d" % (len(self.G)))         
+        for merge_tuple, replaced_nodes in cluster_single_exon_transcripts(self.G, trim, overhang_threshold):
+            self.G.remove_nodes_from(replaced_nodes)
+            self._add_merged_node(merge_tuple)
+        logging.info("PRECLUSTERING nodes=%d" % (len(self.G)))
         # cluster exons
         cluster_tree = ClusterTree(0,1)
         nodes = []
@@ -459,10 +528,9 @@ class IsoformGraph(object):
             cluster_tree.insert(node.start, node.end, exon_index)
             nodes.append(node)
             exon_index += 1
-        # collapse each cluster of exon nodes independently
-        logging.debug('COLLAPSE')
         # find clusters of overlapping nodes
         for start, end, indexes in cluster_tree.getregions():
+            # collapse each cluster of exon nodes independently
             logging.debug("cluster start=%d end=%d transcripts=%d" % (start, end, len(indexes)))
             # define initial starting set of cluster nodes
             cluster_nodes = set(nodes[i] for i in indexes)
@@ -513,63 +581,6 @@ class IsoformGraph(object):
                 logging.debug("cluster start=%d end=%d iterations=%d merge operations performed=%d" % (start, end, iters, merges))
                 iters += 1
         logging.debug("/COLLAPSE")
-
-#    def _collapse_once(self, trim=False, overhang_threshold=0):
-#        nodes = []
-#        leaf_node_indexes = set()
-#        # cluster exons by strand
-#        cluster_trees = {POS_STRAND: ClusterTree(0,1), NEG_STRAND: ClusterTree(0,1)}
-#        exon_index = 0
-#        for node in self.G.nodes_iter():
-#            if node.node_type == INTRON:
-#                continue
-#            if self.G.in_degree(node) == 0 or self.G.out_degree(node) == 0:
-#                leaf_node_indexes.add(exon_index)
-#            # add to cluster tree based on strand
-#            if node.strand == NO_STRAND:
-#                strands = [POS_STRAND, NEG_STRAND]
-#            else:
-#                strands = [node.strand]
-#            for strand in strands:
-#                cluster_trees[strand].insert(node.start, node.end, exon_index)
-#            nodes.append(node)
-#            exon_index += 1
-#        # collapse each cluster of exon nodes independently
-#        logging.debug('COLLAPSE')
-#        merge_tuples = []
-#        replaced_nodes = set()
-#        for strand, cluster_tree in cluster_trees.iteritems():
-#            logging.debug("strand=%s" % node_strand_int_to_str(strand))
-#            # find clusters of overlapping nodes
-#            for start, end, indexes in cluster_tree.getregions():
-#                # get lists of leaf nodes and internal nodes
-#                leaf_nodes = [nodes[i] for i in set(indexes).intersection(leaf_node_indexes)]                
-#                logging.debug("leaf_nodes=%s" % leaf_nodes)
-#                if len(leaf_nodes) == 0:
-#                    continue
-#                internal_nodes = [nodes[i] for i in set(indexes).difference(leaf_node_indexes)]
-#                logging.debug("internal_nodes=%s" % internal_nodes)
-#                if len(leaf_nodes) + len(internal_nodes) < 2:
-#                    continue
-#                self._collapse_cluster(set(leaf_nodes), set(internal_nodes), merge_tuples, replaced_nodes, trim, overhang_threshold)
-#        logging.debug("/COLLAPSE")
-#        # remove all exons that were replaced by merges
-#        self.G.remove_nodes_from(replaced_nodes)
-#        # reconstruct the graph by adding all the merged exons
-#        for merge_tuple in merge_tuples:
-#            self._add_merged_node(merge_tuple)
-#        return len(merge_tuples)
-
-#    def collapse(self, trim=False, overhang_threshold=0):        
-#        merges = 1
-#        iters = 1
-#        while merges > 0:
-#            #merges = self._collapse_once(trim=trim, overhang_threshold=overhang_threshold)
-#            merges = self._collapse_once(trim=trim, overhang_threshold=overhang_threshold)
-#            logging.debug("iterations=%d merge operations performed=%d" % (iters, merges))
-#            iters += 1
-#            #if iters == 2:
-#            #    break
 
     def convert_introns_to_edges(self):
         H = nx.DiGraph()
