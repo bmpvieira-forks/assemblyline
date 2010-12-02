@@ -22,12 +22,10 @@ NO_STRAND = 2
 MergeTuple = collections.namedtuple('MergeTuple', ['node', 'scores', 'predecessors', 'successors'])
 
 def is_intron_compatible(exon1, introns1, exon2, introns2):
-    for intron in introns2:
-        if interval_overlap(exon1, intron):
-            return False
-    for intron in introns1:
-        if interval_overlap(exon2, intron):
-            return False
+    if any(interval_overlap(exon1, intron) for intron in introns2):
+        return False
+    if any(interval_overlap(exon2, intron) for intron in introns1):
+        return False
     return True
 
 def cluster_overlapping_nodes(nodes):
@@ -39,46 +37,94 @@ def cluster_overlapping_nodes(nodes):
     for start, end, indexes in cluster_tree.getregions():        
         yield start, end, [nodes[i] for i in indexes]
 
+#def find_intron_compatible_nodes(G, leaf_nodes, internal_nodes, node_proxies):
+#    Gcompat = nx.Graph()
+#    nodes = list(leaf_nodes) + list(internal_nodes)
+#    # compare each leaf to rest of nodes
+#    for i in xrange(len(leaf_nodes)):
+#        n1 = nodes[i]                
+#        n1_introns = G.predecessors(n1) + G.successors(n1)        
+#        for j in xrange(i+1, len(nodes)):
+#            n2 = nodes[j]
+#            #logging.debug("N1=%s N2=%s" % (n1, n2))
+#            # ensure proxy nodes are not considered for merging
+#            if (n2 in node_proxies[n1]) or (n1 in node_proxies[n2]):
+#                continue
+#            #logging.debug("passed proxy N1=%s N2=%s" % (n1, n2))
+#            # ensure nodes weren't generated as trimmings of the same
+#            # original parent node
+#            if len(node_proxies[n1].intersection(node_proxies[n2])) > 0:
+#                continue
+#            n2_introns = G.predecessors(n2) + G.successors(n2)
+#            #logging.debug("passed proxy2 N1=%s N2=%s" % (n1, n2))
+#            # ensure that there are no introns interfering between the
+#            # two nodes, and that there is not already a path between
+#            # the nodes in the current graph
+#            if (is_intron_compatible(n1, n1_introns, n2, n2_introns) and
+#                (nx.shortest_path(G, n1, n2) == False) and
+#                (nx.shortest_path(G, n2, n1) == False)):
+#                logging.debug("Found intron compatible nodes:")
+#                logging.debug("NODE1:%s" % str(n1))
+#                logging.debug("NODE2:%s" % str(n2))                
+#                Gcompat.add_edge(i,j)
+#    # find all the maximal cliques in the graph, which equate to the
+#    # intron-compatible node groups
+#    for indexes in nx.find_cliques(Gcompat):
+#        if len(indexes) > 1:
+#            # return groups of nodes that overlap in genomic space for merging
+#            for start, end, overlapping_nodes in cluster_overlapping_nodes([nodes[i] for i in indexes]):
+#                if len(overlapping_nodes) > 1:
+#                    newstrand = reduce(merge_strand, iter(n.strand for n in overlapping_nodes))
+#                    newnode = Node(start, end, newstrand, EXON)
+#                    yield newnode, overlapping_nodes
+
 def find_intron_compatible_nodes(G, leaf_nodes, internal_nodes, node_proxies):
-    Gcompat = nx.Graph()
+    # build an interval tree to find overlapping node pairs
     nodes = list(leaf_nodes) + list(internal_nodes)
-    # compare each leaf to rest of nodes
-    for i in xrange(len(leaf_nodes)):
-        n1 = nodes[i]                
+    exon_tree = IntervalTree()
+    for i,node in enumerate(nodes):    
+        exon_tree.insert_interval(Interval(node.start, node.end, value=i))
+    # find nodes overlapping each leaf node
+    for i,n1 in enumerate(leaf_nodes):
         n1_introns = G.predecessors(n1) + G.successors(n1)        
-        for j in xrange(i+1, len(nodes)):
+        for hit in exon_tree.find(n1.start-1, n1.end+1):
+            # do not need to compare node against itself or any leaf nodes
+            # with lower indices because merging A,B and B,A would be 
+            # redundant and unnecessary
+            j = hit.value
+            if i >= j:
+                continue
             n2 = nodes[j]
-            #logging.debug("N1=%s N2=%s" % (n1, n2))
             # ensure proxy nodes are not considered for merging
             if (n2 in node_proxies[n1]) or (n1 in node_proxies[n2]):
                 continue
-            #logging.debug("passed proxy N1=%s N2=%s" % (n1, n2))
             # ensure nodes weren't generated as trimmings of the same
             # original parent node
             if len(node_proxies[n1].intersection(node_proxies[n2])) > 0:
                 continue
             n2_introns = G.predecessors(n2) + G.successors(n2)
-            #logging.debug("passed proxy2 N1=%s N2=%s" % (n1, n2))
             # ensure that there are no introns interfering between the
-            # two nodes, and that there is not already a path between
-            # the nodes in the current graph
-            if (is_intron_compatible(n1, n1_introns, n2, n2_introns) and
-                (nx.shortest_path(G, n1, n2) == False) and
-                (nx.shortest_path(G, n2, n1) == False)):
+            # two nodes
+            if (is_intron_compatible(n1, n1_introns, n2, n2_introns)):
                 logging.debug("Found intron compatible nodes:")
                 logging.debug("NODE1:%s" % str(n1))
-                logging.debug("NODE2:%s" % str(n2))                
-                Gcompat.add_edge(i,j)
-    # find all the maximal cliques in the graph, which equate to the
-    # intron-compatible node groups
-    for indexes in nx.find_cliques(Gcompat):
-        if len(indexes) > 1:
-            # return groups of nodes that overlap in genomic space for merging
-            for start, end, overlapping_nodes in cluster_overlapping_nodes([nodes[i] for i in indexes]):
-                if len(overlapping_nodes) > 1:
-                    newstrand = reduce(merge_strand, iter(n.strand for n in overlapping_nodes))
-                    newnode = Node(start, end, newstrand, EXON)
-                    yield newnode, overlapping_nodes
+                logging.debug("NODE2:%s" % str(n2))
+                start = n1.start if n1.start <= n2.start else n2.start
+                end = n1.end if n1.end >= n2.end else n2.end                
+                newnode = Node(start, end, merge_strand(n1.strand, n2.strand), EXON)
+                yield newnode, [n1, n2]
+            #and that there is not already a path between
+            # the nodes in the current graph
+#            if (is_intron_compatible(n1, n1_introns, n2, n2_introns) and
+#                (nx.shortest_path(G, n1, n2) == False) and
+#                (nx.shortest_path(G, n2, n1) == False)):
+#                logging.debug("Found intron compatible nodes:")
+#                logging.debug("NODE1:%s" % str(n1))
+#                logging.debug("NODE2:%s" % str(n2))
+#                start = n1.start if n1.start <= n2.start else n2.start
+#                end = n1.end if n1.end >= n2.end else n2.end                
+#                newnode = Node(start, end, merge_strand(n1.strand, n2.strand), EXON)
+#                yield newnode, [n1, n2]
 
 def merge_strand(strand1, strand2):
     if strand1 == strand2:
@@ -139,10 +185,8 @@ def trim(G, leaf_node, match_node, overhang_threshold):
     # area of the target transcript within a specified threshold amount
     trim_left = leaf_left_free and (not match_left_free) and left_overhang > 0 and left_overhang < overhang_threshold 
     trim_right = leaf_right_free and (not match_right_free) and right_overhang > 0 and right_overhang < overhang_threshold    
-    logging.debug("trim overhang threshold=%d" % (overhang_threshold))
-    logging.debug("left overhang=%d right overhang=%d" % (left_overhang, right_overhang))
-    logging.debug("left end free=%s right end free=%s" % (leaf_left_free, leaf_right_free))
-    logging.debug("trim left=%s right=%s" % (trim_left, trim_right))
+    logging.debug("trim left:free=%s,overhang=%d,trim=%s right:free=%s,overhang=%d,trim=%s" % 
+                  (leaf_left_free, left_overhang, trim_left, leaf_right_free, right_overhang, trim_right))
     if trim_left or trim_right:
         start = match_node.start if trim_left else leaf_node.start
         end = match_node.end if trim_right else leaf_node.end

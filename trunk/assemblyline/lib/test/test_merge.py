@@ -127,7 +127,7 @@ class TestMergeTranscripts(unittest.TestCase):
         """test merging exons that are touching but not overlapping"""
         gtf_file = os.path.join(os.path.dirname(__file__), "merge_path3.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
-            isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)             
+            isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
             isoform_graph.collapse()
             #write_dot(isoform_graph, "merge_path3.dot")
             self.compare_dot(isoform_graph, "merge_path3.dot")
@@ -195,6 +195,18 @@ class TestMergeTranscripts(unittest.TestCase):
             #write_dot(isoform_graph, "merge_path9.dot")            
             self.compare_dot(isoform_graph, "merge_path9.dot")
             # TODO: need to test isoform generation
+
+#    def testMergePath10(self):
+#        """test a locus that causes an infinite merge loop"""
+#        gtf_file = os.path.join(os.path.dirname(__file__), "merge_path10.gtf")
+#        for locus_transcripts in parse_gtf(open(gtf_file)):
+#            isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+#            isoform_graph.collapse(trim=True, overhang_threshold=15)
+#            #write_dot(isoform_graph, "merge_path9.dot")            
+#            #self.compare_dot(isoform_graph, "merge_path10.dot")
+#            nx.spring_layout(isoform_graph.G)
+#            nx.draw(isoform_graph.G)
+#            plt.show()
 
     def testTrim(self):
         """test trimming intron-incompatible paths"""
