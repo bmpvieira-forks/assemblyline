@@ -72,7 +72,7 @@ class Transcript(object):
 
 
 class Exon(object):
-    __slots__ = ('start', 'end', 'score')
+    __slots__ = ('start', 'end', 'score', 'id')
     def __str__(self):
         return ("<%s(start=%d, end=%d, score=%f)>" %
                 (self.__class__.__name__, self.start, self.end, self.score))
@@ -97,10 +97,11 @@ def separate_transcripts(gtf_features, score_attr="FPKM"):
         elif feature.feature_type == "exon":
             exon_num = int(feature.attrs["exon_number"])
             exon = Exon()
+            exon.id = '.'.join([tx_id, str(exon_num)])
             exon.start = feature.start
             exon.end = feature.end
             # remove the length normalization from scores
-            exon.score = float(feature.attrs[score_attr]) * (feature.end - feature.start) / 1.0e3
+            #exon.score = float(feature.attrs[score_attr]) * (feature.end - feature.start) / 1.0e3
             transcript.exons[exon_num] = exon
     # convert transcript exons from dictionary to sorted list
     for transcript in transcripts.itervalues():
@@ -108,7 +109,9 @@ def separate_transcripts(gtf_features, score_attr="FPKM"):
         transcript.exons = [transcript.exons[v] for v in sorted(transcript.exons.keys())]
         # remove the length normalization from scores
         transcript_length = sum([e.end - e.start for e in transcript.exons])
-        transcript.score = transcript.score * (transcript_length) / 1.0e3
+        transcript.score = transcript.score * (transcript_length) / 1.0e3        
+        for exon in transcript.exons:
+            exon.score = transcript.score * (exon.end - exon.start) / float(transcript_length)
     # sort transcripts by position
     return sorted(transcripts.values(), key=operator.attrgetter('start'))
 

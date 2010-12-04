@@ -19,22 +19,30 @@ DOT_DIR = "dot_files"
 def get_path(filename):
     return os.path.join(os.path.dirname(__file__), DOT_DIR, filename)
 
+def convert_ids_to_string(ids):
+    return ','.join([str(id) for id in sorted(ids)])
+    
+def convert_attrs_to_strings(H):
+    G = H.copy()
+    for n in G:
+        G.node[n]['ids'] = convert_ids_to_string(G.node[n]['ids'])
+    return G
+
 def write_dot(isoform_graph, filename):
-    def score_dict_to_strings(H):
-        G = H.copy()
-        for n in G:
-            sorted_labels = sorted(G.node[n]['scores'].keys())
-            score_string = ','.join(["%s=%s" % (k, G.node[n]['scores'][k]) for k in sorted_labels])
-            G.node[n]['scores'] = score_string
-        return G
-    G = score_dict_to_strings(isoform_graph.G)
+    G = convert_attrs_to_strings(isoform_graph.G)
     nx.write_dot(G, get_path(filename))
 
 class TestMergeTranscripts(unittest.TestCase):
 
     def compare_dot(self, isoform_graph, filename):
         Gcorrect = nx.read_dot(get_path(filename))
-        self.assertTrue(all(str(n) in Gcorrect for n in isoform_graph.G))
+        G = convert_attrs_to_strings(isoform_graph.G)
+        for n in G:
+            node_str = str(n)
+            self.assertTrue(node_str in Gcorrect)
+            correct_ids = Gcorrect.node[node_str]['ids']
+            test_ids = '"%s"' % (G.node[n]['ids'])
+            self.assertTrue(correct_ids == test_ids)
         self.assertTrue(nx.is_isomorphic(isoform_graph.G, Gcorrect)) 
 
     def testMergeIdentical(self):
@@ -102,7 +110,6 @@ class TestMergeTranscripts(unittest.TestCase):
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
             isoform_graph.collapse()
-            write_dot(isoform_graph, "merge_encompassing_path_after.dot")            
             #write_dot(isoform_graph, "merge_encompassing_path.dot")            
             self.compare_dot(isoform_graph, "merge_encompassing_path.dot")
 
@@ -155,14 +162,10 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "merge_path6.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            write_dot(isoform_graph, "merge_path6_b4.dot")
             isoform_graph.collapse(trim=True, overhang_threshold=15)
-            write_dot(isoform_graph, "merge_path6_after.dot")
+            #write_dot(isoform_graph, "merge_path6_after.dot")
             #write_dot(isoform_graph, "merge_path6.dot")
             self.compare_dot(isoform_graph, "merge_path6.dot")
-            #nx.spring_layout(isoform_graph.G)
-            #nx.draw(isoform_graph.G)
-            #plt.show()
             break
 
     def testMergePath7(self):
@@ -173,18 +176,17 @@ class TestMergeTranscripts(unittest.TestCase):
             isoform_graph.collapse(trim=True, overhang_threshold=15)
             #write_dot(isoform_graph, "merge_path7.dot")
             self.compare_dot(isoform_graph, "merge_path7.dot")
-            # TODO: need to test isoform generation
 
     def testMergePath8(self):
         """test a complex locus on chromosome 10 that caused problems"""
         gtf_file = os.path.join(os.path.dirname(__file__), "merge_path8.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            #write_dot(isoform_graph, "merge_path8_b4.dot")
+            #write_dot(isoform_graph, "merge_path8_b4.dot")            
             isoform_graph.collapse(trim=True, overhang_threshold=15)
+            #write_dot(isoform_graph, "merge_path8_after.dot")            
             #write_dot(isoform_graph, "merge_path8.dot")            
             self.compare_dot(isoform_graph, "merge_path8.dot")
-            # TODO: need to test isoform generation
 
     def testMergePath9(self):
         """test a locus that causes an infinite merge loop"""
@@ -194,19 +196,15 @@ class TestMergeTranscripts(unittest.TestCase):
             isoform_graph.collapse(trim=True, overhang_threshold=15)
             #write_dot(isoform_graph, "merge_path9.dot")            
             self.compare_dot(isoform_graph, "merge_path9.dot")
-            # TODO: need to test isoform generation
 
-#    def testMergePath10(self):
-#        """test a locus that causes an infinite merge loop"""
-#        gtf_file = os.path.join(os.path.dirname(__file__), "merge_path10.gtf")
-#        for locus_transcripts in parse_gtf(open(gtf_file)):
-#            isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-#            isoform_graph.collapse(trim=True, overhang_threshold=15)
-#            #write_dot(isoform_graph, "merge_path9.dot")            
-#            #self.compare_dot(isoform_graph, "merge_path10.dot")
-#            nx.spring_layout(isoform_graph.G)
-#            nx.draw(isoform_graph.G)
-#            plt.show()
+    def testMergePath10(self):
+        """test a locus that causes an infinite merge loop"""
+        gtf_file = os.path.join(os.path.dirname(__file__), "merge_path10.gtf")
+        for locus_transcripts in parse_gtf(open(gtf_file)):
+            isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            #write_dot(isoform_graph, "merge_path10.dot")            
+            self.compare_dot(isoform_graph, "merge_path10.dot")
 
     def testTrim(self):
         """test trimming intron-incompatible paths"""
@@ -223,7 +221,9 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "trim2.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            #write_dot(isoform_graph, "trim2_b4.dot")            
             isoform_graph.collapse(trim=True, overhang_threshold=15)
+            #write_dot(isoform_graph, "trim2_after.dot")            
             #write_dot(isoform_graph, "trim2.dot")
             self.compare_dot(isoform_graph, "trim2.dot")
 
@@ -232,10 +232,11 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "trim3.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            #write_dot(isoform_graph, "trim3_b4.dot")            
+            isoform_graph.collapse(trim=True, overhang_threshold=16)
+            #write_dot(isoform_graph, "trim3_after.dot")            
             #write_dot(isoform_graph, "trim3.dot")            
             self.compare_dot(isoform_graph, "trim3.dot")
-            # TODO: need to test isoform generation
  
     def testThreading1(self):
         """ensure that leaf nodes that are 'absorbed' into the graph
@@ -246,15 +247,45 @@ class TestMergeTranscripts(unittest.TestCase):
             isoform_graph.collapse(trim=True, overhang_threshold=15)
             #write_dot(isoform_graph, "threading1.dot")  
             self.compare_dot(isoform_graph, "threading1.dot")
-            # TODO: need to test isoform generation
 
     def testClusterSingleExonTranscripts(self):
         gtf_file = os.path.join(os.path.dirname(__file__), "single_exon_transcripts1.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            #write_dot(isoform_graph, "single_exon_transcripts_b4.dot")  
             isoform_graph.collapse(trim=True, overhang_threshold=15)
+            #write_dot(isoform_graph, "single_exon_transcripts_after.dot")  
             #write_dot(isoform_graph, "single_exon_transcripts.dot")  
             self.compare_dot(isoform_graph, "single_exon_transcripts.dot")
+
+    def testJoin1(self):
+        """test whether compatible but unconnected exons can be linked to introns"""
+        gtf_file = os.path.join(os.path.dirname(__file__), "join1.gtf")
+        for locus_transcripts in parse_gtf(open(gtf_file)):
+            isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            #write_dot(isoform_graph, "join1.dot")  
+            self.compare_dot(isoform_graph, "join1.dot")
+
+    def testJoin2(self):
+        """test join with unstranded node used by both + and - strand"""
+        gtf_file = os.path.join(os.path.dirname(__file__), "join2.gtf")
+        for locus_transcripts in parse_gtf(open(gtf_file)):
+            isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            #write_dot(isoform_graph, "join2.dot")  
+            self.compare_dot(isoform_graph, "join2.dot")
+
+    def testJoin3(self):
+        """test join with unstranded node used by both + and - strand"""
+        gtf_file = os.path.join(os.path.dirname(__file__), "join3.gtf")
+        for locus_transcripts in parse_gtf(open(gtf_file)):
+            isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            #write_dot(isoform_graph, "join3_b4.dot")  
+            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            #write_dot(isoform_graph, "join3_after.dot")  
+            #write_dot(isoform_graph, "join3.dot")  
+            self.compare_dot(isoform_graph, "join3.dot")
 
 #            nx.spring_layout(isoform_graph.G)
 #            nx.draw(isoform_graph.G)
