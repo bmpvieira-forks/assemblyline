@@ -100,7 +100,9 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "merge_incompatible.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            #write_dot(isoform_graph, "merge_incompatible_b4.dot")
             isoform_graph.collapse()
+            #write_dot(isoform_graph, "merge_incompatible_after.dot")
             #write_dot(isoform_graph, "merge_incompatible.dot")
             self.compare_dot(isoform_graph, "merge_incompatible.dot")
 
@@ -153,7 +155,9 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "merge_path5.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            #write_dot(isoform_graph, "merge_path5_b4.dot")
             isoform_graph.collapse()
+            #write_dot(isoform_graph, "merge_path5_after.dot")
             #write_dot(isoform_graph, "merge_path5.dot")
             self.compare_dot(isoform_graph, "merge_path5.dot")
 

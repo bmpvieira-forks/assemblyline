@@ -6,21 +6,18 @@ Created on Nov 23, 2010
 import logging
 import networkx as nx
 import collections
+import itertools
 
 from bx.intervals.intersection import Interval, IntervalTree
 from bx.intervals.cluster import ClusterTree
 
 from cNode import Node, strand_int_to_str, strand_str_to_int, node_type_to_str, cmp_strand, interval_overlap
-
-EXON = 0
-INTRON = 1
-POS_STRAND = 0
-NEG_STRAND = 1
-NO_STRAND = 2
+from base import EXON, INTRON, POS_STRAND, NEG_STRAND, NO_STRAND
+from path_finder import thread_transcript, find_paths, score_path
 
 # a structure for managing isoform graph information
 # stores the node plus its immediate edges and scores
-NodeDataTuple = collections.namedtuple('NodeDataTuple', ['node', 'ids', 'predecessors', 'successors'])
+NodeEdgesTuple = collections.namedtuple('NodeEdgesTuple', ['node', 'predecessors', 'successors'])
 MergeTuple = collections.namedtuple('MergeTuple', ['node', 'ids', 'predecessors', 'successors'])
 
 class MergeInfo(object):
@@ -42,16 +39,7 @@ def is_intron_compatible(exon1, introns1, exon2, introns2):
     if any(interval_overlap(exon2, intron) for intron in introns1):
         return False
     return True
-
-def cluster_overlapping_nodes(nodes):
-    # cluster nodes
-    cluster_tree = ClusterTree(0,1)
-    for i,node in enumerate(nodes):
-        cluster_tree.insert(node.start, node.end, i)
-    # find groups of overlapping nodes
-    for start, end, indexes in cluster_tree.getregions():        
-        yield start, end, [nodes[i] for i in indexes]
-
+ 
 def merge_strand(strand1, strand2):
     if strand1 == strand2:
         return strand1
@@ -63,13 +51,27 @@ def merge_strand(strand1, strand2):
         logging.error("Incompatible strands")        
         assert False
 
+def get_overhang(leaf_node, match_node):
+    start_diff = match_node.start - leaf_node.start
+    end_diff = leaf_node.end - match_node.end
+    return start_diff, end_diff
+
+def get_free_ends(strand, in_degree, out_degree):
+    """returns whether the (left,right) genomic ends of the node are free ends without edges"""
+    fiveprime = (in_degree == 0)
+    threeprime = (out_degree == 0)
+    if strand == NEG_STRAND:
+        return threeprime, fiveprime
+    else:
+        return fiveprime, threeprime
+
 def make_merge_tuple(G, newnode, orig_nodes, orig_preds=None, orig_succs=None):
     preds = set()
     succs = set()
     ids = set()
     if orig_preds is not None:
         preds.update(orig_preds)
-    if succs is not None:
+    if orig_succs is not None:
         succs.update(orig_succs)
     for orig_node in orig_nodes:
         ids.update(G.node[orig_node]['ids'])
@@ -77,37 +79,17 @@ def make_merge_tuple(G, newnode, orig_nodes, orig_preds=None, orig_succs=None):
         succs.update(G.successors(orig_node))
     return MergeTuple(newnode, frozenset(ids), frozenset(preds), frozenset(succs))
 
-def get_overhang(leaf_node, match_node):
-    start_diff = match_node.start - leaf_node.start
-    end_diff = leaf_node.end - match_node.end
-    return start_diff, end_diff
-
-def get_free_ends(G, node):
-    """returns whether the (left,right) genomic ends of the node are free ends without edges"""
-    fiveprime = G.in_degree(node) == 0
-    threeprime = G.out_degree(node) == 0
-    if node.strand == NEG_STRAND:
-        return threeprime, fiveprime
-    else:
-        return fiveprime, threeprime
-
-def trim(G, leaf_node, match_node, overhang_threshold):
-    left_overhang, right_overhang = get_overhang(leaf_node, match_node)
-    leaf_left_free, leaf_right_free = get_free_ends(G, leaf_node)
-    match_left_free, match_right_free = get_free_ends(G, match_node)
-    # to perform trimming the candidate leaf must overhang into an intron-incompatible
-    # area of the target transcript within a specified threshold amount
-    trim_left = leaf_left_free and (not match_left_free) and left_overhang > 0 and left_overhang < overhang_threshold 
-    trim_right = leaf_right_free and (not match_right_free) and right_overhang > 0 and right_overhang < overhang_threshold    
-    logging.debug("trim left:free=%s,overhang=%d,trim=%s right:free=%s,overhang=%d,trim=%s" % 
-                  (leaf_left_free, left_overhang, trim_left, leaf_right_free, right_overhang, trim_right))
-    if trim_left or trim_right:
-        start = match_node.start if trim_left else leaf_node.start
-        end = match_node.end if trim_right else leaf_node.end
-        newnode = Node(start, end, merge_strand(leaf_node.strand, match_node.strand), EXON)
-        return newnode    
-    else:
-        return None 
+def separate_leaf_and_internal_nodes(G, nodes):
+    # partition nodes by strand and whether node is a leaf or internal
+    leaf_nodes = []
+    internal_nodes = [] 
+    for node in nodes:
+        preds, succs = G.predecessors(node), G.successors(node)
+        if len(preds) == 0 or len(succs) == 0:
+            leaf_nodes.append(NodeEdgesTuple(node, preds, succs))
+        else:
+            internal_nodes.append(NodeEdgesTuple(node, preds, succs))
+    return leaf_nodes, internal_nodes
 
 def make_intron_indexes(G, do_trim=False, overhang_threshold=0):    
     # build an index of intron edges so that 
@@ -139,7 +121,7 @@ def make_intron_indexes(G, do_trim=False, overhang_threshold=0):
 def find_intron_exon_connections(G, node, intron_starts, intron_ends, 
                                  intron_start_tree, intron_end_tree,
                                  do_trim):
-    left_free, right_free = get_free_ends(G, node)
+    left_free, right_free = get_free_ends(node.strand, G.in_degree(node), G.out_degree(node))
     if not (left_free or right_free):
         return
     order_by_strand = lambda x,y,s: (y,x) if s == NEG_STRAND else (x,y)
@@ -155,7 +137,7 @@ def find_intron_exon_connections(G, node, intron_starts, intron_ends,
             if do_trim:
                 for interval in intron_end_tree[strand].find(node.start, node.start):
                     intron = interval.value 
-                    logging.debug("Found trimmed intron-exon join: %s %s" % (intron, node))
+                    #logging.debug("Found trimmed intron-exon join: %s %s" % (intron, node))
                     left_intron_dict[intron.end].add(intron)                    
         if right_free:
             for intron in intron_starts[node.end][strand]:
@@ -164,227 +146,261 @@ def find_intron_exon_connections(G, node, intron_starts, intron_ends,
             if do_trim:
                 for interval in intron_start_tree[strand].find(node.end, node.end):
                     intron = interval.value 
-                    logging.debug("Found trimmed intron-exon join: %s %s" % (intron, node))
+                    #logging.debug("Found trimmed intron-exon join: %s %s" % (intron, node))
                     right_intron_dict[intron.start].add(intron)
         if node.start not in left_intron_dict:
             left_intron_dict[node.start] = set()
         if node.end not in right_intron_dict:
             right_intron_dict[node.end] = set()
         for start, left_introns in left_intron_dict.iteritems():
-            logging.debug("start=%d left_introns=%s" % (start, str(left_introns)))                
+            #logging.debug("start=%d left_introns=%s" % (start, str(left_introns)))                
             for end, right_introns in right_intron_dict.iteritems():
-                logging.debug("start=%d end=%d left_introns=%s right_introns=%s" % (start, end, str(left_introns), str(right_introns)))                
+                #logging.debug("start=%d end=%d left_introns=%s right_introns=%s" % (start, end, str(left_introns), str(right_introns)))                
                 if len(left_introns) == 0 and len(right_introns) == 0:
                     continue
                 newnode = Node(start, end, strand, EXON)
                 preds, succs = order_by_strand(left_introns, right_introns, strand)
-                logging.debug("Found valid join %s -> %s -> %s" % (preds, newnode, succs))                
+                #logging.debug("Found valid join %s -> %s -> %s" % (preds, newnode, succs))                
                 yield newnode, node, preds, succs
 
-def merge_node_pair(G, n1_exon, n1_introns, n2_exon, n2_introns, 
+def trim(leaf_node, leaf_in_degree, leaf_out_degree,
+         match_node, match_in_degree, match_out_degree,
+         overhang_threshold):
+    left_overhang, right_overhang = get_overhang(leaf_node, match_node)
+    leaf_left_free, leaf_right_free = get_free_ends(leaf_node.strand, leaf_in_degree, leaf_out_degree)
+    match_left_free, match_right_free = get_free_ends(match_node.strand, match_in_degree, match_out_degree)
+    # to perform trimming the candidate leaf must overhang into an intron-incompatible
+    # area of the target transcript within a specified threshold amount
+    trim_left = leaf_left_free and (not match_left_free) and left_overhang > 0 and left_overhang < overhang_threshold 
+    trim_right = leaf_right_free and (not match_right_free) and right_overhang > 0 and right_overhang < overhang_threshold    
+    #logging.debug("trim left:free=%s,overhang=%d,trim=%s right:free=%s,overhang=%d,trim=%s" % 
+    #              (leaf_left_free, left_overhang, trim_left, leaf_right_free, right_overhang, trim_right))
+    if trim_left or trim_right:
+        start = match_node.start if trim_left else leaf_node.start
+        end = match_node.end if trim_right else leaf_node.end
+        newnode = Node(start, end, merge_strand(leaf_node.strand, match_node.strand), EXON)
+        return newnode    
+    else:
+        return None 
+
+def merge_node_pair(G, n1_tuple, n2_tuple,
                     do_trim=False, overhang_threshold=0):
-    n1_nodes = set([n1_exon])
-    n2_nodes = set([n2_exon])
+    '''
+    n1_tuple: NodeEdgesTuple(node, predecessors, successors)
+    n2_tuple: NodeEdgesTuple(node, predecessors, successors)
+    do_trim: True to enable trimming
+    overhang_threshold: max distance to allow trimming
+    '''
+    n1_nodes = set([n1_tuple.node])
+    n2_nodes = set([n2_tuple.node])
     if do_trim:
         # get trimmed node of n1 with respect to n2
-        trimmed_node = trim(G, n1_exon, n2_exon, overhang_threshold)
+        trimmed_node = trim(n1_tuple.node, len(n1_tuple.predecessors), len(n1_tuple.successors),
+                            n2_tuple.node, len(n2_tuple.predecessors), len(n2_tuple.successors),
+                            overhang_threshold)
         if trimmed_node is not None:
             n1_nodes.add(trimmed_node)
         # get trimmed node of n2 with respect to n1
-        trimmed_node = trim(G, n2_exon, n1_exon, overhang_threshold)
+        trimmed_node = trim(n2_tuple.node, len(n2_tuple.predecessors), len(n2_tuple.successors),
+                            n1_tuple.node, len(n1_tuple.predecessors), len(n1_tuple.successors),
+                            overhang_threshold)
         if trimmed_node is not None:
             n2_nodes.add(trimmed_node)
     for n1 in n1_nodes:
         for n2 in n2_nodes:
             # ensure that there are no introns interfering between the
             # two nodes
+            n1_introns = itertools.chain(n1_tuple.predecessors, n1_tuple.successors)
+            n2_introns = itertools.chain(n2_tuple.predecessors, n2_tuple.successors)
             if (is_intron_compatible(n1, n1_introns, n2, n2_introns)):
-                logging.debug("Found intron compatible nodes:")
-                logging.debug("NODE1:%s" % str(n1))
-                logging.debug("NODE2:%s" % str(n2))
+                #logging.debug("Found intron compatible nodes:")
+                #logging.debug("NODE1:%s" % str(n1))
+                #logging.debug("NODE2:%s" % str(n2))
                 start = n1.start if n1.start <= n2.start else n2.start
                 end = n1.end if n1.end >= n2.end else n2.end                
                 newnode = Node(start, end, merge_strand(n1.strand, n2.strand), EXON)
-                yield newnode, [n1_exon, n2_exon]
+                yield newnode, [n1_tuple.node, n2_tuple.node]
 
-def merge_nodes(G, leaf_nodes, internal_nodes, 
+def merge_nodes(G, leaf_node_tuples, internal_node_tuples, 
                 do_trim=False, overhang_threshold=0):
+    '''
+    G: nx.DiGraph
+    leaf_node_tuples: (node, predecessors, successors) tuples for each leaf
+    internal_node_tuples: (node, predecessors, successors) tuples for each internal node
+    do_trim: set to True to enabled node trimming to facilitate merging
+    overhang_threshold: nodes separated by fewer than N bp can be trimmed
+    '''
     # build an interval tree to find overlapping node pairs
-    nodes = list(leaf_nodes) + list(internal_nodes)
+    node_tuples = list(leaf_node_tuples) + list(internal_node_tuples)
     exon_tree = IntervalTree()
-    for i,node in enumerate(nodes):    
+    for i,node_tuple in enumerate(node_tuples):
+        node = node_tuple.node
         exon_tree.insert_interval(Interval(node.start, node.end, value=i))
     # find nodes overlapping each leaf node
-    for i,n1 in enumerate(leaf_nodes):
-        n1_introns = G.predecessors(n1) + G.successors(n1)        
-        for hit in exon_tree.find(n1.start-1, n1.end+1):
+    for i,n1_tuple in enumerate(leaf_node_tuples):
+        for hit in exon_tree.find(n1_tuple.node.start-1, n1_tuple.node.end+1):
             # do not need to compare node against itself or any leaf nodes
             # with lower indices because merging A,B and B,A would be 
             # redundant and unnecessary
             j = hit.value
             if i >= j:
                 continue
-            n2 = nodes[j]
-            n2_introns = G.predecessors(n2) + G.successors(n2)            
-            for merged_node, original_nodes in merge_node_pair(G, n1, n1_introns, n2, n2_introns, do_trim, overhang_threshold):                
+            n2_tuple = node_tuples[j]
+            for merged_node, original_nodes in merge_node_pair(G, n1_tuple, n2_tuple,
+                                                               do_trim, overhang_threshold):                
                 yield merged_node, original_nodes
 
+#def cluster_single_exon_transcripts(G, trim, overhang_threshold):
+#    '''
+#    optimize the merging by first clustering single exon transcripts
+#    that do not overlap any multi-exon transcripts
+#    '''
+#    # build interval trees and find single exon
+#    # nodes that are candidates for clustering
+#    intron_tree = IntervalTree()
+#    exon_tree = IntervalTree()
+#    single_exon_nodes = []
+#    for node in G.nodes_iter():
+#        if node.node_type == INTRON:
+#            intron_tree.insert_interval(Interval(node.start, node.end, strand=node.strand))
+#        elif (node.strand != NO_STRAND) or (G.degree(node) > 0):
+#            exon_tree.insert_interval(Interval(node.start, node.end, strand=node.strand))            
+#        else:
+#            # TODO: NO_STRAND is not required here, but single exon nodes
+#            # that have strand information need to be separated and clustered
+#            # separately using separate "free_nodes" lists
+#            single_exon_nodes.append(node)
+#    intronlist_exon_map = collections.defaultdict(lambda: [])
+#    for node in single_exon_nodes:
+#        # should only cluster nodes that are not candidates for trimming
+#        # and eventual joining to graph
+#        if trim:
+#            overlapping_exons = exon_tree.find(node.start, node.end)
+#            can_trim_left = any((0 <= (e.start - node.start) <= overhang_threshold) for e in overlapping_exons)
+#            can_trim_right = any((0 <= (node.end - e.end) <= overhang_threshold) for e in overlapping_exons)
+#            if can_trim_left or can_trim_right:
+#                #logging.debug("pre-clustering skipping trim-able node=%s" % node)
+#                continue
+#        # organize exons by how they overlap introns by 
+#        # building an (intron list) -> (single exon node) mapping
+#        overlapping_introns = intron_tree.find(node.start, node.end)
+#        intron_tuple = tuple((intron.start, intron.end, intron.strand)
+#                             for intron in overlapping_introns)
+#        intronlist_exon_map[intron_tuple].append(node)
+#    # single exon transcript nodes that overlap identical 
+#    # intron lists can be directly clustered without sacrificing 
+#    # potential merging with multi-exon transcripts
+#    for intronlist, exonlist in intronlist_exon_map.iteritems():
+#        cluster_tree = ClusterTree(0, 1)
+#        for index, node in enumerate(exonlist):
+#            cluster_tree.insert(node.start, node.end, index)            
+#        for start, end, exonlist_indexes in cluster_tree.getregions():
+#            if len(exonlist_indexes) <= 1:
+#                continue
+#            # create a new node
+#            orig_nodes = set(exonlist[index] for index in exonlist_indexes)
+#            ids = set()
+#            for orig_node in orig_nodes:
+#                ids.update(G.node[orig_node]['ids'])
+#            # add the new clustered node to the graph
+#            new_node = Node(start, end, NO_STRAND, EXON)
+#            merge_tuple = MergeTuple(new_node, frozenset(ids), frozenset(), frozenset())
+#            logging.debug("pre-clustering node=%s original nodes=%s" % (new_node, orig_nodes))
+#            yield merge_tuple, orig_nodes
 
-def cluster_single_exon_transcripts(G, trim, overhang_threshold):
+def cluster_transcripts(G, trim, overhang_threshold):
     '''
-    optimize the merging by first clustering single exon transcripts
-    that do not overlap any multi-exon transcripts
+    optimize the merging by first clustering transcripts within intron compatible "domains"
     '''
-    # build interval trees and find single exon
-    # nodes that are candidates for clustering
-    intron_tree = IntervalTree()
-    exon_tree = IntervalTree()
-    single_exon_nodes = []
-    for node in G.nodes_iter():
-        if node.node_type == INTRON:
-            intron_tree.insert_interval(Interval(node.start, node.end, strand=node.strand))
-        elif (node.strand != NO_STRAND) or (G.degree(node) > 0):
-            exon_tree.insert_interval(Interval(node.start, node.end, strand=node.strand))            
+    # find all introns    
+    introns = [n for n in G.nodes_iter() if n.node_type == INTRON]
+    cluster_start = min(n.start for n in G.nodes_iter())
+    cluster_end = max(n.end for n in G.nodes_iter())    
+    # add all intron start/end positions to a set
+    intron_boundaries = {POS_STRAND: set(), NEG_STRAND: set()}
+    for intron in introns:
+        assert intron.strand != NO_STRAND
+        intron_boundaries[intron.strand].add(intron.start)
+        intron_boundaries[intron.strand].add(intron.end)
+    # sort the intron boundary positions and add them to interval trees
+    intron_boundary_trees = {POS_STRAND: IntervalTree(),
+                             NEG_STRAND: IntervalTree()}
+    for strand, intron_boundary_set in intron_boundaries.iteritems():        
+        sorted_intron_boundaries = [cluster_start] + sorted(intron_boundary_set) + [cluster_end]
+        tree = intron_boundary_trees[strand]
+        domain_id = 0
+        for start, end in itertools.izip(sorted_intron_boundaries[:-1], sorted_intron_boundaries[1:]):
+            tree.insert_interval(Interval(start, end, strand=strand, value=domain_id))
+            domain_id += 1
+    # place exons within intron boundary domains
+    single_domain_exon_map = {POS_STRAND: collections.defaultdict(lambda: []),
+                              NEG_STRAND: collections.defaultdict(lambda: [])}
+    multi_domain_exon_map = {POS_STRAND: collections.defaultdict(lambda: []),
+                             NEG_STRAND: collections.defaultdict(lambda: [])}
+    for exon in G.nodes_iter():
+        if exon.node_type != EXON:
+            continue
+        if exon.strand == NO_STRAND:
+            strands = (POS_STRAND, NEG_STRAND)
         else:
-            # TODO: NO_STRAND is not required here, but single exon nodes
-            # that have strand information need to be separated and clustered
-            # separately using separate "free_nodes" lists
-            single_exon_nodes.append(node)
-    intronlist_exon_map = collections.defaultdict(lambda: [])
-    for node in single_exon_nodes:
-        # should only cluster nodes that are not candidates for trimming
-        # and eventual joining to graph
-        if trim:
-            overlapping_exons = exon_tree.find(node.start, node.end)
-            can_trim_left = any((0 <= (e.start - node.start) <= overhang_threshold) for e in overlapping_exons)
-            can_trim_right = any((0 <= (node.end - e.end) <= overhang_threshold) for e in overlapping_exons)
-            if can_trim_left or can_trim_right:
-                #logging.debug("pre-clustering skipping trim-able node=%s" % node)
-                continue
-        # organize exons by how they overlap introns by 
-        # building an (intron list) -> (single exon node) mapping
-        overlapping_introns = intron_tree.find(node.start, node.end)
-        intron_tuple = tuple((intron.start, intron.end, intron.strand)
-                             for intron in overlapping_introns)
-        intronlist_exon_map[intron_tuple].append(node)
-    # single exon transcript nodes that overlap identical 
-    # intron lists can be directly clustered without sacrificing 
-    # potential merging with multi-exon transcripts
-    for intronlist, exonlist in intronlist_exon_map.iteritems():
-        cluster_tree = ClusterTree(0, 1)
-        for index, node in enumerate(exonlist):
-            cluster_tree.insert(node.start, node.end, index)            
-        for start, end, exonlist_indexes in cluster_tree.getregions():
-            if len(exonlist_indexes) <= 1:
-                continue
-            # create a new node
-            orig_nodes = set(exonlist[index] for index in exonlist_indexes)
-            ids = set()
-            for orig_node in orig_nodes:
-                ids.update(G.node[orig_node]['ids'])
-            # add the new clustered node to the graph
-            new_node = Node(start, end, NO_STRAND, EXON)
-            merge_tuple = MergeTuple(new_node, frozenset(ids), frozenset(), frozenset())
-            logging.debug("pre-clustering node=%s original nodes=%s" % (new_node, orig_nodes))
-            yield merge_tuple, orig_nodes
+            strands = (exon.strand,)
+        for strand in strands:
+            overlapping_domains = intron_boundary_trees[strand].find(exon.start, exon.end)
+            assert len(overlapping_domains) > 0
+            if len(overlapping_domains) == 1:
+                domain_interval = overlapping_domains[0]
+                assert (exon.start >= domain_interval.start) and (exon.end <= domain_interval.end)
+                single_domain_exon_map[strand][domain_interval.value].append(exon)
+            else:
+                for domain_interval in overlapping_domains:
+                    multi_domain_exon_map[strand][domain_interval.value].append(exon)
+    merge_tuples = []
+    replaced_nodes = set()
+    for strand, domain_exon_map in single_domain_exon_map.iteritems():
+        # cluster exons that lie within a single intron boundary domain
+        for domain_id,exonlist in domain_exon_map.iteritems():
+            # add to cluster tree
+            cluster_tree = ClusterTree(0, 1)
+            for index, exon in enumerate(exonlist):
+                cluster_tree.insert(exon.start, exon.end, index)
+            # get clustered regions
+            cluster_merge_tuples = []
+            cluster_replaced_nodes = set()
+            for start, end, exonlist_indexes in cluster_tree.getregions():
+                # no need to process singleton clusters
+                if len(exonlist_indexes) <= 1:
+                    continue
+                # create a new merged node
+                orig_nodes = set(exonlist[index] for index in exonlist_indexes)
+                newstrand = reduce(merge_strand, [n.strand for n in orig_nodes])                
+                newnode = Node(start, end, newstrand, EXON)
+                cluster_merge_tuples.append(make_merge_tuple(G, newnode, orig_nodes))
+                cluster_replaced_nodes.update(orig_nodes)
+                logging.debug("intron-domain start=%d end=%d strand=%d nodes=%d" % (start, end, strand, len(exonlist_indexes)))
+            # before replacing nodes in this domain, must ensure they cannot merge
+            # within nodes that overlap multiple domains
+            multi_exonlist = multi_domain_exon_map[strand][domain_id]
+            multi_leaf_nodes, multi_internal_nodes = separate_leaf_and_internal_nodes(G, multi_exonlist)
+            single_leaf_nodes, single_internal_nodes = separate_leaf_and_internal_nodes(G, cluster_replaced_nodes)
+            node_sets_to_merge = [(multi_leaf_nodes, single_leaf_nodes), 
+                                  (multi_leaf_nodes, single_internal_nodes),
+                                  (single_leaf_nodes, multi_internal_nodes)]
 
-def thread_transcript(G, exon_tree, strand, exons, exon_index=0, path=None):
-    if path == None:
-        path = []
-    if exon_index == len(exons):
-        yield path
-    else:
-        e = exons[exon_index]     
-        # intersect with exons to find potential path nodes
-        # this is approximate and will be constrained further
-        nodes = [hit.value for hit in exon_tree.find(e.start, e.end)
-                 if (cmp_strand(hit.value.strand, strand) and
-                     (e.start >= hit.value.start) and
-                     (e.end <= hit.value.end))]
-        valid_nodes = []
-        for n in nodes:
-            # make sure there is a valid path to node 'n'
-            if len(path) > 0 and nx.shortest_path(G, path[-1], n) == False:
-                continue
-            # find which ends of the exon are flexible
-            left_free = (((exon_index == 0) and (strand != NEG_STRAND)) or
-                         ((exon_index == len(exons)) and (strand == NEG_STRAND)))
-            right_free = (((exon_index == len(exons)) and (strand != NEG_STRAND)) or
-                          ((exon_index == 0) and (strand == NEG_STRAND)))
-            # ensure that exon-intron splice sites are constrained
-            if (not left_free) and (e.start != n.start):
-                continue
-            if (not right_free) and (e.end != n.end):
-                continue
-            valid_nodes.append(n)
-        if len(valid_nodes) == 0:
-            # if there is no valid node to continue this path (which can 
-            # happen due to trimming and other modifications to the original
-            # transcripts) return this path early
-            yield path
-            # find new paths starting from the next node
-            for newpath in thread_transcript(G, exon_tree, strand, exons, exon_index+1, path=None):
-                yield newpath
-        else:
-            # found some valid paths
-            for node in valid_nodes:  
-                for newpath in thread_transcript(G, exon_tree, strand, exons, exon_index+1, path + [node]):
-                    yield newpath
-
-def get_connected_components(G):
-    H = G.to_undirected()
-    connected_nodes = nx.connected_components(H)
-    for nodelist in connected_nodes:
-        yield nx.DiGraph(G.subgraph(nodelist))
-
-def find_paths_from_start(G, partial_path_dict, start_node, path=None):
-    if path == None:
-        path = []
-    logging.debug('CURRENT_PATH=%s' % str(path))
-    if G.out_degree(start_node) == 0:
-        yield path + [start_node]
-        logging.debug('END NODE REACHED=%s FINAL PATH=%s' % (str(start_node), str(path)))
-    else:
-        # search for partial paths starting from this node
-        if start_node in partial_path_dict:
-            for partial_path in partial_path_dict[start_node]:
-                logging.debug('Adding partial path=%s' % str(partial_path))                
-                for newpath in find_paths_from_start(G, partial_path_dict, partial_path[-1], path + list(partial_path[:-1])):
-                    yield newpath
-        else:
-            logging.debug('ADDING NODE=%s' % str(start_node))
-            # no partial path exists so use all possible paths
-            for next_node in G.successors(start_node):
-                logging.debug('NEXT NODE=%s' % str(next_node))
-                for newpath in find_paths_from_start(G, partial_path_dict, next_node, path + [start_node]):
-                    yield newpath
-
-
-def find_paths(G, partial_paths):
-    # make a dictionary so it is possible to look up 
-    # partial paths based on the start node
-    partial_path_dict = collections.defaultdict(lambda: [])
-    for p in partial_paths:
-        for i in xrange(len(p)-1):
-            partial_path_dict[p[i]].append(p[i:])
-    partial_path_dict = dict(partial_path_dict)        
-    # break up the graph into connected subgraphs
-    for Gsub in get_connected_components(G):
-        # find start nodes
-        start_nodes = [n for (n,d) in Gsub.in_degree_iter()
-                       if (d == 0)]
-        paths = []        
-        for start_node in start_nodes:
-            paths.extend(find_paths_from_start(Gsub, partial_path_dict, start_node))
-        yield paths
-
-def score_path(G, id_score_map, path):
-    total_length = 0
-    total_score = 0
-    for node in path:
-        total_length += (node.end - node.start)
-        total_score += sum(id_score_map[id] for id in G.node[node]['ids'])
-    return 1e3 * total_score / total_length
+            # find intron-compatible nodes that can be merged
+            merged_node_dict = collections.defaultdict(lambda: set())
+            for set1_node_tuples, set2_node_tuples in node_sets_to_merge:
+                #for n1 in set1_node_tuples:
+                #    for n2 in set2_node_tuples:
+                #        logging.debug("need to check if node %s can merge with node %s" % (n1, n2))
+                for merged_node, orig_nodes in merge_nodes(G, set1_node_tuples, set2_node_tuples, trim, overhang_threshold):
+                    merged_node_dict[merged_node].update(orig_nodes)
+            for merged_node, orig_nodes in merged_node_dict.iteritems():
+                replaced_nodes.update(orig_nodes)
+                merge_tuple = make_merge_tuple(G, merged_node, orig_nodes)
+                merge_tuples.append(merge_tuple)
+            merge_tuples.extend(cluster_merge_tuples)
+            replaced_nodes.update(cluster_replaced_nodes)
+    return merge_tuples, replaced_nodes
 
 class IsoformGraph(object):
     def __init__(self):
@@ -446,7 +462,7 @@ class IsoformGraph(object):
         intron_start_tree: IntervalTree with intron start positions + overhang threshold for trimming
         intron_end_tree: IntervalTree with intron end positions - overhang threshold for trimming        
         '''
-        logging.debug("CONNECTING EXONS")
+        #logging.debug("CONNECTING EXONS")
         join_info_dict = collections.defaultdict(lambda: MergeInfo()) 
         for node in leaf_nodes:
             for joined_node, orig_node, preds, succs in find_intron_exon_connections(self.G, node, intron_starts, intron_ends, 
@@ -459,27 +475,27 @@ class IsoformGraph(object):
         for joined_node, merge_info in join_info_dict.iteritems():
             merge_tuple = make_merge_tuple(self.G, joined_node, merge_info.nodes, merge_info.preds, merge_info.succs)
             yield merge_tuple, merge_info.nodes
-        logging.debug("/CONNECTING EXONS")
+        #logging.debug("/CONNECTING EXONS")
 
-    def _collapse_cluster(self, leaf_nodes, internal_nodes, 
+    def _collapse_cluster(self, leaf_node_tuples, internal_node_tuples, 
                           merge_tuples, replaced_nodes,
                           trim=False, overhang_threshold=0):
         # find intron-compatible nodes that can be merged
-        logging.debug("MERGING")
+        #logging.debug("MERGING")
         #merged_node_dict = collections.defaultdict(lambda: set())
         merged_node_dict = collections.defaultdict(lambda: MergeInfo())
-        for merged_node, orig_nodes in merge_nodes(self.G, leaf_nodes, internal_nodes, trim, overhang_threshold):
+        for merged_node, orig_nodes in merge_nodes(self.G, leaf_node_tuples, internal_node_tuples, trim, overhang_threshold):
             merged_node_dict[merged_node].update_nodes(orig_nodes)         
 #        for merged_node, orig_nodes in merged_node_dict.iteritems():
         for merged_node, merge_info in merged_node_dict.iteritems():
             replaced_nodes.update(merge_info.nodes)
             merge_tuple = make_merge_tuple(self.G, merged_node, merge_info.nodes, merge_info.preds, merge_info.succs)
             merge_tuples.append(merge_tuple)
-            logging.debug("Merged intron compatible exons: %s" % str(merge_tuple))
-        logging.debug("/MERGING")
+            #logging.debug("Merged intron compatible exons: %s" % str(merge_tuple))
+        #logging.debug("/MERGING")
 
     def collapse(self, trim=False, overhang_threshold=0):
-        logging.info("COLLAPSE nodes=%d" % (len(self.G)))         
+        logging.info("COLLAPSE called with nodes=%d" % (len(self.G)))
         # build intron intersection tables to add edges between
         # introns and exons
         intron_starts, intron_ends, intron_start_tree, intron_end_tree = make_intron_indexes(self.G, trim, overhang_threshold) 
@@ -494,13 +510,19 @@ class IsoformGraph(object):
             # don't remove original nodes in this first step
             # because the nodes need the opportunity to merge
             # with all the rest of the nodes in the graph first
-            self._add_merged_node(merge_tuple)            
+            self._add_merged_node(merge_tuple)
+        # perform a pre-clustering step to collapse transcripts
+        # within intron-compatible regions
+        merge_tuples, replaced_nodes = cluster_transcripts(self.G, trim, overhang_threshold)
+        self.G.remove_nodes_from(replaced_nodes)
+        for merge_tuple in merge_tuples:
+            self._add_merged_node(merge_tuple)
+        logging.info("COLLAPSE clustered intron domain transcripts nodes=%d" % (len(self.G)))
         # perform a pre-clustering step to collapse single
         # exon transcripts using a much simpler merge method
-        for merge_tuple, replaced_nodes in cluster_single_exon_transcripts(self.G, trim, overhang_threshold):
-            self.G.remove_nodes_from(replaced_nodes)
-            self._add_merged_node(merge_tuple)
-        logging.info("PRECLUSTERING nodes=%d" % (len(self.G)))
+        #for merge_tuple, replaced_nodes in cluster_single_exon_transcripts(self.G, trim, overhang_threshold):
+        #    self.G.remove_nodes_from(replaced_nodes)
+        #    self._add_merged_node(merge_tuple)
         # cluster exons
         cluster_tree = ClusterTree(0,1)
         exon_nodes = []
@@ -514,7 +536,7 @@ class IsoformGraph(object):
         # find clusters of overlapping nodes
         for start, end, indexes in cluster_tree.getregions():
             # collapse each cluster of exon nodes independently
-            logging.debug("cluster start=%d end=%d transcripts=%d" % (start, end, len(indexes)))
+            logging.debug("COLLAPSE cluster start=%d end=%d nodes=%d" % (start, end, len(indexes)))
             # define initial starting set of cluster nodes
             cluster_nodes = set(exon_nodes[i] for i in indexes)
             merges = 1
@@ -526,32 +548,32 @@ class IsoformGraph(object):
                 strand_internal_nodes = {POS_STRAND: [], 
                                          NEG_STRAND: []}
                 for node in cluster_nodes:
-                    is_leaf = (self.G.in_degree(node) == 0 or self.G.out_degree(node) == 0)
+                    preds, succs = self.G.predecessors(node), self.G.successors(node)
                     if node.strand == NO_STRAND:
                         strands = [POS_STRAND, NEG_STRAND]
                     else:
                         strands = [node.strand]
                     for strand in strands:
-                        if is_leaf:
-                            strand_leaf_nodes[strand].append(node)
+                        if len(preds) == 0 or len(succs) == 0:
+                            strand_leaf_nodes[strand].append(NodeEdgesTuple(node, preds, succs))
                         else:
-                            strand_internal_nodes[strand].append(node)
+                            strand_internal_nodes[strand].append(NodeEdgesTuple(node, preds, succs))
                 # collapse transcripts on each strand                
                 merge_tuples = []
                 replaced_nodes = set()            
                 for strand in (POS_STRAND, NEG_STRAND):            
                     # get leaf nodes
-                    leaf_nodes = strand_leaf_nodes[strand]
-                    if len(leaf_nodes) == 0:
+                    leaf_node_tuples = strand_leaf_nodes[strand]
+                    if len(leaf_node_tuples) == 0:
                         continue
                     # get internal nodes
-                    internal_nodes = strand_internal_nodes[strand]
-                    if len(leaf_nodes) + len(internal_nodes) < 2:
+                    internal_node_tuples = strand_internal_nodes[strand]
+                    if len(leaf_node_tuples) + len(internal_node_tuples) < 2:
                         continue
-                    logging.debug("cluster start=%d end=%d strand=%s leaf_nodes=%d internal_nodes=%d" % 
+                    logging.debug("COLLAPSE cluster start=%d end=%d strand=%s leaf_nodes=%d internal_nodes=%d" % 
                                   (start, end, strand_int_to_str(strand), 
-                                   len(leaf_nodes), len(internal_nodes)))
-                    self._collapse_cluster(set(leaf_nodes), set(internal_nodes), 
+                                   len(leaf_node_tuples), len(internal_node_tuples)))
+                    self._collapse_cluster(leaf_node_tuples, internal_node_tuples, 
                                            merge_tuples, replaced_nodes, 
                                            trim, overhang_threshold)
                 # remove all exons that were replaced by merges
@@ -562,12 +584,14 @@ class IsoformGraph(object):
                     self._add_merged_node(merge_tuple)
                     cluster_nodes.add(merge_tuple.node)
                 merges = len(merge_tuples)
-                logging.debug("cluster start=%d end=%d iterations=%d merge operations performed=%d" % (start, end, iters, merges))
+                logging.debug("COLLAPSE cluster start=%d end=%d iterations=%d merges=%d nodes=%d" % (start, end, iters, merges, len(cluster_nodes)))
                 # join free exon ends to compatible introns
                 joins = 0
                 merge_tuples = []
                 replaced_nodes = set()
-                for merge_tuple, orig_nodes in self._connect_leaf_exons(cluster_nodes,
+                leaf_nodes = [n for n,d in self.G.in_degree_iter(cluster_nodes) if d == 0]
+                leaf_nodes.extend([n for n,d in self.G.out_degree_iter(cluster_nodes) if d == 0])
+                for merge_tuple, orig_nodes in self._connect_leaf_exons(leaf_nodes,
                                                                         intron_starts, 
                                                                         intron_ends, 
                                                                         intron_start_tree, 
@@ -575,68 +599,16 @@ class IsoformGraph(object):
                                                                         trim):
                     replaced_nodes.update(orig_nodes)
                     merge_tuples.append(merge_tuple)
-                    logging.debug("JOIN tuple: %s" % str(merge_tuple))
-                    logging.debug("REPLACED nodes: %s" % orig_nodes)
                     joins += 1                
-                logging.debug("REPLACED nodes: %s" % replaced_nodes)
+                #logging.debug("REPLACED nodes: %s" % replaced_nodes)
                 self.G.remove_nodes_from(replaced_nodes)
                 cluster_nodes.difference_update(replaced_nodes)
-                logging.debug("ADDING nodes: %s" % str(merge_tuples))
+                #logging.debug("ADDING nodes: %s" % str(merge_tuples))
                 for merge_tuple in merge_tuples:
-                    logging.debug("Adding JOIN: %s" % str(merge_tuple))
                     self._add_merged_node(merge_tuple)
                     cluster_nodes.add(merge_tuple.node)
-                logging.debug("cluster start=%d end=%d iterations=%d join operations performed=%d" % (start, end, iters, joins))
+                logging.debug("COLLAPSE cluster start=%d end=%d iterations=%d joins=%d nodes=%d" % (start, end, iters, joins, len(cluster_nodes)))
                 merges += joins
                 iters += 1
         logging.debug("/COLLAPSE")
-        
-    def get_isoforms(self, transcripts):
-        # build interval tree
-        exon_tree = IntervalTree()
-        for node in self.G.nodes_iter():
-            if node.node_type == EXON:
-                exon_tree.insert_interval(Interval(node.start, node.end, value=node))
-        # find paths through graph that support initial transcripts
-        logging.debug("THREADING")
-        logging.debug("num transcripts=%d" % len(transcripts))        
-        threaded_paths = set()
-        id_score_map = {}
-        for t in transcripts:
-            # add scores to the score lookup table
-            id_score_map[t.id] = t.score
-            for e in t.exons:
-                id_score_map[e.id] = e.score
-            # ignore single exon transcripts
-            if len(t.exons) == 1:
-                continue
-            # convert to integer strand
-            strand = strand_str_to_int(t.strand)
-            # flip exons for minus strand to keep path in correct order
-            exons = t.exons[::-1] if strand == NEG_STRAND else t.exons
-            for path in thread_transcript(self.G, exon_tree, strand, exons):
-                # ignore paths of length 1 (useless for threading)
-                if len(path) > 1:
-                    # TODO: check path for now
-                    for i in xrange(len(path)-1):
-                        for j in xrange(i+1, len(path)):
-                            if nx.shortest_path(self.G, path[i], path[j]) == False:
-                                logging.error("PATH ERROR")
-                                assert False
-                    threaded_paths.add(tuple(path))
-                for x in path:
-                    assert x.node_type != INTRON
-        logging.debug("threaded %s paths" % len(threaded_paths))
-        for p in threaded_paths:
-            logging.debug("threaded path=%s" % str([str(n) for n in p]))
-            logging.debug("threaded node types=%s" % str([str(n.node_type) for n in p]))
-            logging.debug("threaded exon sizes=%s" % str([str(n.end - n.start) for n in p]))
-            logging.debug("threaded exon starts=%s" % str([str(n.start) for n in p]))
-        logging.debug("/THREADING")
-        # using transcript-threaded paths as a guide find full paths
-        # through the graph        
-        for gene_paths in find_paths(self.G, threaded_paths):
-            # find non-redundant set of paths
-            gene_paths = set(tuple(p) for p in gene_paths)
-            scored_gene_paths = [(p, score_path(self.G, id_score_map, p)) for p in gene_paths]
-            yield scored_gene_paths
+
