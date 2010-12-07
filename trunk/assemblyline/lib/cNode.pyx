@@ -92,3 +92,7 @@ cpdef bint cmp_strand(int a, int b):
 
 cpdef bint interval_overlap(Node a, Node b):
     return (a.start < b.end) and (b.start < a.end)
+
+cpdef bint interval_overlap_threshold(Node a, Node b, int d=0):
+    return (a.start < b.end + d) and (b.start < a.end + d)
+    
