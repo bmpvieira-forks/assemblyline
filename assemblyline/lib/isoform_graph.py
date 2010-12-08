@@ -190,27 +190,105 @@ def cluster_within_domains(exon_tuples, domain_set):
     for start, end, overlapping_indexes in cluster_tree.getregions():
         yield start, end, overlapping_indexes 
 
-def cluster_exons(G, strand, exons, introns, overhang_threshold):
-    cluster_start = min(e.start for e in exons)
-    cluster_end = max(e.end for e in exons)
-    # TODO: strand should not needed here?
-    domain_intervals, domain_trees = find_intron_domains(strand, cluster_start, cluster_end, introns)
-    intron_start_dict, intron_end_dict = make_intron_boundary_map(introns)    
-    # get 'intron compatibility' domains associated with each exon
-    exon_tuples = list(map_exons_to_intron_domains(G, exons, domain_trees, overhang_threshold))    
-    # find set of possible domain-ranges to be clustered
-    #domain_sets = set(frozenset(e.exon_domains) for e in exon_tuples)
-    # sorted sets by their size (smallest to largest)
-    #sorted_domain_sets = sorted(domain_sets, key=len)
-    #for domain_set in sorted_domain_sets:
-    #    print 'domain set %s' % str(domain_set)
-    #    cluster_domains(exon_tuples, domain_set, clusters)
+#def cluster_exons(G, strand, exons, introns, overhang_threshold):
+#    cluster_start = min(e.start for e in exons)
+#    cluster_end = max(e.end for e in exons)
+#    # TODO: strand should not needed here?
+#    domain_intervals, domain_trees = find_intron_domains(strand, cluster_start, cluster_end, introns)
+#    intron_start_dict, intron_end_dict = make_intron_boundary_map(introns)  
+#    # get 'intron compatibility' domains associated with each exon
+#    exon_tuples = list(map_exons_to_intron_domains(G, exons, domain_trees, overhang_threshold))    
+#    # find set of possible domain-ranges to be clustered
+#    #domain_sets = set(frozenset(e.exon_domains) for e in exon_tuples)
+#    # sorted sets by their size (smallest to largest)
+#    #sorted_domain_sets = sorted(domain_sets, key=len)
+#    #for domain_set in sorted_domain_sets:
+#    #    print 'domain set %s' % str(domain_set)
+#    #    cluster_domains(exon_tuples, domain_set, clusters)
+#    clusters = collections.defaultdict(lambda: ClusterInfo())
+#    # start with single domain regions and grow
+#    for domain_size in xrange(0, len(domain_intervals)):
+#        # scan through all domains of this size and cluster exons
+#        for domain_end in xrange(domain_size, len(domain_intervals)):
+#            domain_start = domain_end - domain_size
+#            domain_set = set(range(domain_start, domain_end+1))
+#            # find genomic intervals of domain            
+#            interval_start = domain_intervals[domain_start].start          
+#            interval_end = domain_intervals[domain_end].end
+#            interval_left_introns = intron_end_dict.get(interval_start, set()) 
+#            interval_right_introns = intron_start_dict.get(interval_end, set())
+#            logging.debug('domain set (%d,%d) interval (%d,%d)' % (domain_start, domain_end, interval_start, interval_end))            
+#            # cluster exons within this domain
+#            for start, end, indexes in cluster_within_domains(exon_tuples, domain_set):
+#                # trim clusters that lie outside of domain interval
+#                if start < interval_start:
+#                    #print 'trim start %d < interval start %d' % (start, interval_start)
+#                    start = interval_start
+#                connect_left = (start == interval_start) and len(interval_left_introns) > 0
+#                if end > interval_end:
+#                    #print 'trim end %d > interval end %d' % (end, interval_end)
+#                    end = interval_end
+#                connect_right = (end == interval_end) and len(interval_right_introns) > 0
+#                if (len(indexes) > 1 or connect_left or connect_right):
+#                    # TODO: delete print statements
+#                    #print 'cluster start=%d end=%d indexes=%s' % (start, end, indexes)
+#                    #for i in indexes:
+#                    #    print '  node=%s' % (str(exon_tuples[i]))
+#                    # check whether cluster exactly touches the domain borders
+#                    # to determine whether to join the cluster with adjacent
+#                    # introns
+#                    left_introns, right_introns = set(), set()
+#                    if start == interval_start:
+#                        left_introns.update(interval_left_introns)
+#                    if end == interval_end:
+#                        right_introns.update(interval_right_introns)
+#                    if strand == NEG_STRAND:
+#                        preds, succs = right_introns, left_introns
+#                    else:
+#                        preds, succs = left_introns, right_introns
+#                    # add to cluster dictionary
+#                    cluster_info = ClusterInfo(indexes, preds, succs)
+#                    logging.debug('cluster start=%d end=%d indexes=%s preds=%s succs=%s' % (start, end, indexes, preds, succs))                
+#                    clusters[(start,end)].update(cluster_info) 
+#    # build merge tuples from the clusters
+#    merge_list = []
+#    for startend, cluster_info in clusters.iteritems():
+#        start, end = startend
+#        orig_exon_tuples = [exon_tuples[i] for i in cluster_info.indexes]
+#        orig_nodes = set(e.node for e in orig_exon_tuples)        
+#        merge_tuple = merge_exon_tuples(G, start, end, strand, orig_exon_tuples, 
+#                                        cluster_info.preds, cluster_info.succs) 
+#        logging.debug('start=%d end=%d merged node=%s' % (start, end, str(merge_tuple)))
+#        # decorate merge tuples with number of nodes merged to
+#        # sort later
+#        nodeset = orig_nodes.union(merge_tuple.preds, merge_tuple.succs)
+#        merge_list.append((len(nodeset), nodeset, merge_tuple, orig_nodes))
+#    # sort by number of nodes merged from largest to smallest
+#    merge_list = [x[1:] for x in sorted(merge_list, key=operator.itemgetter(0), reverse=True)]
+#    indexes_to_discard = set()
+#    # remove subsets from list of merge tuples
+#    for i in xrange(len(merge_list) - 1):
+#        nodeset1 = merge_list[i][0]
+#        for j in xrange(i+1, len(merge_list)):
+#            nodeset2 = merge_list[j][0]
+#            if nodeset1.issuperset(nodeset2):
+#                logging.debug('discarding subset tuple %s' % str(merge_list[j][1]))
+#                indexes_to_discard.add(j)
+#    merge_list = [merge_list[i][1:] for i in xrange(len(merge_list))
+#                  if i not in indexes_to_discard] 
+#    return merge_list
+
+def collapse_cluster(G, strand, exon_tuples, 
+                     domain_indexes, domain_intervals,
+                     intron_start_dict, intron_end_dict):
     clusters = collections.defaultdict(lambda: ClusterInfo())
     # start with single domain regions and grow
-    for domain_size in xrange(0, len(domain_intervals)):
+    for domain_size in xrange(0, len(domain_indexes)):
         # scan through all domains of this size and cluster exons
-        for domain_end in xrange(domain_size, len(domain_intervals)):
-            domain_start = domain_end - domain_size
+        for end_index in xrange(domain_size, len(domain_indexes)):
+            start_index = end_index - domain_size
+            domain_start = domain_indexes[start_index]
+            domain_end = domain_indexes[end_index]
             domain_set = set(range(domain_start, domain_end+1))
             # find genomic intervals of domain            
             interval_start = domain_intervals[domain_start].start          
@@ -275,9 +353,32 @@ def cluster_exons(G, strand, exons, introns, overhang_threshold):
                 logging.debug('discarding subset tuple %s' % str(merge_list[j][1]))
                 indexes_to_discard.add(j)
     merge_list = [merge_list[i][1:] for i in xrange(len(merge_list))
-                  if i not in indexes_to_discard] 
+                  if i not in indexes_to_discard]
     return merge_list
 
+def collapse_graph(G, strand, exons, introns, overhang_threshold):
+    # divide graph into regions of intron compatibility,
+    # or "intron domains"
+    cluster_start = min(e.start for e in exons)
+    cluster_end = max(e.end for e in exons)
+    domain_intervals, domain_tree = find_intron_domains(strand, cluster_start, cluster_end, introns)
+    intron_start_dict, intron_end_dict = make_intron_boundary_map(introns)
+    # partition the exons into overlapping clusters
+    # so that each cluster can be solved independently
+    exon_cluster_tree = ClusterTree(0,1)
+    for exon_index,exon in enumerate(exons):
+        exon_cluster_tree.insert(exon.start, exon.end, exon_index)
+    # process clusters of overlapping exon nodes
+    merge_list = []
+    for start, end, indexes in exon_cluster_tree.getregions():
+        # get 'intron compatibility' domains associated with this entire exon cluster
+        cluster_domains = sorted(interval.value for interval in domain_tree.find(start, end))
+        # get 'intron compatibility' domains associated with individual exons in cluster
+        exon_tuples = list(map_exons_to_intron_domains(G, [exons[i] for i in indexes], domain_tree, overhang_threshold))
+        merge_list.extend(collapse_cluster(G, strand, exon_tuples, 
+                                           cluster_domains, domain_intervals,
+                                           intron_start_dict, intron_end_dict))
+    return merge_list
 
 class IsoformGraph(object):
     def __init__(self):
@@ -352,7 +453,7 @@ class IsoformGraph(object):
             if len(exons) == 0:
                 continue
             # run the main clustering algorithm
-            for merge_tuple, orig_nodes in cluster_exons(self.G, strand, exons, introns, overhang_threshold):
+            for merge_tuple, orig_nodes in collapse_graph(self.G, strand, exons, introns, overhang_threshold):
                 # if merged node is already in the graph, then simply
                 # update it with the new list of ids rather than replacing
                 # it and adding it again later
@@ -362,6 +463,16 @@ class IsoformGraph(object):
                 else:
                     merge_tuples.append(merge_tuple)
                     replaced_nodes.update(orig_nodes)
+#            for merge_tuple, orig_nodes in cluster_exons(self.G, strand, exons, introns, overhang_threshold):
+#                # if merged node is already in the graph, then simply
+#                # update it with the new list of ids rather than replacing
+#                # it and adding it again later
+#                if merge_tuple.node in self.G:
+#                    self._add_merged_node(merge_tuple)
+#                    replaced_nodes.update(set(orig_nodes).difference([merge_tuple.node]))
+#                else:
+#                    merge_tuples.append(merge_tuple)
+#                    replaced_nodes.update(orig_nodes)
         self.G.remove_nodes_from(replaced_nodes)
         for merge_tuple in merge_tuples:
             self._add_merged_node(merge_tuple)

@@ -113,7 +113,8 @@ def score_path(G, id_score_map, path):
 
 def find_best_paths(G, partial_paths, id_score_map, num_paths=10, 
                     max_stored_paths=1000, 
-                    max_iterations=1000000):
+                    max_iterations=10000):
+    debug_every = 1000
     # make a dictionary so it is possible to look up 
     # partial paths based on the start node
     partial_path_dict = collections.defaultdict(lambda: set())
@@ -132,6 +133,7 @@ def find_best_paths(G, partial_paths, id_score_map, num_paths=10,
         for start_node in start_nodes:
             paths = []
             iters = 0
+            debug_next = 1000
             for path in find_paths_from_start(Gsub, partial_path_dict, start_node):
                 score = score_path(G, id_score_map, path)
                 if len(paths) < max_stored_paths:
@@ -141,6 +143,9 @@ def find_best_paths(G, partial_paths, id_score_map, num_paths=10,
                     # add path and discard the lowest scoring path
                     heapq.heappushpop(paths, (score, path))
                 iters += 1
+                if iters == debug_next:
+                    logging.debug("Path finder examined %d paths" % (iters))
+                    debug_next += debug_every
                 if iters == max_iterations:
                     logging.warning("Path scoring reached max iterations before enumerating all paths")
                     break
