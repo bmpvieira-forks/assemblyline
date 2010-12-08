@@ -113,7 +113,9 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "merge_strand.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts) 
+            write_dot(isoform_graph, "merge_strand_b4.dot")
             isoform_graph.collapse()
+            write_dot(isoform_graph, "merge_strand_after.dot")
             #write_dot(isoform_graph, "merge_strand.dot")
             self.compare_dot(isoform_graph, "merge_strand.dot")
 
@@ -170,14 +172,10 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "merge_path5.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            write_dot(isoform_graph, "merge_path5_b4.dot")
+            #write_dot(isoform_graph, "merge_path5_b4.dot")
             isoform_graph.collapse()
-            write_dot(isoform_graph, "merge_path5_after.dot")
+            #write_dot(isoform_graph, "merge_path5_after.dot")
             #write_dot(isoform_graph, "merge_path5.dot")
-            nx.spring_layout(isoform_graph.G)
-            nx.draw(isoform_graph.G)
-            plt.show()            
-
             self.compare_dot(isoform_graph, "merge_path5.dot")
 
     def testMergePath6(self):
@@ -185,6 +183,7 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "merge_path6.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            #write_dot(isoform_graph, "merge_path6_b4.dot")
             isoform_graph.collapse(trim=True, overhang_threshold=15)
             #write_dot(isoform_graph, "merge_path6_after.dot")
             #write_dot(isoform_graph, "merge_path6.dot")
@@ -258,9 +257,9 @@ class TestMergeTranscripts(unittest.TestCase):
             #write_dot(isoform_graph, "trim3_b4.dot")            
             isoform_graph.collapse(trim=True, overhang_threshold=16)
             #write_dot(isoform_graph, "trim3_after.dot")            
-            #write_dot(isoform_graph, "trim3.dot")            
+            #write_dot(isoform_graph, "trim3.dot")
             self.compare_dot(isoform_graph, "trim3.dot")
- 
+
     def testThreading1(self):
         """ensure that leaf nodes that are 'absorbed' into the graph
         have their predecessor/successor nodes merged"""
@@ -275,10 +274,10 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "single_exon_transcripts1.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            write_dot(isoform_graph, "single_exon_transcripts_b4.dot")  
+            #write_dot(isoform_graph, "single_exon_transcripts_b4.dot")  
             isoform_graph.collapse(trim=True, overhang_threshold=15)
-            write_dot(isoform_graph, "single_exon_transcripts_after.dot")  
-            #write_dot(isoform_graph, "single_exon_transcripts.dot")  
+            #write_dot(isoform_graph, "single_exon_transcripts_after.dot")  
+            #write_dot(isoform_graph, "single_exon_transcripts.dot")
             self.compare_dot(isoform_graph, "single_exon_transcripts.dot")
 
     def testJoin1(self):
@@ -286,8 +285,10 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "join1.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            #write_dot(isoform_graph, "join1_b4.dot")  
             isoform_graph.collapse(trim=True, overhang_threshold=15)
-            #write_dot(isoform_graph, "join1.dot")  
+            #write_dot(isoform_graph, "join1_after.dot")  
+            #write_dot(isoform_graph, "join1.dot")
             self.compare_dot(isoform_graph, "join1.dot")
 
     def testJoin2(self):
