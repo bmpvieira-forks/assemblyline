@@ -68,7 +68,9 @@ cdef class Node(object):
               (self.end == other.end) and
               (self.strand == other.strand) and
               (self.node_type == other.node_type))
-        if op == 2:
+        if op == 0:
+            return self.start < other.start 
+        elif op == 2:
             return eq
         elif op == 3:
             return not eq

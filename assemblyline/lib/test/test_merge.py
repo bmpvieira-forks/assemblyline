@@ -271,6 +271,7 @@ class TestMergeTranscripts(unittest.TestCase):
             self.compare_dot(isoform_graph, "threading1.dot")
 
     def testClusterSingleExonTranscripts(self):
+        """ensure single-exon transcripts can be interpreted as either (+) or (-) strand"""
         gtf_file = os.path.join(os.path.dirname(__file__), "single_exon_transcripts1.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
@@ -311,66 +312,10 @@ class TestMergeTranscripts(unittest.TestCase):
             #write_dot(isoform_graph, "join3.dot")  
             self.compare_dot(isoform_graph, "join3.dot")
 
-
-
 #            nx.spring_layout(isoform_graph.G)
 #            nx.draw(isoform_graph.G)
 #            plt.show()
 #            nx.spring_layout(isoform_graph.G)
-#            nx.draw(isoform_graph.G)
-#            plt.show()
-            #nx.spring_layout(isoform_graph.G)
-            #nx.draw(isoform_graph.G)
-            #plt.show()
-
-#    def testThreading(self):
-#        """test threading transcripts to find paths through graph"""
-#        gtf_file = os.path.join(os.path.dirname(__file__), "thread_transcripts.gtf")
-#        for locus_transcripts in parse_gtf(open(gtf_file)):
-#            isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-#            isoform_graph.get_isoforms(locus_transcripts)
-            # TODO: do a test!
-            #nx.write_dot(isoform_graph.G, "merge_path7.dot")
-
-            #nx.spectral_layout(isoform_graph.G)
-            #nx.spring_layout(isoform_graph.G)
-            #nx.draw(isoform_graph.G)
-            #plt.show()
-#            nx.write_dot(isoform_graph.G, "merge_path6.dot")
-
-#            nx.write_dot(isoform_graph.G, "merge_path5.dot")            
-#            nx.write_dot(isoform_graph.G, "merge_complex_path.dot")            
-#            nx.spring_layout(isoform_graph.G)
-#            nx.draw(isoform_graph.G)
-#            plt.show()
-#            nx.write_dot(isoform_graph.G, "merge_incompatible.dot")            
-#            nx.spring_layout(isoform_graph.G)
-#            nx.draw(isoform_graph.G)
-#            plt.show()
-            #nx.write_dot(isoform_graph.G, "merge_multi2.dot")            
-            #Gcorrect = nx.read_dot(os.path.join(os.path.dirname(__file__), "merge_nostrand.dot"))
-            #nx.write_dot(isoform_graph.G, "merge_path3.dot")
-            #self.assertTrue(nx.is_isomorphic(isoform_graph.G, Gcorrect)) 
-#            nx.draw(isoform_graph.G)
-#            plt.show()
-            #nx.spectral_layout(isoform_graph.G)
-            #nx.spring_layout(isoform_graph.G)
-            #nx.draw(isoform_graph.G)
-            #plt.show()
-            #Gcorrect = nx.read_dot(os.path.join(os.path.dirname(__file__), "trim.dot"))
-            #self.assertTrue(all(str(n) in Gcorrect for n in isoform_graph.G))
-            #self.assertTrue(nx.is_isomorphic(isoform_graph.G, Gcorrect))
-#            nx.spring_layout(isoform_graph.G)
-#            nx.draw(isoform_graph.G)
-#            plt.show()
-#            nx.write_dot(isoform_graph.G, "merge_incompatible.dot")            
-#            nx.spring_layout(isoform_graph.G)
-#            nx.draw(isoform_graph.G)
-#            plt.show()
-            #nx.write_dot(isoform_graph.G, "merge_multi2.dot")            
-            #Gcorrect = nx.read_dot(os.path.join(os.path.dirname(__file__), "merge_nostrand.dot"))
-            #nx.write_dot(isoform_graph.G, "merge_path3.dot")
-            #self.assertTrue(nx.is_isomorphic(isoform_graph.G, Gcorrect)) 
 #            nx.draw(isoform_graph.G)
 #            plt.show()
 
