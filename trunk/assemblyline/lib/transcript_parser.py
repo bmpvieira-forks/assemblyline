@@ -111,7 +111,8 @@ def separate_transcripts(gtf_features, score_attr="FPKM"):
         transcript_length = sum([e.end - e.start for e in transcript.exons])
         transcript.score = transcript.score * (transcript_length) / 1.0e3        
         for exon in transcript.exons:
-            exon.score = transcript.score * (exon.end - exon.start) / float(transcript_length)
+            exon.score = transcript.score
+            #exon.score = transcript.score * (exon.end - exon.start) / float(transcript_length)
     # sort transcripts by position
     return sorted(transcripts.values(), key=operator.attrgetter('start'))
 
