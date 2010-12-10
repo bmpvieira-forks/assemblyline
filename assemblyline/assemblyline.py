@@ -71,39 +71,24 @@ def find_consensus(gtf_file, overhang_threshold):
         chrom = locus_transcripts[0].chrom
         
         for loc_gene_id, loc_tss_id, score, path in get_isoforms(isoform_graph.G, locus_transcripts):
-            gene_name = "G_%07d|TSS_%07d|TU_%07d" % (gene_id + loc_gene_id, 
-                                                     tss_id + loc_tss_id,
-                                                     tx_id)
+            gene_name = "L%07d|G%07d|TSS%07d|TU%07d" % (locus_id,
+                                                        gene_id + loc_gene_id, 
+                                                        tss_id + loc_tss_id,
+                                                        tx_id)
             strand = strand_int_to_str(path[0].strand)            
             exons = [(node.start, node.end) for node in path]
             if strand == "-":
                 exons.reverse()
             s = write_bed(chrom, gene_name, strand, score, exons)
             print s
-            #print gene_id + loc_gene_id, tss_id + loc_tss_id, tx_id, score
             tx_id += 1
         gene_id += loc_gene_id
         tss_id += loc_tss_id        
-        continue
-
-        for gene_num, tss_num, score_path_tuples in get_isoforms(isoform_graph.G, locus_transcripts):
-            gene_name = "G_%07d|TSS_%07d" % (gene_id + gene_num, tss_id)
-            for score, path in score_path_tuples:            
-                tx_name = "TU_%07d" % (tx_id)
-                strand = strand_int_to_str(path[0].strand)            
-                exons = [(node.start, node.end) for node in path if node.node_type == EXON]
-                if strand == "-":
-                    exons.reverse()
-                s = write_bed(chrom, '|'.join([gene_name, tx_name]), strand, score, exons)
-                print s
-                tx_id += 1
-            tss_id += 1
-        gene_id += gene_num
-
+        locus_id += 1
 
 def main():
-    #logging.basicConfig(level=logging.DEBUG,
-    #                    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")    
+    logging.basicConfig(level=logging.DEBUG,
+                        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")    
     parser = argparse.ArgumentParser()
     parser.add_argument("--overhang", type=int, dest="overhang_threshold", default=15)
     parser.add_argument("--score-attr", dest="score_attr", default="FPKM")
