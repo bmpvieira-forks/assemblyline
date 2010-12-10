@@ -260,6 +260,22 @@ class TestMergeTranscripts(unittest.TestCase):
             #write_dot(isoform_graph, "trim3.dot")
             self.compare_dot(isoform_graph, "trim3.dot")
 
+    def testTrim4(self):
+        """test case where there are conflicting valid trimmings
+        and the smallest trimmed distance must be chosen"""
+        gtf_file = os.path.join(os.path.dirname(__file__), "trim4.gtf")
+        for locus_transcripts in parse_gtf(open(gtf_file)):
+            isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            isoform_graph.collapse(trim=True, overhang_threshold=35)
+            #write_dot(isoform_graph, "trim4_35.dot")
+            self.compare_dot(isoform_graph, "trim4_35.dot")
+            # try with overhang threshold one less to ensure
+            # trimming is not performed
+            isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+            isoform_graph.collapse(trim=True, overhang_threshold=34)
+            #write_dot(isoform_graph, "trim4_34.dot")
+            self.compare_dot(isoform_graph, "trim4_34.dot")
+
     def testThreading1(self):
         """ensure that leaf nodes that are 'absorbed' into the graph
         have their predecessor/successor nodes merged"""
@@ -312,9 +328,6 @@ class TestMergeTranscripts(unittest.TestCase):
             #write_dot(isoform_graph, "join3.dot")  
             self.compare_dot(isoform_graph, "join3.dot")
 
-#            nx.spring_layout(isoform_graph.G)
-#            nx.draw(isoform_graph.G)
-#            plt.show()
 #            nx.spring_layout(isoform_graph.G)
 #            nx.draw(isoform_graph.G)
 #            plt.show()
