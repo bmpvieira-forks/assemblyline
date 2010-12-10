@@ -79,21 +79,6 @@ def get_free_ends(strand, in_degree, out_degree):
     else:
         return fiveprime, threeprime
 
-#def trim_interval(start, end, trim_left, trim_right, overhang_threshold):
-#    # TODO: move to C code
-#    trim_start, trim_end = start, end
-#    if trim_left:
-#        trim_start = start + overhang_threshold
-#        if trim_start >= end:
-#            trim_start = end-1
-#    if trim_right:
-#        trim_end = end - overhang_threshold
-#        if trim_end <= start:
-#            trim_end = start+1
-#    if trim_end < trim_start:
-#        return trim_end, trim_start
-#    return trim_start, trim_end
-
 def trim_interval(start, end, trim_left, trim_right, 
                   intron_starts, intron_ends,
                   overhang_threshold):
@@ -189,25 +174,6 @@ def find_intron_domains(strand, cluster_start, cluster_end, introns):
         domain_id += 1
     return intervals, tree
 
-
-#def get_node_intron_domains(exon, preds, succs, intron_domain_tree, overhang_threshold):
-#    # trim exons before computing exon domains
-#    if overhang_threshold > 0:
-#        left_free, right_free = get_free_ends(exon.strand, len(preds), len(succs))
-#        start, end = trim_interval(exon.start, exon.end, 
-#                                   left_free, right_free,
-#                                   overhang_threshold)
-#    else:
-#        start, end = exon.start, exon.end
-#    # transform exon coordinates to intron domain regions
-#    exon_domains = set(interval.value for interval in intron_domain_tree.find(start, end))
-#    logging.debug('exon start=%d end=%d trimstart=%d trimend=%d domains=%s' % (exon.start, exon.end, start, end, exon_domains))
-#    # convert introns into domain regions
-#    intron_domains = set()
-#    for intron in itertools.chain(preds, succs):
-#        intron_domains.update(interval.value for interval in intron_domain_tree.find(intron.start, intron.end))
-#    return exon_domains, intron_domains
-
 def get_node_intron_domains(exon, preds, succs, intron_starts, intron_ends, intron_domain_tree, overhang_threshold):
     '''
     intron_starts: sorted list of intron start positions
@@ -230,15 +196,6 @@ def get_node_intron_domains(exon, preds, succs, intron_starts, intron_ends, intr
     for intron in itertools.chain(preds, succs):
         intron_domains.update(interval.value for interval in intron_domain_tree.find(intron.start, intron.end))
     return exon_domains, intron_domains
-
-#def map_exons_to_intron_domains(G, exons, domain_tree, overhang_threshold=0):
-#    for node in exons:
-#        assert node.node_type == EXON
-#        preds, succs = G.predecessors(node), G.successors(node)
-#        edomains, idomains = get_node_intron_domains(node, preds, succs,
-#                                                     domain_tree, 
-#                                                     overhang_threshold)
-#        yield ExonTuple(node, preds, succs, edomains, idomains)
 
 def map_exons_to_intron_domains(G, exons, intron_starts, intron_ends, domain_tree, overhang_threshold=0):
     for node in exons:
@@ -348,30 +305,6 @@ def collapse_cluster(G, strand, exon_tuples,
     merge_list = [merge_list[i][1:] for i in xrange(len(merge_list))
                   if i not in indexes_to_discard]
     return merge_list
-
-#def collapse_graph(G, strand, exons, introns, overhang_threshold):
-#    # divide graph into regions of intron compatibility,
-#    # or "intron domains"
-#    cluster_start = min(e.start for e in exons)
-#    cluster_end = max(e.end for e in exons)
-#    domain_intervals, domain_tree = find_intron_domains(strand, cluster_start, cluster_end, introns)
-#    intron_start_dict, intron_end_dict = make_intron_boundary_map(introns)
-#    # partition the exons into overlapping clusters
-#    # so that each cluster can be solved independently
-#    exon_cluster_tree = ClusterTree(0,1)
-#    for exon_index,exon in enumerate(exons):
-#        exon_cluster_tree.insert(exon.start, exon.end, exon_index)
-#    # process clusters of overlapping exon nodes
-#    merge_list = []
-#    for start, end, indexes in exon_cluster_tree.getregions():
-#        # get 'intron compatibility' domains associated with this entire exon cluster
-#        cluster_domains = sorted(interval.value for interval in domain_tree.find(start, end))
-#        # get 'intron compatibility' domains associated with individual exons in cluster
-#        exon_tuples = list(map_exons_to_intron_domains(G, [exons[i] for i in indexes], domain_tree, overhang_threshold))
-#        merge_list.extend(collapse_cluster(G, strand, exon_tuples, 
-#                                           cluster_domains, domain_intervals,
-#                                           intron_start_dict, intron_end_dict))
-#    return merge_list
 
 def collapse_graph(G, strand, exons, introns, overhang_threshold):
     # divide graph into regions of intron compatibility,
