@@ -387,11 +387,12 @@ class IsoformGraph(object):
             # continue loop
             e1_node = e2_node
 
-    def collapse(self, trim=False, overhang_threshold=0):
+    def collapse(self, overhang_threshold=0):
+        '''
+        overhang_threshold: number of bases that dangling exons can extend
+        from the nearest compatible intron and be trimmed
+        '''        
         logging.info("COLLAPSE called with nodes=%d" % (len(self.G)))
-        # TODO: just use trim and not overhang threshold
-        if not trim:
-            overhang_threshold = 0
         # divide nodes into pos/neg strands
         strand_exons, strand_introns = partition_nodes_by_strand(self.G)        
         merge_tuples = []

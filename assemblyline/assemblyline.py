@@ -67,9 +67,8 @@ def find_consensus(gtf_file, overhang_threshold):
                       (len(locus_transcripts), locus_transcripts[0].chrom,
                        locus_transcripts[0].start, locus_transcripts[-1].end))
         isoform_graph = IsoformGraph.from_transcripts(locus_transcripts) 
-        isoform_graph.collapse(trim=True, overhang_threshold=overhang_threshold)        
-        chrom = locus_transcripts[0].chrom
-        
+        isoform_graph.collapse(overhang_threshold=overhang_threshold)        
+        chrom = locus_transcripts[0].chrom        
         for loc_gene_id, loc_tss_id, score, path in get_isoforms(isoform_graph.G, locus_transcripts):
             gene_name = "L%07d|G%07d|TSS%07d|TU%07d" % (locus_id,
                                                         gene_id + loc_gene_id, 
@@ -90,7 +89,7 @@ def main():
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")    
     parser = argparse.ArgumentParser()
-    parser.add_argument("--overhang", type=int, dest="overhang_threshold", default=15)
+    parser.add_argument("--overhang", type=int, dest="overhang_threshold", default=100)
     parser.add_argument("--score-attr", dest="score_attr", default="FPKM")
     parser.add_argument("filename")
     options = parser.parse_args()

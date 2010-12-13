@@ -184,7 +184,7 @@ class TestMergeTranscripts(unittest.TestCase):
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
             #write_dot(isoform_graph, "merge_path6_b4.dot")
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            isoform_graph.collapse(overhang_threshold=15)
             #write_dot(isoform_graph, "merge_path6_after.dot")
             #write_dot(isoform_graph, "merge_path6.dot")
             self.compare_dot(isoform_graph, "merge_path6.dot")
@@ -195,7 +195,7 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "merge_path7.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            isoform_graph.collapse(overhang_threshold=15)
             #write_dot(isoform_graph, "merge_path7.dot")
             self.compare_dot(isoform_graph, "merge_path7.dot")
 
@@ -205,7 +205,7 @@ class TestMergeTranscripts(unittest.TestCase):
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
             #write_dot(isoform_graph, "merge_path8_b4.dot")            
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            isoform_graph.collapse(overhang_threshold=15)
             #write_dot(isoform_graph, "merge_path8_after.dot")            
             #write_dot(isoform_graph, "merge_path8.dot")            
             self.compare_dot(isoform_graph, "merge_path8.dot")
@@ -215,7 +215,7 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "merge_path9.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            isoform_graph.collapse(overhang_threshold=15)
             #write_dot(isoform_graph, "merge_path9.dot")            
             self.compare_dot(isoform_graph, "merge_path9.dot")
 
@@ -224,7 +224,7 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "merge_path10.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            isoform_graph.collapse(overhang_threshold=15)
             #write_dot(isoform_graph, "merge_path10.dot")            
             self.compare_dot(isoform_graph, "merge_path10.dot")
 
@@ -233,7 +233,7 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "trim.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            isoform_graph.collapse(overhang_threshold=15)
             #write_dot(isoform_graph, "trim.dot")
             self.compare_dot(isoform_graph, "trim.dot")
 
@@ -244,7 +244,7 @@ class TestMergeTranscripts(unittest.TestCase):
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
             #write_dot(isoform_graph, "trim2_b4.dot")            
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            isoform_graph.collapse(overhang_threshold=15)
             #write_dot(isoform_graph, "trim2_after.dot")            
             #write_dot(isoform_graph, "trim2.dot")
             self.compare_dot(isoform_graph, "trim2.dot")
@@ -255,7 +255,7 @@ class TestMergeTranscripts(unittest.TestCase):
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
             #write_dot(isoform_graph, "trim3_b4.dot")            
-            isoform_graph.collapse(trim=True, overhang_threshold=16)
+            isoform_graph.collapse(overhang_threshold=16)
             #write_dot(isoform_graph, "trim3_after.dot")            
             #write_dot(isoform_graph, "trim3.dot")
             self.compare_dot(isoform_graph, "trim3.dot")
@@ -266,13 +266,13 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "trim4.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            isoform_graph.collapse(trim=True, overhang_threshold=35)
+            isoform_graph.collapse(overhang_threshold=35)
             #write_dot(isoform_graph, "trim4_35.dot")
             self.compare_dot(isoform_graph, "trim4_35.dot")
             # try with overhang threshold one less to ensure
             # trimming is not performed
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            isoform_graph.collapse(trim=True, overhang_threshold=34)
+            isoform_graph.collapse(overhang_threshold=34)
             #write_dot(isoform_graph, "trim4_34.dot")
             self.compare_dot(isoform_graph, "trim4_34.dot")
 
@@ -282,7 +282,7 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "threading1.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            isoform_graph.collapse(overhang_threshold=15)
             #write_dot(isoform_graph, "threading1.dot")  
             self.compare_dot(isoform_graph, "threading1.dot")
 
@@ -292,7 +292,7 @@ class TestMergeTranscripts(unittest.TestCase):
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
             #write_dot(isoform_graph, "single_exon_transcripts_b4.dot")  
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            isoform_graph.collapse(overhang_threshold=15)
             #write_dot(isoform_graph, "single_exon_transcripts_after.dot")  
             #write_dot(isoform_graph, "single_exon_transcripts.dot")
             self.compare_dot(isoform_graph, "single_exon_transcripts.dot")
@@ -303,7 +303,7 @@ class TestMergeTranscripts(unittest.TestCase):
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
             #write_dot(isoform_graph, "join1_b4.dot")  
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            isoform_graph.collapse(overhang_threshold=15)
             #write_dot(isoform_graph, "join1_after.dot")  
             #write_dot(isoform_graph, "join1.dot")
             self.compare_dot(isoform_graph, "join1.dot")
@@ -313,7 +313,7 @@ class TestMergeTranscripts(unittest.TestCase):
         gtf_file = os.path.join(os.path.dirname(__file__), "join2.gtf")
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            isoform_graph.collapse(overhang_threshold=15)
             #write_dot(isoform_graph, "join2.dot")  
             self.compare_dot(isoform_graph, "join2.dot")
 
@@ -323,7 +323,7 @@ class TestMergeTranscripts(unittest.TestCase):
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
             #write_dot(isoform_graph, "join3_b4.dot")  
-            isoform_graph.collapse(trim=True, overhang_threshold=15)
+            isoform_graph.collapse(overhang_threshold=15)
             #write_dot(isoform_graph, "join3_after.dot")  
             #write_dot(isoform_graph, "join3.dot")  
             self.compare_dot(isoform_graph, "join3.dot")
