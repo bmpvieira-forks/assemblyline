@@ -23,6 +23,22 @@ PWT = 'pwt'
 PSCORE = 'pscore'
 PSRC = 'psrc'
 
+def bfs_edges(G,source):
+    """Produce edges in a breadth-first-search starting at source."""
+    # Taken from NetworkX source code http://networkx.lanl.gov
+    visited=set([source])
+    stack = [(source,iter(G[source]))]
+    while stack:
+        parent,children = stack[0]
+        try:
+            child = next(children)
+            if child not in visited:
+                yield parent,child
+                visited.add(child)
+                stack.append((child,iter(G[child])))
+        except StopIteration:
+            stack.pop(0)
+
 def visit_node_from_parent(G, parent, child):    
     pnode = G.node[parent]
     cnode = G.node[child]
@@ -57,6 +73,7 @@ def clear_path_attributes(G):
     for n in G.nodes_iter():
         G.node[n] = {}
 
+
 def find_best_path(G, sorted_edges, source, sink):
     '''
     use dynamic programming to find the highest scoring path through 
@@ -73,15 +90,89 @@ def find_best_path(G, sorted_edges, source, sink):
     while path[-1] != source:
         path.append(G.node[path[-1]][PSRC])
     path.reverse()
-    # clear path attributes
-    for n in G.nodes_iter():
-        nattrs = G.node[n]
-        if PLEN in nattrs:
-            del nattrs[PLEN]
-            del nattrs[PWT]
-            del nattrs[PSCORE]
-            del nattrs[PSRC]
     return path, score, weight
+
+
+def rank_paths(G, parent, length, weight):
+    children = G.successors_iter(parent)
+    pedge = G.edge[parent]
+    # score is the minimum of the current weight and the 
+    # weight of the edge, normalized to transcript length
+    h = [(-imin2(weight,pedge[c]['weight'])/float(length + (c.end - c.start)), c) for c in children]    
+    heapq.heapify(h)
+    while len(h) > 0:
+        yield heapq.heappop(h)[1]
+
+def dfs_paths(G, start_node, end_nodes):
+    """
+    performs depth-first search beginning at 'start_node',
+    and prioritizes paths based on the 'rank_paths' weighting
+    function.  the function is greedy in that first enumerates
+    all the path extensions from the current path and chooses
+    the one that maximizes the path score    
+    """
+    # produce edges for components with source
+    path_length = start_node.end - start_node.start
+    path_weight = G.node[start_node]['weight']
+    path = [start_node]
+    # check if start node is also end node
+    if start_node in end_nodes:
+        yield list(path), path_length, path_weight
+        return
+    stack = [(path_weight, rank_paths(G, path[-1], path_length, path_weight))]
+    while stack:
+        parent = path[-1]
+        parent_weight, children = stack[-1]
+        #print 'current w=%f l=%d p=%s' % (path_weight, path_length, path)
+        try:
+            child = next(children)
+            # add to path
+            path_length += (child.end - child.start)
+            path_weight = imin2(path_weight, G.edge[parent][child]['weight'])
+            path.append(child)
+            # check for finished path
+            if path[-1] in end_nodes:
+                yield list(path), path_length, path_weight           
+            stack.append((path_weight, rank_paths(G, path[-1], path_length, path_weight))) 
+        except StopIteration:
+            stack.pop()
+            path.pop()
+            path_length -= (parent.end - parent.start)
+            path_weight = parent_weight
+            #print 'revert to w=%f l=%d p=%s' % (path_weight, path_length, path)
+
+#def find_suboptimal_paths(G, start_node, end_nodes, 
+#                          fraction_major_path,
+#                          max_paths,
+#                          max_iters=10000):
+#    debug_every = 1000
+#    debug_next = 1000
+#    iters = 0
+#    paths = []
+#    for path, path_length, path_weight in dfs_paths(G, start_node, end_nodes):        
+#        score = 1.0e3 * path_weight / path_length
+#        #logging.debug("score=%f path=%s" % (score, path))
+#        if len(paths) < max_paths:
+#            # add path to graph
+#            heapq.heappush(paths, (score, path))
+#        else:
+#            # add path and discard the lowest scoring path
+#            heapq.heappushpop(paths, (score, path))
+#        iters += 1
+#        if iters == debug_next:
+#            logging.debug("Path finder examined %d paths" % (iters))
+#            debug_next += debug_every
+#        if iters == max_iters:
+#            logging.warning("Path scoring reached max iterations before enumerating all paths")
+#            break
+#    # sort from hi -> low score
+#    paths = sorted(paths, key=operator.itemgetter(0), reverse=True)[:max_paths]
+#    path_score_limit = paths[0][0] * fraction_major_path
+#    for score, path in paths:
+#        if score < path_score_limit:
+#            break
+#        yield score, path
+#    del paths
 
 def find_suboptimal_paths(G, start_node, end_node, 
                           fraction_major_path,
@@ -94,7 +185,8 @@ def find_suboptimal_paths(G, start_node, end_node,
     for n in sorted_nodes:
         sorted_edges.extend((p,n) for p in G.predecessors(n))
     
-    path, path_score, path_weight = find_best_path(G, sorted_edges, start_node, end_node)
+    H = G.copy()
+    path, path_score, path_weight = find_best_path(H, sorted_edges, start_node, end_node)
     score_limit = path_score * fraction_major_path
     # enumerate paths until the score falls below the 
     # specified percentage of the best path
@@ -108,7 +200,8 @@ def find_suboptimal_paths(G, start_node, end_node,
                 #print 'weight after', pcedge['weight']
         #print 'path', path, path_score, path_weight
         yield path_score, path
-        path, path_score, path_weight = find_best_path(G, sorted_edges, start_node, end_node)
+        H = G.copy()
+        path, path_score, path_weight = find_best_path(H, sorted_edges, start_node, end_node)
 
 def get_transcript_score_map(transcripts):
     # get transcript scores
