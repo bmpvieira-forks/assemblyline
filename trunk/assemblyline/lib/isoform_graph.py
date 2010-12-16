@@ -14,7 +14,7 @@ from bx.intervals.intersection import Interval, IntervalTree
 from bx.intervals.cluster import ClusterTree
 
 from cNode import Node, strand_int_to_str, strand_str_to_int, node_type_to_str
-from base import EXON, INTRON, POS_STRAND, NEG_STRAND, NO_STRAND
+from base import EXON, INTRON, POS_STRAND, NEG_STRAND, NO_STRAND, merge_strand
 
 # a structure for managing isoform graph information
 # stores the node plus its immediate edges
@@ -37,18 +37,6 @@ class ClusterInfo(object):
         self.indexes.update(other.indexes)
         self.preds.update(other.preds)
         self.succs.update(other.succs)
-
-def merge_strand(strand1, strand2):
-    # TODO: move to C code
-    if strand1 == strand2:
-        return strand1
-    elif strand1 == NO_STRAND:
-        return strand2
-    elif strand2 == NO_STRAND:
-        return strand1
-    else:
-        logging.error("Incompatible strands")        
-        assert False
 
 def merge_exon_tuples(G, cluster_start, cluster_end, strand, exon_tuples, join_preds=None, join_succs=None):
     preds = set()
@@ -130,8 +118,10 @@ def partition_nodes_by_strand(G):
         if node.node_type == INTRON:
             assert node.strand != NO_STRAND
             strand_introns[node.strand].append(node)
-        else:
+        elif node.node_type == EXON:
             strand_exons[node.strand].append(node)
+        else:
+            assert False
     return strand_exons, strand_introns
 
 def make_intron_boundary_map(introns):

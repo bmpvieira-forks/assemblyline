@@ -16,8 +16,9 @@ cdef dict _strand_str_to_int = {"+": POS_STRAND,
 
 DEF EXON = 0
 DEF INTRON = 1
+DEF DUMMY = 2
 
-cdef list _node_type_to_str = ["E", "I"]
+cdef list _node_type_to_str = ["E", "I", "D"]
 
 def strand_str_to_int(strand):
     return _strand_str_to_int[strand]
