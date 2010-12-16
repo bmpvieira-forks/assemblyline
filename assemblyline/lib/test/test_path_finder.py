@@ -6,10 +6,11 @@ Created on Dec 8, 2010
 import unittest
 import os
 import networkx as nx
+import matplotlib.pyplot as plt
 
 from isoform_graph import IsoformGraph
 from transcript_parser import parse_gtf
-from path_finder import dfs_paths, get_transcript_score_map, transform_graph, get_isoforms
+from path_finder import get_isoforms
 from cNode import Node
 
 class Test(unittest.TestCase):
@@ -19,8 +20,9 @@ class Test(unittest.TestCase):
         for locus_transcripts in parse_gtf(open(gtf_file)):
             isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
 
-            tx_id = 0            
-            for gene_id, tss_id, score, path in get_isoforms(isoform_graph.G, locus_transcripts):
+            tx_id = 0
+            for gene_id, tss_id, score, path in get_isoforms(isoform_graph.G, locus_transcripts,
+                                                             fraction_major_path=0.000001):
                 print gene_id, tss_id, tx_id, score, path
                 tx_id += 1
             return

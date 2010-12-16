@@ -57,7 +57,9 @@ def write_gtf(chrom, gene_id, tx_id, strand, score, exons):
     f.attrs = attrs
     return f
 
-def find_consensus(gtf_file, overhang_threshold):
+def find_consensus(gtf_file, overhang_threshold,
+                   fraction_major_isoform,
+                   max_paths):
     locus_id = 1
     gene_id = 1
     tss_id = 1
@@ -69,7 +71,10 @@ def find_consensus(gtf_file, overhang_threshold):
         isoform_graph = IsoformGraph.from_transcripts(locus_transcripts) 
         isoform_graph.collapse(overhang_threshold=overhang_threshold)        
         chrom = locus_transcripts[0].chrom        
-        for loc_gene_id, loc_tss_id, score, path in get_isoforms(isoform_graph.G, locus_transcripts):
+        for loc_gene_id, loc_tss_id, score, path in get_isoforms(isoform_graph.G, 
+                                                                 locus_transcripts,
+                                                                 fraction_major_isoform,
+                                                                 max_paths):
             gene_name = "L%07d|G%07d|TSS%07d|TU%07d" % (locus_id,
                                                         gene_id + loc_gene_id, 
                                                         tss_id + loc_tss_id,
@@ -81,8 +86,8 @@ def find_consensus(gtf_file, overhang_threshold):
             s = write_bed(chrom, gene_name, strand, score, exons)
             print s
             tx_id += 1
-        gene_id += loc_gene_id
-        tss_id += loc_tss_id        
+        gene_id += loc_gene_id + 1
+        tss_id += loc_tss_id + 1 
         locus_id += 1
 
 def main():
@@ -90,9 +95,14 @@ def main():
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")    
     parser = argparse.ArgumentParser()
     parser.add_argument("--overhang", type=int, dest="overhang_threshold", default=100)
+    parser.add_argument("--fraction-major-isoform", dest="fraction_major_isoform", type=float, default=0.15)
+    parser.add_argument("--max-paths", dest="max_paths", type=int, default=10)
     parser.add_argument("--score-attr", dest="score_attr", default="FPKM")
     parser.add_argument("filename")
     options = parser.parse_args()
-    find_consensus(options.filename, options.overhang_threshold)
+    find_consensus(options.filename, 
+                   options.overhang_threshold,
+                   options.fraction_major_isoform,
+                   options.max_paths)
 
 if __name__ == '__main__': main()
