@@ -10,9 +10,8 @@ import itertools
 import operator
 import bisect
 
-from bx.intervals.intersection import Interval, IntervalTree
-from bx.intervals.cluster import ClusterTree
-
+from bx.intersection import Interval, IntervalTree
+from bx.cluster import ClusterTree
 from cNode import Node, strand_int_to_str, strand_str_to_int, node_type_to_str
 from base import EXON, INTRON, POS_STRAND, NEG_STRAND, NO_STRAND, merge_strand
 
