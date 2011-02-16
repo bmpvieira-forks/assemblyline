@@ -11,7 +11,7 @@ from Cython.Distutils import build_ext
 def get_extension_modules():
     extensions = []
     # Graph node
-    extensions.append( Extension( "lib.cnode", ["lib/cnode.pyx"] ) )
+    #extensions.append( Extension( "lib.cnode", ["lib/cnode.pyx"] ) )
     # Interval clustering                
     extensions.append( Extension( "lib.bx.cluster", [ "lib/bx/cluster.pyx", "lib/bx/intervalcluster.c"], 
                                   include_dirs=["lib/bx"]) )
