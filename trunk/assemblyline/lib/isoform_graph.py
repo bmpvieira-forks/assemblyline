@@ -12,8 +12,7 @@ import bisect
 
 from bx.intersection import Interval, IntervalTree
 from bx.cluster import ClusterTree
-from cnode import Node, cmp_strand, strand_int_to_str
-from base import EXON, POS_STRAND, NEG_STRAND, NO_STRAND
+from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand, strand_int_to_str
 
 class ExonData(object):
     __slots__ = ('id', 'strand', 'score')
@@ -136,7 +135,7 @@ class IsoformGraph(object):
         g.add_transcripts(transcripts)
 
     def _add_exon_node(self, start, end, transcript):
-        n = Node(start, end, NO_STRAND, EXON)
+        n = Exon(start, end)
         if n not in self.G:  
             self.G.add_node(n, data=[])        
         nd = self.G.node[n]
