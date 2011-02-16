@@ -12,9 +12,9 @@ import os
 
 from lib.transcript_parser import parse_gtf
 from lib.gtf import GTFFeature
-from lib.cNode import strand_int_to_str
+from lib.cnode import strand_int_to_str
 from lib.isoform_graph import IsoformGraph, EXON
-from lib.path_finder import get_isoforms
+#from lib.path_finder import get_isoforms
 
 def write_bed(chrom, name, strand, score, exons):
     #print "EXONS TO PRINT", exons
@@ -82,7 +82,10 @@ def find_consensus(gtf_file, overhang_threshold,
                       (len(locus_transcripts), locus_transcripts[0].chrom,
                        locus_transcripts[0].start, locus_transcripts[-1].end))
         # build and refine isoform graph
-        isoform_graph = IsoformGraph.from_transcripts(locus_transcripts) 
+        isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
+        isoform_graph.assemble()
+        continue
+
         isoform_graph.collapse(overhang_threshold=overhang_threshold)
         chrom = locus_transcripts[0].chrom
         # get transcript id -> transcript object mappings
