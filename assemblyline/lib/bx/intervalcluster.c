@@ -1,4 +1,7 @@
 /*
+	Downloaded from:
+	https://bitbucket.org/james_taylor/bx-python/wiki/Home
+
     Kanwei Li, 2009
     Inspired by previous ClusterTree
     
@@ -197,6 +200,16 @@ treeitr* clusteritr(clustertree *tree) {
         return itr;
     }
     return NULL;
+}
+
+/* Free an infix iterator */
+void freeclusteritr(treeitr *itr) {
+    if (itr != NULL) {
+    	if (itr->next != NULL) {
+    		freeclusteritr(itr->next);
+    	}
+    	free(itr);
+    }
 }
 
 /* Insert based on the start position of intervals */
