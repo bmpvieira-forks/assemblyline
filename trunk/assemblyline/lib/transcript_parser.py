@@ -11,32 +11,28 @@ import os
 import sys
 
 import gtf
-
-def merge_strand(strand1, strand2):
-    if strand1 == strand2:
-        return strand1
-    elif strand1 == ".":
-        return strand2
-    elif strand2 == ".":
-        return strand1
-    else:
-        logging.error("Incompatible strands")        
-        assert False
+from base import Exon, NO_STRAND, POS_STRAND, NEG_STRAND, strand_int_to_str, \
+    strand_str_to_int
 
 class Transcript(object):
-    __slots__ = ('chrom', 'start', 'end', 'strand', 'id', 'label', 'score', 'exons')
+    __slots__ = ('chrom', 'start', 'end', 'strand', 'id', 'label', 
+                 'score', 'length', 'exons')
     def __init__(self):
-        self.id = None
-        self.label = None
         self.chrom = None
         self.start = -1
         self.end = -1
-        self.strand = '.'
+        self.strand = NO_STRAND
+        self.id = None
+        self.label = None
         self.score = 0
+        self.length = 0
         self.exons = {}
     def __str__(self):
-        return ("<%s(chrom='%s', start=%d, end=%d, strand=%s, id=%s, label=%s, score=%f, exons=%s)>" %
-                (self.__class__.__name__, self.chrom, self.start, self.end, self.strand, self.id, self.label, self.score, self.exons))
+        return ("<%s(chrom='%s', start='%d', end='%d', strand='%s', "
+                "id='%s', label='%s', score='%f', length='%d', exons=%s)>" %
+                (self.__class__.__name__, self.chrom, self.start, self.end, 
+                 strand_int_to_str(self.strand), self.id, self.label, 
+                 self.score, self.length, self.exons))
     @property
     def tx_start(self):
         return self.exons[0][0]
@@ -60,7 +56,7 @@ class Transcript(object):
                        str(self.tx_end),
                        str(self.id),
                        str(self.score),
-                       self.strand if self.strand != None else '.',
+                       strand_int_to_str(self.strand),
                        str(self.tx_start),
                        str(self.tx_start),
                        '0',
@@ -69,13 +65,6 @@ class Transcript(object):
                        ','.join(map(str,block_starts)) + ','])
         return s
 
-
-
-class Exon(object):
-    __slots__ = ('start', 'end', 'score', 'id')
-    def __str__(self):
-        return ("<%s(start=%d, end=%d, score=%f)>" %
-                (self.__class__.__name__, self.start, self.end, self.score))
 
 def separate_transcripts(gtf_features, score_attr="FPKM"):
     transcripts = collections.defaultdict(lambda: Transcript())
@@ -89,30 +78,23 @@ def separate_transcripts(gtf_features, score_attr="FPKM"):
         if feature.feature_type == "transcript":
             transcript.id = tx_id
             transcript.label = seqdata_id
-            transcript.strand = feature.strand
+            # convert from string strand notation ("+", "-", ".") 
+            # to integer (0, 1)            
+            transcript.strand = strand_str_to_int(feature.strand)
             transcript.chrom = feature.seqid
             transcript.start = feature.start
             transcript.end = feature.end
             transcript.score = float(feature.attrs[score_attr])
         elif feature.feature_type == "exon":
             exon_num = int(feature.attrs["exon_number"])
-            exon = Exon()
-            exon.id = '.'.join([tx_id, str(exon_num)])
-            exon.start = feature.start
-            exon.end = feature.end
-            # remove the length normalization from scores
-            #exon.score = float(feature.attrs[score_attr]) * (feature.end - feature.start) / 1.0e3
-            transcript.exons[exon_num] = exon
+            transcript.exons[exon_num] = Exon(feature.start, feature.end)
     # convert transcript exons from dictionary to sorted list
     for transcript in transcripts.itervalues():
         # sort the exons in correct transcript order
         transcript.exons = [transcript.exons[v] for v in sorted(transcript.exons.keys())]
         # remove the length normalization from scores
-        transcript_length = sum([e.end - e.start for e in transcript.exons])
-        transcript.score = transcript.score * (transcript_length) / 1.0e3        
-        for exon in transcript.exons:
-            exon.score = transcript.score
-            #exon.score = transcript.score * (exon.end - exon.start) / float(transcript_length)
+        transcript.length = sum([e.end - e.start for e in transcript.exons])
+        transcript.score = transcript.score * (transcript.length) / 1.0e3        
     # sort transcripts by position
     return sorted(transcripts.values(), key=operator.attrgetter('start'))
 
@@ -148,7 +130,6 @@ def separate_loci(feature_iter):
     if len(window) > 0:
         yield window
 
-
 def parse_gtf(fileh, attr_defs=None, score_attr="FPKM"):
     logging.debug("Reading features")
     for locus_features in separate_loci(gtf.GTFFeature.parse(fileh, attr_defs)):
@@ -167,6 +148,7 @@ if __name__ == '__main__':
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")    
     parser = argparse.ArgumentParser()
     parser.add_argument("--sort", action="store_true", default=False)
+    parser.add_argument("--score-attr", dest="score_attr", default="FPKM")
     parser.add_argument("filename")
     options = parser.parse_args()
     prefix = os.path.splitext(options.filename)[0]
