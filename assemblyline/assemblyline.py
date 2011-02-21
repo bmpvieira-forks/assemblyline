@@ -12,26 +12,27 @@ import os
 
 from lib.transcript_parser import parse_gtf
 from lib.gtf import GTFFeature
-from lib.cnode import strand_int_to_str
-from lib.isoform_graph import IsoformGraph, EXON
-#from lib.path_finder import get_isoforms
+from lib.base import strand_int_to_str, NEG_STRAND, POS_STRAND
+from lib.transcript_graph import TranscriptGraph
 
 def write_bed(chrom, name, strand, score, exons):
-    #print "EXONS TO PRINT", exons
-    tx_start = min(e[0] for e in exons)
-    tx_end = max(e[1] for e in exons)
+    #print "EXONS TO PRINT", exons    
+    assert all(exons[0].start < x.start for x in exons[1:])
+    assert all(exons[-1].end > x.end for x in exons[:-1])
+    tx_start = exons[0].start
+    tx_end = exons[-1].end    
     block_sizes = []
     block_starts = []
-    for start, end in exons:
-        block_starts.append(start - tx_start)
-        block_sizes.append(end - start)        
+    for e in exons:
+        block_starts.append(e.start - tx_start)
+        block_sizes.append(e.end - e.start)        
     # make bed fields
     fields = [chrom, 
               str(tx_start), 
               str(tx_end),
               str(name),
               str(score),
-              strand,
+              strand_int_to_str(strand),
               str(tx_start),
               str(tx_start),
               '0',
@@ -66,8 +67,6 @@ def get_transcript_id_label_map(transcripts):
     for t in transcripts:
         # add scores to the score lookup table
         id_map[t.id] = t.label
-        for e in t.exons:
-            id_map[e.id] = t.label
     return id_map
 
 def find_consensus(gtf_file, overhang_threshold,
@@ -82,33 +81,26 @@ def find_consensus(gtf_file, overhang_threshold,
                       (len(locus_transcripts), locus_transcripts[0].chrom,
                        locus_transcripts[0].start, locus_transcripts[-1].end))
         # build and refine isoform graph
-        isoform_graph = IsoformGraph.from_transcripts(locus_transcripts)
-        isoform_graph.assemble()
-        continue
-
-        isoform_graph.collapse(overhang_threshold=overhang_threshold)
+        isoform_graph = TranscriptGraph.from_transcripts(locus_transcripts)
+        #isoform_graph.collapse(overhang_threshold=overhang_threshold)
         chrom = locus_transcripts[0].chrom
         # get transcript id -> transcript object mappings
         tx_id_label_map = get_transcript_id_label_map(locus_transcripts)
         # find isoforms of transcript
-        for loc_gene_id, loc_tss_id, score, path in get_isoforms(isoform_graph.G, 
-                                                                 locus_transcripts,
-                                                                 fraction_major_isoform,
-                                                                 max_paths):
+        for strand, loc_gene_id, loc_tss_id, score, path in \
+            isoform_graph.assemble(max_paths=max_paths,
+                                   fraction_major_isoform=fraction_major_isoform):
             # get transcripts and their sample labels from each path
-            G = isoform_graph.G
-            tx_ids = set().union(*[G.node[n]['ids'] for n in path])
+            tx_ids = set().union(*[isoform_graph.get_exon_ids(n) for n in path])
             tx_labels = set(tx_id_label_map[id] for id in tx_ids)            
             # use locus/gene/tss/transcript id to make gene name
             gene_name = "L%07d|G%07d|TSS%07d|TU%07d" % (locus_id,
                                                         gene_id + loc_gene_id, 
                                                         tss_id + loc_tss_id,
                                                         tx_id)
-            strand = strand_int_to_str(path[0].strand)            
-            exons = [(node.start, node.end) for node in path]
-            if strand == "-":
-                exons.reverse()
-            fields = write_bed(chrom, gene_name, strand, score, exons)
+            if strand == NEG_STRAND:
+                path.reverse()
+            fields = write_bed(chrom, gene_name, strand, score, path)
             # append extra columns to BED format
             fields.append(str(len(tx_ids)))
             fields.append(str(len(tx_labels)))
