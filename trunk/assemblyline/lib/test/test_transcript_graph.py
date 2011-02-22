@@ -52,7 +52,7 @@ class TestTranscriptGraph(unittest.TestCase):
         #nx.draw(G)
         #plt.show()
 
-    def testBasicGraph(self):
+    def test_basic_graph(self):
         """test that basic transcript parser works and builds graph"""        
         # plus strand
         test_basename = "basic_graph1"
@@ -79,7 +79,7 @@ class TestTranscriptGraph(unittest.TestCase):
         #nx.draw(txgraph.G)
         #plt.show()
 
-    def testBasicSplit(self):
+    def test_basic_split(self):
         """test that initial graph construction correctly splits exons"""
         # plus strand
         test_basename = "basic_split1"
@@ -106,7 +106,7 @@ class TestTranscriptGraph(unittest.TestCase):
         #nx.draw(txgraph.G)
         #plt.show()
 
-    def testComplexSplit(self):
+    def test_complex_split(self):
         """test some more complicated exon splitting cases"""
         # only one strand
         test_basename = "complex_split1"
@@ -133,7 +133,7 @@ class TestTranscriptGraph(unittest.TestCase):
         #nx.draw(txgraph.G)
         #plt.show()
 
-    def testAntisense(self):
+    def test_antisense(self):
         """test some examples of antisense transcripts"""
         # exons do not overlap
         test_basename = "antisense1"
