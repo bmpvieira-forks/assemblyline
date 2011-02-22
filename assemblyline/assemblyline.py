@@ -69,9 +69,9 @@ def get_transcript_id_label_map(transcripts):
         id_map[t.id] = t.label
     return id_map
 
-def find_consensus(gtf_file, overhang_threshold,
-                   fraction_major_isoform,
-                   max_paths):
+def run_assemblyline(gtf_file, overhang_threshold,
+                     fraction_major_isoform,
+                     max_paths):
     locus_id = 1
     gene_id = 1
     tss_id = 1
@@ -81,17 +81,17 @@ def find_consensus(gtf_file, overhang_threshold,
                       (len(locus_transcripts), locus_transcripts[0].chrom,
                        locus_transcripts[0].start, locus_transcripts[-1].end))
         # build and refine isoform graph
-        isoform_graph = TranscriptGraph.from_transcripts(locus_transcripts)
-        #isoform_graph.collapse(overhang_threshold=overhang_threshold)
+        transcript_graph = TranscriptGraph.from_transcripts(locus_transcripts)
+        #transcript_graph.collapse(overhang_threshold=overhang_threshold)
         chrom = locus_transcripts[0].chrom
         # get transcript id -> transcript object mappings
         tx_id_label_map = get_transcript_id_label_map(locus_transcripts)
         # find isoforms of transcript
         for strand, loc_gene_id, loc_tss_id, score, path in \
-            isoform_graph.assemble(max_paths=max_paths,
+            transcript_graph.assemble(max_paths=max_paths,
                                    fraction_major_isoform=fraction_major_isoform):
             # get transcripts and their sample labels from each path
-            tx_ids = set().union(*[isoform_graph.get_exon_ids(n) for n in path])
+            tx_ids = set().union(*[transcript_graph.get_exon_ids(n) for n in path])
             tx_labels = set(tx_id_label_map[id] for id in tx_ids)            
             # use locus/gene/tss/transcript id to make gene name
             gene_name = "L%07d|G%07d|TSS%07d|TU%07d" % (locus_id,
@@ -120,9 +120,9 @@ def main():
     parser.add_argument("--score-attr", dest="score_attr", default="FPKM")
     parser.add_argument("filename")
     options = parser.parse_args()
-    find_consensus(options.filename, 
-                   options.overhang_threshold,
-                   options.fraction_major_isoform,
-                   options.max_paths)
+    run_assemblyline(options.filename, 
+                     options.overhang_threshold,
+                     options.fraction_major_isoform,
+                     options.max_paths)
 
 if __name__ == '__main__': main()
