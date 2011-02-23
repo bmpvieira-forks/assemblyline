@@ -17,15 +17,14 @@ DUMMY_END_NODE = Exon(-2,-2)
 NODE_WEIGHT = 'weight'
 NODE_TSS_ID = 'tss_id'
 
-EDGE_SCORE = 'score'
-#EDGE_WEIGHT = 'weight'
+EDGE_WEIGHT = 'weight'
+EDGE_DENSITY = 'density'
 EDGE_OUT_FRAC = 'outfrac'
 EDGE_IN_FRAC = 'infrac'
 
 PLEN = 'plen'
-PCOV = 'pcov'
-PFRAC = 'pfrac'
-PSCORE = 'pscore'
+PWEIGHT = 'pweight'
+PDENSITY = 'pdensity'
 PSRC = 'psrc'
 
 def sum_node_weights(exon_data_list):
@@ -38,55 +37,6 @@ def sum_node_weights(exon_data_list):
         strand_scores[POS_STRAND] += edata.scores[POS_STRAND]
         strand_scores[NEG_STRAND] += edata.scores[NEG_STRAND]
     return strand_scores
-
-def subtract_path_edge(u, v, nbrdict, path_frac):
-    # find total coverage flowing out of this node
-    total_weight = sum(eattrs[EDGE_WEIGHT] for eattrs in nbrdict.itervalues())
-    # compute coverage used
-    used_weight = path_frac * total_weight
-    # subtract from path edge
-    eattrs = nbrdict[v]    
-    eattrs[EDGE_WEIGHT] = max(0, eattrs[EDGE_WEIGHT] - used_weight)
-    # subtract from total weight
-    total_weight = max(0, total_weight - used_weight)
-    # find fraction flowing out of each node
-    for v, eattrs in nbrdict.iteritems():
-        if total_weight == 0:
-            eattrs[EDGE_FRAC] = 0
-        else:
-            eattrs[EDGE_FRAC] = eattrs[EDGE_WEIGHT]/float(total_weight)
-
-def calculate_edge_weights(G):
-    for u,nbrdict in G.adjacency_iter():
-        # find total coverage flowing out of this node
-        total_weight = sum(eattrs[EDGE_WEIGHT] for eattrs in nbrdict.itervalues())
-        # find fraction flowing out of each node
-        for v, eattrs in nbrdict.iteritems():
-            eattrs[EDGE_FRAC] = eattrs[EDGE_WEIGHT]/float(total_weight)
-
-def calculate_edge_weights(G):
-    for u,nbrdict in G.adjacency_iter():
-        # find total coverage flowing out of this node
-        out_score_total = sum(eattrs[EDGE_SCORE] for eattrs in nbrdict.itervalues())
-        for v, eattrs in nbrdict.iteritems():
-            # find fraction flowing out of each node
-            out_frac = eattrs[EDGE_SCORE]/float(out_score_total)
-            # compute coverage density flowing out of edge
-            weight = (G.node[u][NODE_WEIGHT] * out_frac)/float(u.end - u.start)
-            eattrs[EDGE_OUT_FRAC] = out_frac
-            eattrs[EDGE_WEIGHT] = weight
-    # now fraction of weight flowing in to each node
-    # reverse edge directions and use adjacency iter again
-    G.reverse(copy=False)
-    for u,nbrdict in G.adjacency_iter():
-        # find total coverage density flowing into this node
-        in_weight_total = sum(eattrs[EDGE_WEIGHT] for eattrs in nbrdict.itervalues())
-        for v, eattrs in nbrdict.iteritems():
-            # find fraction flowing into node
-            in_frac = eattrs[EDGE_WEIGHT]/float(in_weight_total)
-            eattrs[EDGE_IN_FRAC] = in_frac
-    
-    
 
 def build_strand_specific_graphs(G):
     '''
@@ -115,13 +65,9 @@ def build_strand_specific_graphs(G):
         # check against strand attribute
         strandattr = d['strand']
         assert cmp_strand(strand, strandattr)
-        # add up coverage of edges and set this to the 'weight'
-        edge_data_list = d['data']
-        # add edge
-        attr_dict = {EDGE_SCORE: sum(x.score for x in edge_data_list)}
-        GG[strand].add_edge(u, v, attr_dict=attr_dict) 
-    calculate_edge_weights(GG[POS_STRAND])
-    calculate_edge_weights(GG[NEG_STRAND])    
+        # add up coverage of edges and set this to the 'score'
+        attr_dict = {EDGE_WEIGHT: sum(x.score for x in d['data'])}
+        GG[strand].add_edge(u, v, attr_dict=attr_dict)   
     return GG
 
 def find_start_and_end_nodes(G, strand):
@@ -144,40 +90,24 @@ def find_start_and_end_nodes(G, strand):
                  if (d == 0)]
     return start_nodes, end_nodes
 
-def add_dummy_start_end_nodes(G, start_nodes, end_nodes):
-    # add 'dummy' tss nodes if necessary
-    total_weight = sum(G.node[n][NODE_WEIGHT] for n in start_nodes)    
-    G.add_node(DUMMY_START_NODE, weight=0)
-    for start_node in start_nodes:        
-        weight = G.node[start_node][NODE_WEIGHT]
-        attr_dict = {EDGE_WEIGHT: weight, EDGE_FRAC: (weight / total_weight)}
-        logging.debug('adding dummy %s -> %s weight=%f total_weight=%f' % (DUMMY_START_NODE, start_node, weight, total_weight))
-        G.add_edge(DUMMY_START_NODE, start_node, attr_dict=attr_dict)
-    # add a single 'dummy' end node
-    G.add_node(DUMMY_END_NODE, weight=0)
-    for end_node in end_nodes:
-        weight = G.node[end_node][NODE_WEIGHT]
-        attr_dict = {EDGE_WEIGHT: weight, EDGE_FRAC: 1.0}
-        logging.debug('adding dummy %s -> %s weight=%f total_weight=%f' % (end_node, DUMMY_END_NODE, total_weight, total_weight))
-        G.add_edge(end_node, DUMMY_END_NODE, attr_dict=attr_dict)
-
 def visit_node_from_parent(G, parent, child):    
     # compute length, coverage, and rpkm of the current
     # path when extended to include the child
     pattrs = G.node[parent]
     # new path length is parent length + child length    
     path_length = pattrs.get(PLEN, 0) + (child.end - child.start)    
-    # new path coverage is parent coverage + child coverage
-    path_cov = pattrs.get(PCOV, 0) + G.node[child].get(NODE_WEIGHT, 0)
-    # keep track of the minimum fraction of coverage that
-    # flows between and two nodes along the entire path     
-    parent_frac = pattrs.get(PFRAC, 1.0)
-    child_frac = G.edge[parent][child][EDGE_FRAC]
-    path_frac = parent_frac if parent_frac < child_frac else child_frac
-    # score is total coverage multiplied by the path fraction
-    # divided by the length of the path
-    path_score = (1.0e3 * path_frac * path_cov) / path_length
-    return path_length, path_cov, path_frac, path_score
+    # to compute the coverage going from the parent to the child, take
+    # the existing path coverage at the parent node and multiply it by
+    # the outgoing fraction, then add the child coverage multiplied by
+    # its incoming fraction.
+    parent_cov = pattrs.get(PWEIGHT, pattrs[NODE_WEIGHT])
+    child_cov = G.node[child].get(NODE_WEIGHT, 0)
+    edata = G.edge[parent][child]    
+    path_cov = ((parent_cov * edata[EDGE_OUT_FRAC]) + 
+                (child_cov * edata[EDGE_IN_FRAC]))
+    # score is total coverage divided by the length of the path
+    path_density = path_cov / path_length
+    return path_length, path_cov, path_density
 
 def dyn_prog_search(G, source):
     """Find the highest scoring path by dynamic programming"""
@@ -187,21 +117,20 @@ def dyn_prog_search(G, source):
         parent = stack[0]
         for child in G.successors_iter(parent):
             logging.debug('Visiting %s -> %s' % (parent, child))            
-            path_length, path_cov, path_frac, path_score = visit_node_from_parent(G, parent, child)
-            logging.debug('\tlen=%d frac=%f score=%f child_score=%f' %
-                          (path_length, path_frac, path_score, G.node[child].get(PSCORE,-1)))
+            path_length, path_cov, path_density = visit_node_from_parent(G, parent, child)
+            logging.debug('\tlen=%d cov=%f density=%f child_density=%f' %
+                          (path_length, path_cov, path_density, G.node[child].get(PDENSITY,-1)))
             # only update this node if it has not been visited
             # or if the new score is higher than the old score
             cattrs = G.node[child]
-            if path_score > cattrs.get(PSCORE, -1):
+            if path_density > cattrs.get(PDENSITY, -1):
                 # keep pointer to parent node that produced this high scoring path
                 cattrs[PLEN] = path_length
-                cattrs[PCOV] = path_cov
-                cattrs[PFRAC] = path_frac
-                cattrs[PSCORE] = path_score
+                cattrs[PWEIGHT] = path_cov
+                cattrs[PDENSITY] = path_density
                 cattrs[PSRC] = parent
-                logging.debug('\tupdated child len=%d cov=%f frac=%f score=%f' % 
-                              (path_length, path_cov, path_frac, path_score))
+                logging.debug('\tupdated child len=%d cov=%f density=%f' % 
+                              (path_length, path_cov, path_density))
                 # continue iterating through the child path
                 stack.append(child)
         stack.pop(0)
@@ -209,7 +138,7 @@ def dyn_prog_search(G, source):
 def find_best_path(G, source, sink):
     '''
     use dynamic programming to find the highest scoring path through 
-    the graph starting from 'source'
+    the graph starting from 'source' and ending at 'sink'
     '''
     # run the dynamic programming algorithm to
     # score paths
@@ -217,70 +146,154 @@ def find_best_path(G, source, sink):
     # traceback
     path = [sink]
     pattrs = G.node[sink]
-    score = pattrs[PSCORE]
-    frac = pattrs[PFRAC]    
+    score = pattrs[PDENSITY]
     length = pattrs[PLEN]
-    cov = pattrs[PCOV]
+    cov = pattrs[PWEIGHT]
     while path[-1] != source:
         #logging.debug('path=%s node=%s attrs=%s' %
         #              (path, path[-1], G.node[path[-1]]))
         path.append(G.node[path[-1]][PSRC])
     path.reverse()
     #logging.debug("FINAL path=%s" % (path))
+    return path, length, cov, score
+
+def clear_path_attributes(G):
+    '''
+    remove dynamic programming node attributes that are 
+    added to the graph temporarily
+    
+    must call this before calling the dynamic programming
+    algorithm again on the same graph    
+    '''
     # clear path attributes
     for n in G.nodes_iter():
         nattrs = G.node[n]
         if PLEN in nattrs:
             del nattrs[PLEN]
-            del nattrs[PCOV]
-            del nattrs[PFRAC]
-            del nattrs[PSCORE]
-            del nattrs[PSRC]
-    return path, score, frac, cov, length
+            del nattrs[PWEIGHT]
+            del nattrs[PDENSITY]
+            del nattrs[PSRC]    
 
-                                                
-def subtract_path(G, path_frac, path):
+def recalculate_edge_attrs(G, u, v):
+    # find total weight leaving node 'u'
+    u_succs = G.successors(u)
+    out_weight_total = sum(G.edge[u][x][EDGE_WEIGHT] for x in u_succs)
+    if out_weight_total == 0:
+        out_weight_total = 1
+    # compute edge attributes leaving node 'u'
+    for succ in u_succs:
+        eattrs = G.edge[u][succ]
+        out_frac = eattrs[EDGE_WEIGHT]/float(out_weight_total)
+        if out_frac == 0:
+            density = 0
+        else:
+            density = (G.node[u][NODE_WEIGHT] * out_frac)/float(u.end - u.start)
+        eattrs[EDGE_OUT_FRAC] = out_frac
+        eattrs[EDGE_DENSITY] = density
+    # find total density entering node 'v'
+    v_preds = G.predecessors(v)
+    in_density_total = sum(G.edge[x][v][EDGE_DENSITY] for x in v_preds)
+    if in_density_total == 0:
+        in_density_total = 1
+    # compute edge density fractions entering node 'v'
+    for pred in v_preds:
+        eattrs = G.edge[pred][v]
+        in_frac = eattrs[EDGE_DENSITY]/float(in_density_total)
+        eattrs[EDGE_IN_FRAC] = in_frac
+
+def subtract_path(G, path, path_density):
     '''
-    subtract a fraction of the coverage in each node from the node
-    weights and edge scores, then recompute the edge weights
+    subtract the coverage density incurred by traversing the 
+    given path from each node and edge in the graph
     '''
     for i,v in enumerate(path):
-        # recompute node weight
-        nattrs = G.node[v]
-        used_weight = path_frac * nattrs[NODE_WEIGHT]
-        nattrs[NODE_WEIGHT] = max(0, nattrs[NODE_WEIGHT] - used_weight)    
+        # subtract coverage from node
+        v_cov = path_density * (v.end - v.start)
+        G.node[v][NODE_WEIGHT] = max(0, G.node[v][NODE_WEIGHT] - v_cov)
         if i == 0:
             continue
-        # recompute edge weight
+        # subtract coverage from edge
         u = path[i-1]
-        subtract_path_edge(u, v, G.edge[u], path_frac)
+        u_cov = path_density * (u.end - u.start)
+        eattrs = G.edge[u][v]
+        eattrs[EDGE_WEIGHT] = max(0, eattrs[EDGE_WEIGHT] - u_cov)
+        # recompute edge attrs
+        recalculate_edge_attrs(G, u, v)
 
+def add_dummy_start_end_nodes(G, start_nodes, end_nodes):
+    # add 'dummy' tss nodes if necessary
+    G.add_node(DUMMY_START_NODE, weight=0)
+    for start_node in start_nodes:        
+        logging.debug('adding dummy %s -> %s' % (DUMMY_START_NODE, start_node))
+        attr_dict = {EDGE_WEIGHT: 0.0,
+                     EDGE_DENSITY: 0.0,
+                     EDGE_OUT_FRAC: 0.0,
+                     EDGE_IN_FRAC: 1.0}                     
+        G.add_edge(DUMMY_START_NODE, start_node, attr_dict=attr_dict)
+    # add a single 'dummy' end node
+    G.add_node(DUMMY_END_NODE, weight=0)
+    for end_node in end_nodes:
+        logging.debug('adding dummy %s -> %s' % (end_node, DUMMY_END_NODE))
+        attr_dict = {EDGE_WEIGHT: 0.0,
+                     EDGE_DENSITY: 0.0,
+                     EDGE_OUT_FRAC: 1.0,
+                     EDGE_IN_FRAC: 0.0}
+        G.add_edge(end_node, DUMMY_END_NODE, attr_dict=attr_dict)
 
-def find_suboptimal_paths(G, start_node, end_node, 
+def calculate_edge_attrs(G):
+    for u,nbrdict in G.adjacency_iter():
+        # find total coverage flowing out of this node
+        out_score_total = sum(eattrs[EDGE_WEIGHT] for eattrs in nbrdict.itervalues())        
+        for v, eattrs in nbrdict.iteritems():
+            # find fraction flowing out of each node
+            out_frac = eattrs[EDGE_WEIGHT]/float(out_score_total)
+            # compute coverage density flowing out of edge
+            weight = (G.node[u][NODE_WEIGHT] * out_frac)/float(u.end - u.start)
+            eattrs[EDGE_OUT_FRAC] = out_frac
+            eattrs[EDGE_DENSITY] = weight
+    # now fraction of weight flowing in to each node
+    # reverse edge directions and use adjacency iter again
+    G.reverse(copy=False)
+    for u,nbrdict in G.adjacency_iter():
+        # find total coverage density flowing into this node
+        in_weight_total = sum(eattrs[EDGE_DENSITY] for eattrs in nbrdict.itervalues())
+        for v, eattrs in nbrdict.iteritems():
+            # find fraction flowing into node            
+            in_frac = eattrs[EDGE_DENSITY]/float(in_weight_total)
+            eattrs[EDGE_IN_FRAC] = in_frac
+    # reverse the edges back to normal
+    G.reverse(copy=False)
+
+def find_suboptimal_paths(G, start_nodes, end_nodes, 
                           fraction_major_path,
                           max_paths):
-    # make a copy of the graph
-    # G = H.copy()
-    # iteratively produce paths
+    # compute initial edge weights and coverage flow in/out of nodes
+    calculate_edge_attrs(G)    
+    # at an artificial node at the start and end so that all start
+    # nodes are searched together for the best path
+    add_dummy_start_end_nodes(G, start_nodes, end_nodes)
     score_limit = -1
     while True:        
         # find highest scoring path through graph
-        path, path_score, path_frac, path_cov, path_length = \
-            find_best_path(G, start_node, end_node)
-        logging.debug("Path score=%f limit=%f frac=%f cov=%.2f length=%d path=%s" % 
-                      (path_score, score_limit, path_frac, path_cov, path_length, path))
+        path, path_length, path_cov, path_density = \
+            find_best_path(G, DUMMY_START_NODE, DUMMY_END_NODE)
+        logging.debug("Path density=%f limit=%f cov=%.2f length=%d path=%s" % 
+                      (path_density, score_limit, path_cov, path_length, path))
         # set score limit if this is the first path
         if score_limit < 0:
-            score_limit = path_score * fraction_major_path
-        elif path_score < score_limit:
+            score_limit = path_density * fraction_major_path
+        elif path_density <= score_limit:
             break
-        yield path_score, path
+        yield path_density, path[1:-1]
         # subtract the coverage of this path from the graph and recompute 
         # the edge weights
-        subtract_path(G, path_frac, path)
-        for u,v,d in G.edges_iter(data=True):
-            logging.debug("Edge (%s,%s) weight=%f frac=%f" % (u,v,d[EDGE_WEIGHT],d[EDGE_FRAC]))
-        
+        subtract_path(G, path[1:-1], path_density)
+        # remove path node attributes from graph before
+        # calling dynamic programming algorithm again
+        clear_path_attributes(G)
+    # remove dummy nodes from graph
+    G.remove_node(DUMMY_START_NODE)
+    G.remove_node(DUMMY_END_NODE)
 
 def assemble_subgraph(G, strand, fraction_major_path, max_paths):
     # find start and end nodes in graph
@@ -288,18 +301,13 @@ def assemble_subgraph(G, strand, fraction_major_path, max_paths):
     start_nodes, end_nodes = find_start_and_end_nodes(G, strand)
     logging.debug("START NODES (TSSs): %s" % start_nodes)
     logging.debug("END NODES: %s" % end_nodes)
-    # at an artificial node at the start and end so that all start
-    # nodes are searched together for the best path
-    add_dummy_start_end_nodes(G, start_nodes, end_nodes)
-    for score, path in find_suboptimal_paths(G, DUMMY_START_NODE, DUMMY_END_NODE,
-                                             fraction_major_path=fraction_major_path,
-                                             max_paths=max_paths):
+    for density, path in find_suboptimal_paths(G, start_nodes, end_nodes,
+                                               fraction_major_path=fraction_major_path,
+                                               max_paths=max_paths):
         # get tss_id from path
-        tss_id = G.node[path[1]][NODE_TSS_ID]
-        yield tss_id, score, path[1:-1]
-    # remove dummy nodes from graph
-    G.remove_node(DUMMY_START_NODE)
-    G.remove_node(DUMMY_END_NODE)
+        tss_id = G.node[path[0]][NODE_TSS_ID]
+        yield tss_id, 1.0e3 * density, path
+
 
 def assemble_transcript_graph(G, fraction_major_path, max_paths):
     if fraction_major_path <= 0:

@@ -14,7 +14,7 @@ from ..base import Exon, POS_STRAND, NEG_STRAND
 from ..transcript_graph import TranscriptGraph
 from ..transcript_parser import parse_gtf
 
-from test_base import compare_dot, write_dot, convert_attrs_to_strings, read_gtf, make_transcript
+from test_base import compare_dot, write_dot, convert_attrs_to_strings, read_gtf, make_transcript, get_dot_path
 
 logging.basicConfig(level=logging.DEBUG,
                     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -157,7 +157,18 @@ class TestTranscriptGraph(unittest.TestCase):
         #write_dot(txgraph, dot_file)
         compare_dot(txgraph, dot_file)
 
-
+    def test_actual_data1(self):
+        """test an example taken from real data"""
+        # exons do not overlap
+        test_basename = "assembly2"
+        gtf_file = test_basename + ".gtf"
+        dot_file = test_basename + ".dot"
+        txgraph = read_gtf(gtf_file)
+        write_dot(txgraph, "a")
+        from ..assembler import build_strand_specific_graphs
+        GG = build_strand_specific_graphs(txgraph.G)
+        nx.write_dot(GG[0], get_dot_path("b"))
+        nx.write_dot(GG[1], get_dot_path("c"))
 
 
 if __name__ == "__main__":
