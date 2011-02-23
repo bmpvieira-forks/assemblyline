@@ -17,20 +17,18 @@ from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand, strand_int
 from assembler import assemble_transcript_graph
 
 class ExonData(object):
-    __slots__ = ('id', 'strand', 'scores')
-    def __init__(self, id, strand, scores):
+    __slots__ = ('id', 'strand', 'score')
+    def __init__(self, id, strand, score):
         self.id = id
         self.strand = strand
-        self.scores = map(float, scores)
+        self.score = float(score)
     def __repr__(self):
-        return ("<%s(id='%s',strand='%s',scores='%s')>" % 
+        return ("<%s(id='%s',strand='%s',score='%s')>" % 
                 (self.__class__.__name__, self.id, self.strand, 
-                 str(self.scores))) 
+                 str(self.score))) 
     def __str__(self):
-        return ("[id=%s,strand=%s,scores=%s]" % 
-                (self.id, strand_int_to_str(self.strand),
-                 '(%.2f,%.2f)' % (self.scores[POS_STRAND], 
-                                  self.scores[NEG_STRAND])))
+        return ("[id=%s,strand=%s,score=%.2f]" % 
+                (self.id, strand_int_to_str(self.strand), self.score))
 
 class EdgeData(object):
     __slots__ = ('id', 'score')
