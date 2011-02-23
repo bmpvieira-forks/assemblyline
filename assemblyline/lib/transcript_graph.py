@@ -129,58 +129,7 @@ def split_exon(exon, transcript_coverage, boundaries):
         start, end = exon_splits[j-1], exon_splits[j]
         score = float(end - start) * transcript_coverage
         yield start, end, score
-
-def calculate_strand_fraction(G, exon_splits):
-    strand_scores = [0, 0]
-    for start, end, score in exon_splits:
-        n = Exon(start, end)
-        if n not in G:
-            continue
-        exon_data_list = G.node[n]['data']
-        for edata in exon_data_list:
-            assert edata.strand != NO_STRAND
-            if edata.strand == POS_STRAND:
-                assert edata.scores[POS_STRAND] > 0
-                assert edata.scores[NEG_STRAND] == 0
-            elif edata.strand == NEG_STRAND:
-                assert edata.scores[POS_STRAND] == 0
-                assert edata.scores[NEG_STRAND] > 0                
-            strand_scores[POS_STRAND] += edata.scores[POS_STRAND]
-            strand_scores[NEG_STRAND] += edata.scores[NEG_STRAND]
-    total_score = strand_scores[POS_STRAND] + strand_scores[NEG_STRAND]
-    # if there is no "stranded" coverage at this node, then assign coverage
-    # the positive strand by convention
-    if total_score == 0:
-        return 1.0
-    # proportionally assign unstranded coverage based on amount of
-    # plus and minus strand coverage
-    pos_frac = strand_scores[POS_STRAND] / float(total_score)
-    return pos_frac
-
-def add_unstranded_transcript(G, transcript, boundaries, nbunch, ebunch):
-    strand = transcript.strand
-    cov = transcript.score / transcript.length
-    for exon in transcript.exons:
-        exon_splits = list(split_exon(exon, cov, boundaries))
-        # the coverage allocation is computed here
-        pos_frac = calculate_strand_fraction(G, exon_splits)
-        prev_node = None
-        # create nodes and edges to add to the graph
-        for start, end, score in exon_splits:             
-            scores = pos_frac * score, (1.0 - pos_frac) * score                    
-            cur_node = Exon(start, end)
-            exon_data = ExonData(id=transcript.id, strand=strand, scores=scores)
-            nbunch.append((cur_node, exon_data))                    
-            if prev_node is not None:
-                # only add edges if there is evidence of coverage on the 
-                # appropriate strand
-                if pos_frac > 0:
-                    ebunch.append((prev_node, cur_node, transcript.id, strand, scores[POS_STRAND]))
-                if pos_frac < 1:
-                    ebunch.append((cur_node, prev_node, transcript.id, strand, scores[NEG_STRAND]))
-            # continue loop
-            prev_node = cur_node
-
+        
 class TranscriptGraph(object):
     def __init__(self):
         pass
@@ -201,72 +150,57 @@ class TranscriptGraph(object):
         if not self.G.has_edge(u, v):
             self.G.add_edge(u, v, strand=strand, data=[])
         ed = self.G.edge[u][v]
+        assert ed['strand'] == strand 
         ed['data'].append(EdgeData(id=id, score=score))
     
-    def _add_stranded_exon(self, exon, id, strand, cov, boundaries):
+    def _add_exon(self, exon, id, strand, cov, boundaries):
         assert strand != NO_STRAND        
         nfirst, ndatafirst = None, None
         n1, ndata1 = None, None
         n2, ndata2 = None, None
         for start, end, score in split_exon(exon, cov, boundaries):
-            if strand == POS_STRAND:
-                scores = (score, 0)
-            elif strand == NEG_STRAND:
-                scores = (0, score)
             n2 = Exon(start, end)
-            ndata2 = ExonData(id=id, strand=strand, scores=scores)
+            ndata2 = ExonData(id=id, strand=strand, score=score)
             self._add_node(n2, ndata2)
             # add edges between split exon according to 
-            # strand being assembled.  this allows edges between
-            # split single exons (unstranded) to be oriented 
-            # correctly
+            # strand being assembled.
             if n1 is None:
                 nfirst = n2
                 ndatafirst = ndata2
-            elif strand == NEG_STRAND:
-                self._add_edge(n2, n1, id, strand, ndata2.scores[NEG_STRAND])
             else:
-                assert strand == POS_STRAND
-                self._add_edge(n1, n2, id, strand, ndata1.scores[POS_STRAND])
+                if cmp_strand(strand, NEG_STRAND):
+                    self._add_edge(n2, n1, id, strand, score)
+                if cmp_strand(strand, POS_STRAND):
+                    self._add_edge(n1, n2, id, strand, score)
             # continue loop
             n1, ndata1 = n2, ndata2
         assert n2.end == exon.end
-        return nfirst, ndatafirst, n2, ndata2
+        return nfirst, ndatafirst.score, n2, ndata2.score
 
-    def _add_stranded_transcript(self, transcript, boundaries):
+    def _add_transcript(self, transcript, boundaries):
         assert transcript.strand != NO_STRAND
         exons = transcript.exons        
         strand = transcript.strand
         cov = transcript.score / transcript.length
         # add the first exon to initialize the loop
         # (all transcripts must have at least one exon)
-        e1_start_node, e1_start_data, e1_end_node, e1_end_data = \
-            self._add_stranded_exon(exons[0], transcript.id, strand, cov, boundaries)
+        e1_start_node, e1_start_score, e1_end_node, e1_end_score = \
+            self._add_exon(exons[0], transcript.id, strand, cov, boundaries)
         for e2 in exons[1:]:
             # add exon
-            e2_start_node, e2_start_data, e2_end_node, e2_end_data = \
-                self._add_stranded_exon(e2, transcript.id, strand, cov, boundaries)
-            # add edges from exon -> exon
-            if strand == NEG_STRAND:
-                self._add_edge(e2_start_node, e1_end_node, transcript.id, 
-                               strand, e2_start_data.scores[NEG_STRAND])
-            else:
-                self._add_edge(e1_end_node, e2_start_node, transcript.id,
-                               strand, e1_end_data.scores[POS_STRAND])
+            e2_start_node, e2_start_score, e2_end_node, e2_end_score = \
+                self._add_exon(e2, transcript.id, strand, cov, boundaries)
+            # add intron -> exon edges
+            if strand != NO_STRAND:
+                if strand == NEG_STRAND:
+                    self._add_edge(e2_start_node, e1_end_node, transcript.id, 
+                                   strand, e2_start_score)
+                else:
+                    self._add_edge(e1_end_node, e2_start_node, transcript.id,
+                                   strand, e1_end_score)
             # continue loop
             e1_end_node = e2_end_node
-            e1_end_data = e2_end_data
-
-    def _add_unstranded_transcripts(self, transcripts, boundaries):
-        nbunch = []
-        ebunch = []
-        for transcript in transcripts:
-            add_unstranded_transcript(self.G, transcript, boundaries, nbunch, ebunch)
-        # now add all the nodes and edges
-        for n,exon_data in nbunch:
-            self._add_node(n, exon_data)
-        for u,v,id,strand,score in ebunch:
-            self._add_edge(u, v, id, strand, score)
+            e1_end_score = e2_end_score
 
     def add_transcripts(self, transcripts):
         '''
@@ -277,16 +211,9 @@ class TranscriptGraph(object):
         self.G = nx.DiGraph()
         # find the intron domains of the transcripts
         boundaries = find_transcript_boundaries(transcripts)
-        # add the stranded transcripts first and save the
-        # unstranded transcripts for later
-        nostrand_transcripts = []
+        # add transcripts
         for t in transcripts:
-            if t.strand == NO_STRAND:
-                nostrand_transcripts.append(t)
-                continue
-            self._add_stranded_transcript(t, boundaries)
-        # add the unstranded transcripts
-        self._add_unstranded_transcripts(nostrand_transcripts, boundaries)
+            self._add_transcript(t, boundaries)
 
     def get_exon_ids(self, n):
         exon_data_list = self.G.node[n]['data']

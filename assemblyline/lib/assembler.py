@@ -7,6 +7,8 @@ import collections
 import logging
 import networkx as nx
 
+from bx.cluster import ClusterTree
+
 from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand
 
 # constants for fake 'start' and 'end' nodes
@@ -27,22 +29,68 @@ PWEIGHT = 'pweight'
 PDENSITY = 'pdensity'
 PSRC = 'psrc'
 
+
+#def calculate_strand_fraction(G):
+#
+#    strand_scores = [0, 0, 0]
+#    for n,d in G.nodes_iter(data=True):
+#        for ndata in d['data']:
+#            strand_scores[ndata.strand] += ndata.score / float((n.end - n.start))        
+#    total_score = strand_scores[POS_STRAND] + strand_scores[NEG_STRAND]
+#    # if there is no "stranded" coverage at this node, then assign coverage
+#    # the positive strand by convention
+#    if total_score == 0:
+#        return 1.0
+#    # proportionally assign unstranded coverage based on amount of
+#    # plus and minus strand coverage
+#    pos_frac = strand_scores[POS_STRAND] / float(total_score)
+#    return pos_frac
+
+def calculate_strand_fraction(G):
+    '''
+    compute the fraction of (+) versus (-) transcription in the
+    graph by using the summed coverage densities in all the nodes 
+    '''
+    cluster_tree = ClusterTree(0,1)
+    nodes = G.nodes()
+    for i,n in enumerate(nodes):    
+        cluster_tree.insert(n.start, n.end, i)
+    for start, end, indexes in cluster_tree.getregions():
+        strand_scores = [0, 0, 0]
+        for i in indexes:
+            n = nodes[i]
+            for ndata in G.node[n]['data']:
+                strand_scores[ndata.strand] += ndata.score / float((n.end - n.start))        
+        total_score = strand_scores[POS_STRAND] + strand_scores[NEG_STRAND]        
+        # if there is no "stranded" coverage at this node, then assign coverage
+        # the positive strand by convention
+        if total_score == 0:
+            return 1.0
+        # proportionally assign unstranded coverage based on amount of
+        # plus and minus strand coverage
+        pos_frac = strand_scores[POS_STRAND] / float(total_score)
+        yield G.subgraph(nodes), pos_frac
+    del cluster_tree
+
 def sum_node_weights(exon_data_list):
     '''
     sum exon data scores by strand
     '''
     # sum coverage of node by strand
-    strand_scores = [0, 0]
+    strand_weights = [0, 0, 0]
     for edata in exon_data_list:
-        strand_scores[POS_STRAND] += edata.scores[POS_STRAND]
-        strand_scores[NEG_STRAND] += edata.scores[NEG_STRAND]
-    return strand_scores
+        strand_weights[edata.strand] += edata.score
+    return strand_weights
 
-def build_strand_specific_graphs(G):
+def build_strand_specific_graphs(G, pos_frac):
     '''
     build separate subgraphs of G - a forward strand graph and a 
     reverse strand graph (if necessary)
     
+    pos_frac: fraction of all 'stranded' coverage that is on the 
+    positive strand.  this is used to partition unstranded coverage
+    proportionally
+ 
     nodes in the graph will have a 'weight' attribute equal to the
     total strand-specific coverage for that node
 
@@ -52,23 +100,152 @@ def build_strand_specific_graphs(G):
     '''
     # make graphs
     GG = (nx.DiGraph(), nx.DiGraph())
-    # add nodes first
-    for n,ndict in G.nodes_iter(data=True):
-        strand_weights = sum_node_weights(ndict['data'])
-        for strand,w in enumerate(strand_weights):
+    # cluster nodes and compute fraction of fwd/rev strand coverage    
+    for Gsub, pos_frac in calculate_strand_fraction(G.nodes()):
+        # add nodes first
+        strand_fracs = (pos_frac, 1.0 - pos_frac)
+        for n in Gsub.nodes_iter():
+            strand_weights = sum_node_weights(G.node[n]['data'])
+            # partition the unstranded coverage to fwd/rev strands
+            # according to the fraction of stranded coverage observed
+            for strand in (POS_STRAND, NEG_STRAND):
+                w = strand_weights[strand] + strand_fracs[strand] * strand_weights[NO_STRAND] 
+                if w > 0:
+                    GG[strand].add_node(n, weight=w)
+        # add edges
+        for u,v,d in G.edges_iter(data=True):
+            # determine strand based on coordinates of nodes
+            strand = int(u.start >= v.end)
+            # check against strand attribute
+            strandattr = d['strand']
+            assert cmp_strand(strand, strandattr)
+            # get total coverage on this edge
+            w = sum(x.score for x in d['data'])
+            if strandattr == NO_STRAND:
+                w *= strand_fracs[strand]
             if w > 0:
-                GG[strand].add_node(n, weight=w)
-    # add edges
-    for u,v,d in G.edges_iter(data=True):
-        # determine strand based on coordinates of nodes
-        strand = int(u.start >= v.end)
-        # check against strand attribute
-        strandattr = d['strand']
-        assert cmp_strand(strand, strandattr)
-        # add up coverage of edges and set this to the 'score'
-        attr_dict = {EDGE_WEIGHT: sum(x.score for x in d['data'])}
-        GG[strand].add_edge(u, v, attr_dict=attr_dict)   
+                GG[strand].add_edge(u, v, attr_dict={EDGE_WEIGHT: w})   
     return GG
+
+
+#def add_unstranded_transcript(G, transcript, boundaries, nbunch, ebunch):
+#    strand = transcript.strand
+#    cov = transcript.score / transcript.length
+#    for exon in transcript.exons:
+#        exon_splits = list(split_exon(exon, cov, boundaries))
+#        # the coverage allocation is computed here
+#        pos_frac = calculate_strand_fraction(G, exon_splits)
+#        prev_node = None
+#        # create nodes and edges to add to the graph
+#        for start, end, score in exon_splits:             
+#            scores = pos_frac * score, (1.0 - pos_frac) * score                    
+#            cur_node = Exon(start, end)
+#            exon_data = ExonData(id=transcript.id, strand=strand, scores=scores)
+#            nbunch.append((cur_node, exon_data))                    
+#            if prev_node is not None:
+#                # only add edges if there is evidence of coverage on the 
+#                # appropriate strand
+#                if pos_frac > 0:
+#                    ebunch.append((prev_node, cur_node, transcript.id, strand, scores[POS_STRAND]))
+#                if pos_frac < 1:
+#                    ebunch.append((cur_node, prev_node, transcript.id, strand, scores[NEG_STRAND]))
+#            # continue loop
+#            prev_node = cur_node
+#    def _add_stranded_exon(self, exon, id, strand, cov, boundaries):
+#        assert strand != NO_STRAND        
+#        nfirst, ndatafirst = None, None
+#        n1, ndata1 = None, None
+#        n2, ndata2 = None, None
+#        for start, end, score in split_exon(exon, cov, boundaries):
+#            if strand == POS_STRAND:
+#                scores = (score, 0)
+#            elif strand == NEG_STRAND:
+#                scores = (0, score)
+#            n2 = Exon(start, end)
+#            ndata2 = ExonData(id=id, strand=strand, scores=scores)
+#            self._add_node(n2, ndata2)
+#            # add edges between split exon according to 
+#            # strand being assembled.  this allows edges between
+#            # split single exons (unstranded) to be oriented 
+#            # correctly
+#            if n1 is None:
+#                nfirst = n2
+#                ndatafirst = ndata2
+#            elif strand == NEG_STRAND:
+#                self._add_edge(n2, n1, id, strand, ndata2.scores[NEG_STRAND])
+#            else:
+#                assert strand == POS_STRAND
+#                self._add_edge(n1, n2, id, strand, ndata1.scores[POS_STRAND])
+#            # continue loop
+#            n1, ndata1 = n2, ndata2
+#        assert n2.end == exon.end
+#        return nfirst, ndatafirst, n2, ndata2
+#
+#    def _add_stranded_transcript(self, transcript, boundaries):
+#        assert transcript.strand != NO_STRAND
+#        exons = transcript.exons        
+#        strand = transcript.strand
+#        cov = transcript.score / transcript.length
+#        # add the first exon to initialize the loop
+#        # (all transcripts must have at least one exon)
+#        e1_start_node, e1_start_data, e1_end_node, e1_end_data = \
+#            self._add_stranded_exon(exons[0], transcript.id, strand, cov, boundaries)
+#        for e2 in exons[1:]:
+#            # add exon
+#            e2_start_node, e2_start_data, e2_end_node, e2_end_data = \
+#                self._add_stranded_exon(e2, transcript.id, strand, cov, boundaries)
+#            # add edges from exon -> exon
+#            if strand == NEG_STRAND:
+#                self._add_edge(e2_start_node, e1_end_node, transcript.id, 
+#                               strand, e2_start_data.scores[NEG_STRAND])
+#            else:
+#                self._add_edge(e1_end_node, e2_start_node, transcript.id,
+#                               strand, e1_end_data.scores[POS_STRAND])
+#            # continue loop
+#            e1_end_node = e2_end_node
+#            e1_end_data = e2_end_data
+#    def _add_unstranded_transcripts(self, transcripts, boundaries):
+#        nbunch = []
+#        ebunch = []
+#        for transcript in transcripts:
+#            add_unstranded_transcript(self.G, transcript, boundaries, nbunch, ebunch)
+#        # now add all the nodes and edges
+#        for n,exon_data in nbunch:
+#            self._add_node(n, exon_data)
+#        for u,v,id,strand,score in ebunch:
+#            self._add_edge(u, v, id, strand, score)
+#
+#    def add_transcripts(self, transcripts):
+#        '''
+#        note: this method cannot be called multiple times.  each time this
+#        function is invoked, the previously stored transcripts will be 
+#        deleting and overwritten
+#        '''
+#        self.G = nx.DiGraph()
+#        # find the intron domains of the transcripts
+#        boundaries = find_transcript_boundaries(transcripts)
+#        # add the stranded transcripts first and save the
+#        # unstranded transcripts for later
+#        nostrand_transcripts = []
+#        for t in transcripts:
+#            if t.strand == NO_STRAND:
+#                nostrand_transcripts.append(t)
+#                continue
+#            self._add_stranded_transcript(t, boundaries)
+#        # add the unstranded transcripts
+#        self._add_unstranded_transcripts(nostrand_transcripts, boundaries)
+#            def _add_unstranded_transcripts(self, transcripts, boundaries):
+#        nbunch = []
+#        ebunch = []
+#        for transcript in transcripts:
+#            add_unstranded_transcript(self.G, transcript, boundaries, nbunch, ebunch)
+#        # now add all the nodes and edges
+#        for n,exon_data in nbunch:
+#            self._add_node(n, exon_data)
+#        for u,v,id,strand,score in ebunch:
+#            self._add_edge(u, v, id, strand, score)
+
+
 
 def find_start_and_end_nodes(G, strand):
     # find unique starting positions and their 
@@ -311,7 +488,19 @@ def assemble_subgraph(G, strand, fraction_major_path, max_paths):
 
 def assemble_transcript_graph(G, fraction_major_path, max_paths):
     if fraction_major_path <= 0:
-        fraction_major_path = 1e-8
+        fraction_major_path = 1e-8        
+    # separate graph into connected components
+    for Gsub in nx.weakly_connected_component_subgraphs(G):
+        # determine proportions of positive and negative strand
+        # coverage within nodes in this subgraph
+        pos_frac = calculate_strand_fraction(Gsub)
+        # transform transcript graph into strand-specific graphs
+        # for forward and reverse strands, and calculate node and
+        # edge weights
+        GG = build_strand_specific_graphs(G, pos_frac)
+        
+
+    
     # transform transcript graph into strand-specific graphs
     # for forward and reverse strands, and calculate node and
     # edge weights
