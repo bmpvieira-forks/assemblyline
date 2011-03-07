@@ -48,7 +48,6 @@ def convert_attrs_to_strings(H):
         G.node[n]['data'] = convert_data_to_string(G.node[n]['data'])
     for u,v,d in G.edges_iter(data=True):
         d['data'] = convert_data_to_string(d['data'])
-        d['strand'] = str(d['strand'])  
     return G
 
 def compare_dot(transcript_graph, filename):
@@ -69,12 +68,6 @@ def compare_dot(transcript_graph, filename):
         test_data = '"%s"' % d['data']
         if correct_data != test_data:
             return False
-        correct_strand = Gcorrect.edge[ustr][vstr][0]['strand']
-        test_strand = '%s' % d['strand']
-        if correct_strand != test_strand:
-            return False
-        #print 'correct', correct_strand
-        #print 'test', test_strand
     return nx.is_isomorphic(transcript_graph.G, Gcorrect)
 
 def write_dot(transcript_graph, filename):

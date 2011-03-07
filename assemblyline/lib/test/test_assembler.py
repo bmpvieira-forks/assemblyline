@@ -11,16 +11,94 @@ import matplotlib.pyplot as plt
 
 from ..base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
 from ..transcript_graph import TranscriptGraph
-from ..assembler import NODE_WEIGHT, EDGE_OUT_FRAC, sum_node_weights, \
-    build_strand_specific_graphs, calculate_edge_attrs
+from ..assembler import NODE_WEIGHT, EDGE_OUT_FRAC, sum_transcript_data_scores, \
+    build_strand_specific_graphs, calculate_edge_attrs, collapse_contiguous_nodes
 
-from test_base import make_transcript, read_gtf, write_dot
+from test_base import make_transcript, read_gtf, write_dot, get_dot_path
 
 logging.basicConfig(level=logging.DEBUG,
                     #filename="/exds/users/mkiyer/projects/assemblyline/test/test.log",
                     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-class TestAssembler(unittest.TestCase):
+class TestCollapseContiguousNodes(unittest.TestCase):
+    
+    def test_collapse1(self):
+        """
+        test function to merge genomically contiguous nodes
+        """
+        # plus strand
+        path = [Exon(0,10), Exon(10,15), Exon(16,20), Exon(20,30)]
+        newpath = collapse_contiguous_nodes(path, POS_STRAND)
+        correctpath = [Exon(0,15), Exon(16,30)]
+        for x,y in zip(newpath, correctpath):
+            self.assertTrue(x == y)
+        # minus strand
+        path = [Exon(50,60), Exon(49,50), Exon(48,49), Exon(40,45), 
+                Exon(39,40), Exon(0,10)]
+        newpath = collapse_contiguous_nodes(path, NEG_STRAND)
+        correctpath = [Exon(48,60), Exon(39,45), Exon(0,10)]
+        for x,y in zip(newpath, correctpath):
+            self.assertTrue(x == y)
+    
+class TestPartitionUnstrandedData(unittest.TestCase):
+
+    def test_nonoverlapping_node(self):
+        """
+        ensure that coverage from unstranded transcripts is allocated
+        proportionally to the coverage from overlapping stranded 
+        transcripts
+        """
+        tg = TranscriptGraph()
+        t1 = make_transcript(((0, 100), (500,600), (900, 1100)), id="1", strand="+", score=20)
+        t3 = make_transcript([(1050, 1150), (1500,1600)], id="2", strand=".", score=20)
+        tg.add_transcripts([t1, t3])
+        GG = build_strand_specific_graphs(tg.G)
+        # ensure no negative strand is part of graph
+        self.assertTrue(len(GG[NEG_STRAND]) == 0)
+        # ensure no positive strand is part of graph except for the
+        # final exon that does not overlap with a negative strand exon
+        t2 = make_transcript(((0, 100), (500,600), (900, 1100)), id="1", strand="-", score=20)
+        tg.add_transcripts([t2, t3])
+        GG = build_strand_specific_graphs(tg.G)
+        self.assertAlmostEqual(GG[NEG_STRAND].node[Exon(1050,1100)][NODE_WEIGHT], 7.5)
+        self.assertTrue(len(GG[POS_STRAND].edges()) == 0)
+        self.assertTrue(GG[POS_STRAND].node[Exon(1500,1600)][NODE_WEIGHT] == 10)
+        # now combine both plus and minus strands
+        t1 = make_transcript(((0, 100), (500,600)), id="1", strand="+", score=20)
+        t2 = make_transcript(((500,900),), id="2", strand=".", score=20)
+        t3 = make_transcript([(700,900), (1500,1700)], id="3", strand="-", score=40)
+        # ensure coverage is partitioned to + and - strand
+        tg.add_transcripts([t1, t2, t3])
+        GG = build_strand_specific_graphs(tg.G)
+        self.assertAlmostEqual(GG[POS_STRAND].node[Exon(600,700)][NODE_WEIGHT], 2.5)
+        self.assertAlmostEqual(GG[NEG_STRAND].node[Exon(600,700)][NODE_WEIGHT], 2.5)                        
+        #nx.spring_layout(G)
+        #nx.draw(G)
+        #plt.show()
+
+    def test_clustering(self):
+        """
+        ensure that clustering overlapping exons can be used to determine
+        the positive and negative strand fractions
+        """
+        tg = TranscriptGraph()
+        t1 = make_transcript(((0, 10), (40,50)), id="1", strand="+", score=20)
+        t2 = make_transcript([(45, 65)], id="3", strand=".", score=20)
+        t3 = make_transcript([(60, 70), (90,100)], id="2", strand="-", score=20)
+        tg.add_transcripts([t1, t2, t3])
+        GG = build_strand_specific_graphs(tg.G)
+        self.assertAlmostEqual(GG[POS_STRAND].node[Exon(0,10)][NODE_WEIGHT], 10.0)
+        self.assertAlmostEqual(GG[POS_STRAND].node[Exon(40,45)][NODE_WEIGHT], 5.0)
+        self.assertAlmostEqual(GG[POS_STRAND].node[Exon(45,50)][NODE_WEIGHT], 7.5)
+        self.assertAlmostEqual(GG[POS_STRAND].node[Exon(50,60)][NODE_WEIGHT], 5.0)
+        self.assertAlmostEqual(GG[POS_STRAND].node[Exon(60,65)][NODE_WEIGHT], 2.5)
+        self.assertAlmostEqual(GG[NEG_STRAND].node[Exon(65,70)][NODE_WEIGHT], 5.0)
+        self.assertAlmostEqual(GG[NEG_STRAND].node[Exon(60,65)][NODE_WEIGHT], 7.5)
+        self.assertAlmostEqual(GG[NEG_STRAND].node[Exon(50,60)][NODE_WEIGHT], 5.0)
+        self.assertAlmostEqual(GG[NEG_STRAND].node[Exon(45,50)][NODE_WEIGHT], 2.5)
+
+
+class TestCalculateWeights(unittest.TestCase):
 
     def test_build_pos_strand_graph(self):
         '''
@@ -31,7 +109,11 @@ class TestAssembler(unittest.TestCase):
         t2 = make_transcript(((0, 100), (500,600)), id="2", strand="+", score=30)
         t3 = make_transcript(((0, 100), (700,800)), id="3", strand="+", score=50)
         tg.add_transcripts([t1, t2, t3])
-        GG = build_strand_specific_graphs(tg.G)
+        GG = build_strand_specific_graphs(tg.G)        
+        #for n,d in GG[POS_STRAND].nodes_iter(data=True):
+        #    print 'NODE', n,d
+        #for u,v,d in GG[POS_STRAND].edges_iter(data=True):
+        #    print u,v,d
         calculate_edge_attrs(GG[POS_STRAND])
         calculate_edge_attrs(GG[NEG_STRAND])        
         # ensure no neg strand transcripts
@@ -42,14 +124,6 @@ class TestAssembler(unittest.TestCase):
         self.assertAlmostEqual(G.node[t1.exons[1]][NODE_WEIGHT], 10)
         self.assertAlmostEqual(G.node[t2.exons[1]][NODE_WEIGHT], 15)
         self.assertAlmostEqual(G.node[t3.exons[1]][NODE_WEIGHT], 25)
-        self.assertAlmostEqual(G.node[t1.exons[0]][NODE_WEIGHT], 
-                               sum_node_weights(tg.G.node[t1.exons[0]]['data'])[0])
-        self.assertAlmostEqual(G.node[t1.exons[1]][NODE_WEIGHT], 
-                               sum_node_weights(tg.G.node[t1.exons[1]]['data'])[0])
-        self.assertAlmostEqual(G.node[t2.exons[1]][NODE_WEIGHT], 
-                               sum_node_weights(tg.G.node[t2.exons[1]]['data'])[0])
-        self.assertAlmostEqual(G.node[t3.exons[1]][NODE_WEIGHT], 
-                               sum_node_weights(tg.G.node[t3.exons[1]]['data'])[0])        
         # check edge weight computation
         self.assertAlmostEqual(G.edge[t1.exons[0]][t1.exons[1]][EDGE_OUT_FRAC], 0.20)
         self.assertAlmostEqual(G.edge[t1.exons[0]][t2.exons[1]][EDGE_OUT_FRAC], 0.30)
@@ -132,6 +206,9 @@ class TestAssembler(unittest.TestCase):
         self.assertAlmostEqual(GN.edge[t2.exons[1]][t2.exons[0]][EDGE_OUT_FRAC], 5./6.)
         self.assertAlmostEqual(GN.edge[t2.exons[1]][Exon(700,900)][EDGE_OUT_FRAC], 1./6.)
 
+
+class TestAssembler(unittest.TestCase):
+    
     def test_find_paths(self):
         '''
         test that assembler finds the intended "best" paths
@@ -141,67 +218,23 @@ class TestAssembler(unittest.TestCase):
         t2 = make_transcript(((0, 100), (500,600), (900,1000)), id="2", strand="+", score=600)
         t3 = make_transcript(((0, 100), (700,800), (900,1000)), id="3", strand="+", score=300)
         tg.add_transcripts([t1, t2, t3])
-        results = list(tg.assemble(max_paths=10, fraction_major_isoform=0))
+        results = list(tg.assemble(max_paths=10, fraction_major_path=0))
         self.assertTrue(len(results) == 3)
-        print len(results)
+        #print len(results)
         #yield strand, gene_id, tss_id, score, path
 
-
-
-#    def test_calculate_node_weight(self):
-#        # test all positive strand nodes
-#        exon_data_list = [ExonData("1", POS_STRAND, 10),
-#                          ExonData("2", POS_STRAND, 20)]
-#        weights = calculate_node_weight(exon_data_list)
-#        self.assertTrue(weights == (30,0))
-#        # test all negative strand nodes        
-#        exon_data_list = [ExonData("1", NEG_STRAND, 5),
-#                          ExonData("2", NEG_STRAND, 6)]
-#        weights = calculate_node_weight(exon_data_list)
-#        self.assertTrue(weights == (0,11))
-#        # test only unstranded nodes
-#        exon_data_list = [ExonData("1", NO_STRAND, 1),
-#                          ExonData("2", NO_STRAND, 2)]
-#        weights = calculate_node_weight(exon_data_list)
-#        self.assertTrue(weights == (3,0))
-#        # test combination
-#        exon_data_list = [ExonData("1", POS_STRAND, 10),
-#                          ExonData("2", NEG_STRAND, 20),
-#                          ExonData("3", NO_STRAND, 30)]
-#        weights = calculate_node_weight(exon_data_list)
-#        self.assertTrue(weights == (20,40))
-#        
-
-#    def test_strand_degree(self):
-#        """ensure that in_degree/out_degree are correctly ignoring nodes
-#        on the opposite strand"""        
-#        ig = TranscriptGraph()
-#        t1 = make_transcript(((0, 100), (500,600), (900, 1000)), strand="+")
-#        t2 = make_transcript(((300, 400), (500,600), (700,800)), strand="-")
-#        ig.add_transcripts([t1, t2])
-#        G = ig.G        
-#        self.assertTrue(get_in_degree(G, Exon(0, 100), POS_STRAND) == 0)
-#        self.assertTrue(get_out_degree(G, Exon(0, 100), POS_STRAND) == 1)
-#        self.assertTrue(get_in_degree(G, Exon(500,600), POS_STRAND) == 1)
-#        self.assertTrue(get_out_degree(G, Exon(500,600), POS_STRAND) == 1)
-#        self.assertTrue(get_in_degree(G, Exon(900,1000), POS_STRAND) == 1)
-#        self.assertTrue(get_out_degree(G, Exon(900,1000), POS_STRAND) == 0)
-#        self.assertTrue(get_in_degree(G, Exon(300,400), NEG_STRAND) == 1)
-#        self.assertTrue(get_out_degree(G, Exon(300,400), NEG_STRAND) == 0)
-#        self.assertTrue(get_in_degree(G, Exon(500,600), NEG_STRAND) == 1)
-#        self.assertTrue(get_out_degree(G, Exon(500,600), NEG_STRAND) == 1)
-#        self.assertTrue(get_in_degree(G, Exon(700,800), NEG_STRAND) == 0)
-#        self.assertTrue(get_out_degree(G, Exon(700,800), NEG_STRAND) == 1)
-
-#    def test_assembly(self):
+#    def test_actual_data1(self):
+#        """test an example taken from real data"""
 #        # exons do not overlap
-#        test_basename = "assembly1"
+#        test_basename = "assembly2"
 #        gtf_file = test_basename + ".gtf"
 #        dot_file = test_basename + ".dot"
-#        isoform_graph = read_gtf(gtf_file)
-#        write_dot(isoform_graph, "a")
-#        for strand, gene_id, tss_id, score, path in isoform_graph.assemble(100):
-#            print strand, gene_id, tss_id, score, path
+#        txgraph = read_gtf(gtf_file)
+#        write_dot(txgraph, "a")
+#        from ..assembler import build_strand_specific_graphs
+#        GG = build_strand_specific_graphs(txgraph.G)
+#        nx.write_dot(GG[0], get_dot_path("b"))
+#        nx.write_dot(GG[1], get_dot_path("c"))
 
 
 if __name__ == "__main__":
