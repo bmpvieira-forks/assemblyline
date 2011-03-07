@@ -3,6 +3,7 @@ Created on Feb 15, 2011
 
 @author: mkiyer
 '''
+
 # strand constants
 POS_STRAND = 0
 NEG_STRAND = 1

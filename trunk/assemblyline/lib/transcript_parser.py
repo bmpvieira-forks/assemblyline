@@ -35,10 +35,10 @@ class Transcript(object):
                  self.score, self.length, self.exons))
     @property
     def tx_start(self):
-        return self.exons[0][0]
+        return self.exons[0].start
     @property
     def tx_end(self):
-        return self.exons[-1][1]
+        return self.exons[-1].end
     @property
     def introns(self):
         return zip([e[1] for e in self.exons[:-1]],
