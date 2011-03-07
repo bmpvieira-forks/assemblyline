@@ -12,7 +12,7 @@ import os
 
 from lib.transcript_parser import parse_gtf
 from lib.gtf import GTFFeature
-from lib.base import strand_int_to_str, NEG_STRAND, POS_STRAND
+from lib.base import Exon, strand_int_to_str, NEG_STRAND, POS_STRAND
 from lib.transcript_graph import TranscriptGraph
 
 def write_bed(chrom, name, strand, score, exons):
@@ -69,6 +69,20 @@ def get_transcript_id_label_map(transcripts):
         id_map[t.id] = t.label
     return id_map
 
+def collapse_contiguous_nodes(path, strand):
+    newpath = []    
+    n = Exon(path[0].start, path[0].end)
+    for i in xrange(1, len(path)):
+        if strand == NEG_STRAND and (n.start == path[i].end):
+            n.start = path[i].start
+        elif n.end == path[i].start:
+            n.end = path[i].end
+        else:
+            newpath.append(n)
+            n = Exon(path[i].start, path[i].end)
+    newpath.append(n)
+    return newpath
+
 def run_assemblyline(gtf_file, overhang_threshold,
                      fraction_major_isoform,
                      max_paths):
@@ -80,8 +94,10 @@ def run_assemblyline(gtf_file, overhang_threshold,
         logging.debug("Locus with %d transcripts chrom=%s start=%d end=%d" % 
                       (len(locus_transcripts), locus_transcripts[0].chrom,
                        locus_transcripts[0].start, locus_transcripts[-1].end))
-        # build and refine isoform graph
-        transcript_graph = TranscriptGraph.from_transcripts(locus_transcripts)
+        # build and refine transcript graph        
+        transcript_graph = TranscriptGraph()
+        transcript_graph.add_transcripts(locus_transcripts, 
+                                         overhang_threshold)
         #transcript_graph.collapse(overhang_threshold=overhang_threshold)
         chrom = locus_transcripts[0].chrom
         # get transcript id -> transcript object mappings
@@ -89,17 +105,20 @@ def run_assemblyline(gtf_file, overhang_threshold,
         # find isoforms of transcript
         for strand, loc_gene_id, loc_tss_id, score, path in \
             transcript_graph.assemble(max_paths=max_paths,
-                                   fraction_major_isoform=fraction_major_isoform):
+                                      fraction_major_path=fraction_major_isoform):
             # get transcripts and their sample labels from each path
             tx_ids = set().union(*[transcript_graph.get_exon_ids(n) for n in path])
-            tx_labels = set(tx_id_label_map[id] for id in tx_ids)            
+            tx_labels = set(tx_id_label_map[id] for id in tx_ids)
             # use locus/gene/tss/transcript id to make gene name
             gene_name = "L%07d|G%07d|TSS%07d|TU%07d" % (locus_id,
                                                         gene_id + loc_gene_id, 
                                                         tss_id + loc_tss_id,
                                                         tx_id)
+            # collapse contiguous nodes
+            path = collapse_contiguous_nodes(path, strand) 
+            # fix path
             if strand == NEG_STRAND:
-                path.reverse()
+                path.reverse()           
             fields = write_bed(chrom, gene_name, strand, score, path)
             # append extra columns to BED format
             fields.append(str(len(tx_ids)))
