@@ -1,5 +1,5 @@
 strict digraph G {
-"900-1000" [data="[id=G1.1,strand=.,scores=(0.10,0.00)]"];
-"0-100" [data="[id=G1.1,strand=.,scores=(0.10,0.00)]"];
-"200-300" [data="[id=G1.1,strand=.,scores=(0.10,0.00)]"];
+"900-1000" [data="[id=G1.1,strand=.,score=0.10]"];
+"0-100" [data="[id=G1.1,strand=.,score=0.10]"];
+"200-300" [data="[id=G1.1,strand=.,score=0.10]"];
 }
