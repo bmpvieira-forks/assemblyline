@@ -155,7 +155,7 @@ def find_exon_boundaries(transcripts):
     # sort the intron boundary positions and add them to interval trees
     return sorted(exon_boundaries)
 
-def split_exon(exon, transcript_coverage, boundaries):
+def split_exon(exon, coverage_density, boundaries):
     # find the indexes into the intron boundaries list that
     # border the exon.  all the indexes in between these two
     # are overlapping the exon and we must use them to break
@@ -165,8 +165,8 @@ def split_exon(exon, transcript_coverage, boundaries):
     exon_splits = [exon.start] + boundaries[start_ind:end_ind] + [exon.end]
     for j in xrange(1, len(exon_splits)):
         start, end = exon_splits[j-1], exon_splits[j]
-        score = float(end - start) * transcript_coverage
-        yield start, end, score
+        cov = float(end - start) * coverage_density
+        yield start, end, cov
 
 
 class TranscriptGraph(object):
@@ -195,12 +195,13 @@ class TranscriptGraph(object):
         ed = self.G.edge[u][v]
         ed['data'].append(tdata)
     
-    def _add_exon(self, exon, id, strand, cov, boundaries):
+    def _add_exon(self, exon, id, strand, density, boundaries):
         nfirst, tdatafirst = None, None
         n1 = None
         n2 = None
         tdata = None
-        for start, end, score in split_exon(exon, cov, boundaries):
+        edge_tdata = TranscriptData(id=id, strand=strand, score=density)
+        for start, end, score in split_exon(exon, density, boundaries):
             n2 = Exon(start, end)
             tdata = TranscriptData(id=id, strand=strand, score=score)
             self._add_node(n2, tdata)
@@ -211,9 +212,9 @@ class TranscriptGraph(object):
                 tdatafirst = tdata
             else:
                 if cmp_strand(strand, NEG_STRAND):
-                    self._add_edge(n2, n1, tdata)
+                    self._add_edge(n2, n1, edge_tdata)
                 if cmp_strand(strand, POS_STRAND):
-                    self._add_edge(n1, n2, tdata)
+                    self._add_edge(n1, n2, edge_tdata)
             # continue loop
             n1 = n2
         assert n2.end == exon.end
@@ -222,15 +223,16 @@ class TranscriptGraph(object):
     def _add_transcript(self, transcript, boundaries):
         exons = transcript.exons        
         strand = transcript.strand
-        cov = transcript.score / transcript.length
+        density = transcript.score / transcript.length
+        edge_tdata = TranscriptData(id=transcript.id, strand=strand, score=density)
         # add the first exon to initialize the loop
         # (all transcripts must have at least one exon)
         e1_start_node, e1_start_tdata, e1_end_node, e1_end_tdata = \
-            self._add_exon(exons[0], transcript.id, strand, cov, boundaries)
+            self._add_exon(exons[0], transcript.id, strand, density, boundaries)
         for e2 in exons[1:]:
             # add exon
             e2_start_node, e2_start_tdata, e2_end_node, e2_end_tdata = \
-                self._add_exon(e2, transcript.id, strand, cov, boundaries)
+                self._add_exon(e2, transcript.id, strand, density, boundaries)
             # add intron -> exon edges
             if strand != NO_STRAND:
                 if strand == NEG_STRAND:

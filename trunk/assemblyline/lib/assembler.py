@@ -160,6 +160,30 @@ def visit_node_from_parent(G, parent, child):
     path_density = path_cov / path_length
     return path_length, path_cov, path_density
 
+def calculate_edge_attrs(G):
+    for u,nbrdict in G.adjacency_iter():
+        # find total coverage flowing out of this node
+        out_score_total = sum(eattrs[EDGE_WEIGHT] for eattrs in nbrdict.itervalues())        
+        for v, eattrs in nbrdict.iteritems():
+            # find fraction flowing out of each node
+            out_frac = eattrs[EDGE_WEIGHT]/float(out_score_total)
+            # compute coverage density flowing out of edge
+            weight = (G.node[u][NODE_WEIGHT] * out_frac)/float(u.end - u.start)
+            eattrs[EDGE_OUT_FRAC] = out_frac
+            eattrs[EDGE_DENSITY] = weight
+    # now fraction of weight flowing in to each node
+    # reverse edge directions and use adjacency iter again
+    G.reverse(copy=False)
+    for u,nbrdict in G.adjacency_iter():
+        # find total coverage density flowing into this node
+        in_weight_total = sum(eattrs[EDGE_DENSITY] for eattrs in nbrdict.itervalues())
+        for v, eattrs in nbrdict.iteritems():
+            # find fraction flowing into node            
+            in_frac = eattrs[EDGE_DENSITY]/float(in_weight_total)
+            eattrs[EDGE_IN_FRAC] = in_frac
+    # reverse the edges back to normal
+    G.reverse(copy=False)
+
 def dyn_prog_search(G, source):
     """Find the highest scoring path by dynamic programming"""
     # Taken from NetworkX source code http://networkx.lanl.gov
@@ -291,30 +315,6 @@ def add_dummy_start_end_nodes(G, start_nodes, end_nodes):
                      EDGE_IN_FRAC: 0.0}
         G.add_edge(end_node, DUMMY_END_NODE, attr_dict=attr_dict)
 
-def calculate_edge_attrs(G):
-    for u,nbrdict in G.adjacency_iter():
-        # find total coverage flowing out of this node
-        out_score_total = sum(eattrs[EDGE_WEIGHT] for eattrs in nbrdict.itervalues())        
-        for v, eattrs in nbrdict.iteritems():
-            # find fraction flowing out of each node
-            out_frac = eattrs[EDGE_WEIGHT]/float(out_score_total)
-            # compute coverage density flowing out of edge
-            weight = (G.node[u][NODE_WEIGHT] * out_frac)/float(u.end - u.start)
-            eattrs[EDGE_OUT_FRAC] = out_frac
-            eattrs[EDGE_DENSITY] = weight
-    # now fraction of weight flowing in to each node
-    # reverse edge directions and use adjacency iter again
-    G.reverse(copy=False)
-    for u,nbrdict in G.adjacency_iter():
-        # find total coverage density flowing into this node
-        in_weight_total = sum(eattrs[EDGE_DENSITY] for eattrs in nbrdict.itervalues())
-        for v, eattrs in nbrdict.iteritems():
-            # find fraction flowing into node            
-            in_frac = eattrs[EDGE_DENSITY]/float(in_weight_total)
-            eattrs[EDGE_IN_FRAC] = in_frac
-    # reverse the edges back to normal
-    G.reverse(copy=False)
-
 def find_suboptimal_paths(G, start_nodes, end_nodes, 
                           fraction_major_path,
                           max_paths):
@@ -324,7 +324,7 @@ def find_suboptimal_paths(G, start_nodes, end_nodes,
     # nodes are searched together for the best path
     add_dummy_start_end_nodes(G, start_nodes, end_nodes)
     score_limit = -1
-    while True:        
+    while True:
         # find highest scoring path through graph
         path, path_length, path_cov, path_density = \
             find_best_path(G, DUMMY_START_NODE, DUMMY_END_NODE)
@@ -336,9 +336,25 @@ def find_suboptimal_paths(G, start_nodes, end_nodes,
         elif path_density <= score_limit:
             break
         yield path_density, path[1:-1]
+
+        # DEBUG OUTPUT
+        for u,nbrdict in G.adjacency_iter():
+            logging.debug("NODE(%s) -> %f" % (u, G.node[u][NODE_WEIGHT]))
+            for v, eattrs in nbrdict.iteritems():
+                logging.debug("EDGE(%s,%s) -> %s" % (u, v, eattrs))
+        
         # subtract the coverage of this path from the graph and recompute 
         # the edge weights
         subtract_path(G, path[1:-1], path_density)
+
+        # DEBUG OUTPUT
+        for u,nbrdict in G.adjacency_iter():
+            logging.debug("SUBTRACTED NODE(%s) -> %f" % (u, G.node[u][NODE_WEIGHT]))
+            for v, eattrs in nbrdict.iteritems():
+                logging.debug("SUBTRACTED EDGE(%s,%s) -> %s" % (u, v, eattrs))
+        
+        
+        
         # remove path node attributes from graph before
         # calling dynamic programming algorithm again
         clear_path_attributes(G)
