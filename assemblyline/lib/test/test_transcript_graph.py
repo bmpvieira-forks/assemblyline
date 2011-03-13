@@ -126,15 +126,16 @@ class TestTranscriptGraph(unittest.TestCase):
         #write_dot(txgraph, dot_file)
         self.assertTrue(compare_dot(txgraph, dot_file))        
 
-    def test_example1(self):
-        """test some examples from actualy data"""
-        # exons do not overlap
-        test_basename = "ex1"
-        gtf_file = test_basename + ".gtf"
-        dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        write_dot(txgraph, dot_file)
-        #self.assertTrue(compare_dot(txgraph, dot_file))        
+#    def test_example1(self):
+#        """test some examples from actual data"""
+#        pass
+#        # exons do not overlap
+#        #test_basename = "ex1"
+#        #gtf_file = test_basename + ".gtf"
+#        #dot_file = test_basename + ".dot"
+#        #txgraph = read_gtf(gtf_file)
+#        #write_dot(txgraph, dot_file)
+#        #self.assertTrue(compare_dot(txgraph, dot_file))        
 
 
 class TestTrimming(unittest.TestCase):
@@ -157,7 +158,6 @@ class TestTrimming(unittest.TestCase):
             break
         #write_dot(txgraph, dot_file)
         self.assertTrue(compare_dot(txgraph, dot_file))        
-
 
 
 if __name__ == "__main__":

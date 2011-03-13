@@ -6,7 +6,7 @@ Created on Feb 20, 2011
 import os
 import networkx as nx
 
-from ..transcript_graph import TranscriptGraph
+from ..transcript_graph import TranscriptGraph, TranscriptData
 from ..transcript_parser import Transcript, parse_gtf
 from ..base import Exon, strand_str_to_int
 
