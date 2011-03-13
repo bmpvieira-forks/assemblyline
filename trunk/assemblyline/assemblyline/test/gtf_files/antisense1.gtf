@@ -1,0 +1,7 @@
+chr1	Cufflinks	transcript	0	2000	1000	+	.	gene_id "G1"; transcript_id "G1.1"; FPKM "1.0"
+chr1	Cufflinks	exon	0	100	1000	+	.	gene_id "G1"; transcript_id "G1.1"; exon_number "1"; FPKM "1.0"
+chr1	Cufflinks	exon	1900	2000	1000	+	.	gene_id "G1"; transcript_id "G1.1"; exon_number "2"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	1000	1500	1000	-	.	gene_id "G2"; transcript_id "G2.1"; FPKM "1.0"
+chr1	Cufflinks	exon	1000	1100	1000	-	.	gene_id "G2"; transcript_id "G2.1"; exon_number "1"; FPKM "1.0"
+chr1	Cufflinks	exon	1400	1500	1000	-	.	gene_id "G2"; transcript_id "G2.1"; exon_number "2"; FPKM "1.0"
