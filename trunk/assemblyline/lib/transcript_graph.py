@@ -27,7 +27,7 @@ class TranscriptData(object):
                 (self.__class__.__name__, self.id, self.strand, 
                  str(self.score))) 
     def __str__(self):
-        return ("[id=%s,strand=%s,score=%.2f]" % 
+        return ("[id=%s,strand=%s,score=%.6f]" % 
                 (self.id, strand_int_to_str(self.strand), self.score))
 
 def find_intron_starts_and_ends(transcripts):
@@ -195,53 +195,55 @@ class TranscriptGraph(object):
         ed = self.G.edge[u][v]
         ed['data'].append(tdata)
     
-    def _add_exon(self, exon, id, strand, density, boundaries):
-        nfirst, tdatafirst = None, None
+    def _add_exon(self, exon, tdata, boundaries):
+        """
+        tdata: TranscriptData object with 'score' equal to the coverage 
+        density
+        """
+        nfirst = None
         n1 = None
-        n2 = None
-        tdata = None
-        edge_tdata = TranscriptData(id=id, strand=strand, score=density)
-        for start, end, score in split_exon(exon, density, boundaries):
+        n2 = None        
+        for start, end, score in split_exon(exon, tdata.score, boundaries):
             n2 = Exon(start, end)
-            tdata = TranscriptData(id=id, strand=strand, score=score)
-            self._add_node(n2, tdata)
+            exon_tdata = TranscriptData(id=tdata.id, strand=tdata.strand, 
+                                        score=score)
+            self._add_node(n2, exon_tdata)
             # add edges between split exon according to 
             # strand being assembled.
             if n1 is None:
                 nfirst = n2
-                tdatafirst = tdata
             else:
-                if cmp_strand(strand, NEG_STRAND):
-                    self._add_edge(n2, n1, edge_tdata)
-                if cmp_strand(strand, POS_STRAND):
-                    self._add_edge(n1, n2, edge_tdata)
+                if cmp_strand(tdata.strand, NEG_STRAND):
+                    self._add_edge(n2, n1, tdata)
+                if cmp_strand(tdata.strand, POS_STRAND):
+                    self._add_edge(n1, n2, tdata)
             # continue loop
             n1 = n2
         assert n2.end == exon.end
-        return nfirst, tdatafirst, n2, tdata
+        return nfirst, n2
 
     def _add_transcript(self, transcript, boundaries):
         exons = transcript.exons        
         strand = transcript.strand
         density = transcript.score / transcript.length
-        edge_tdata = TranscriptData(id=transcript.id, strand=strand, score=density)
+        tdata = TranscriptData(id=transcript.id, strand=strand, 
+                               score=density)
         # add the first exon to initialize the loop
         # (all transcripts must have at least one exon)
-        e1_start_node, e1_start_tdata, e1_end_node, e1_end_tdata = \
-            self._add_exon(exons[0], transcript.id, strand, density, boundaries)
+        e1_start_node, e1_end_node = \
+            self._add_exon(exons[0], tdata, boundaries)
         for e2 in exons[1:]:
             # add exon
-            e2_start_node, e2_start_tdata, e2_end_node, e2_end_tdata = \
-                self._add_exon(e2, transcript.id, strand, density, boundaries)
+            e2_start_node, e2_end_node = \
+                self._add_exon(e2, tdata, boundaries)
             # add intron -> exon edges
             if strand != NO_STRAND:
                 if strand == NEG_STRAND:
-                    self._add_edge(e2_start_node, e1_end_node, e2_start_tdata)
+                    self._add_edge(e2_start_node, e1_end_node, tdata)
                 else:
-                    self._add_edge(e1_end_node, e2_start_node, e1_end_tdata)
+                    self._add_edge(e1_end_node, e2_start_node, tdata)
             # continue loop
             e1_end_node = e2_end_node
-            e1_end_tdata = e2_end_tdata
 
     def add_transcripts(self, transcripts, overhang_threshold=0):
         '''
