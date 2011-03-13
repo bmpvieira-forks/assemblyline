@@ -9,9 +9,9 @@ import os
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from ..base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
-from ..transcript_graph import TranscriptGraph
-from ..assembler import NODE_WEIGHT, EDGE_OUT_FRAC, sum_transcript_data_scores, \
+from lib.base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
+from lib.transcript_graph import TranscriptGraph
+from lib.assembler import NODE_WEIGHT, EDGE_OUT_FRAC, sum_transcript_data_scores, \
     build_strand_specific_graphs, calculate_edge_attrs, collapse_contiguous_nodes
 
 from test_base import make_transcript, read_gtf, write_dot, get_dot_path
