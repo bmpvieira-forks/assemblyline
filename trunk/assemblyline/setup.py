@@ -13,10 +13,10 @@ def get_extension_modules():
     # Graph node
     #extensions.append( Extension( "lib.cnode", ["lib/cnode.pyx"] ) )
     # Interval clustering                
-    extensions.append( Extension( "lib.bx.cluster", [ "lib/bx/cluster.pyx", "lib/bx/intervalcluster.c"], 
-                                  include_dirs=["lib/bx"]) )
+    extensions.append( Extension( "assemblyline.lib.bx.cluster", [ "assemblyline/lib/bx/cluster.pyx", "assemblyline/lib/bx/intervalcluster.c"], 
+                                  include_dirs=["assemblyline/lib/bx"]) )
     # Interval intersection
-    extensions.append( Extension( "lib.bx.intersection", [ "lib/bx/intersection.pyx" ] ) )
+    extensions.append( Extension( "assemblyline.lib.bx.intersection", [ "assemblyline/lib/bx/intersection.pyx" ] ) )
     return extensions
 
 def main():
