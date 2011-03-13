@@ -10,9 +10,9 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from StringIO import StringIO
 
-from lib.base import Exon, POS_STRAND, NEG_STRAND
-from lib.transcript_graph import TranscriptGraph
-from lib.transcript_parser import parse_gtf
+from assemblyline.lib.base import Exon, POS_STRAND, NEG_STRAND
+from assemblyline.lib.transcript_graph import TranscriptGraph
+from assemblyline.lib.transcript_parser import parse_gtf
 
 from test_base import compare_dot, write_dot, convert_attrs_to_strings, read_gtf, make_transcript, get_gtf_path
 

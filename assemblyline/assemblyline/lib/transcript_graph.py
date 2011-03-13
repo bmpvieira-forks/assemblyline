@@ -10,10 +10,9 @@ import itertools
 import operator
 import bisect
 
+from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand, strand_int_to_str
 from bx.intersection import Interval, IntervalTree
 from bx.cluster import ClusterTree
-from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand, strand_int_to_str
-
 from assembler import assemble_transcript_graph
 
 class TranscriptData(object):
