@@ -1,8 +1,0 @@
-strict digraph G {
-"1900-2000" [data="[id=G1.1,strand=+,score=0.100000]"];
-"0-100" [data="[id=G1.1,strand=+,score=0.100000]"];
-"1000-1100" [data="[id=G2.1,strand=-,score=0.100000]"];
-"1400-1500" [data="[id=G2.1,strand=-,score=0.100000]"];
-"0-100" -> "1900-2000"  [data="[id=G1.1,strand=+,score=0.001000]"];
-"1400-1500" -> "1000-1100"  [data="[id=G2.1,strand=-,score=0.001000]"];
-}
