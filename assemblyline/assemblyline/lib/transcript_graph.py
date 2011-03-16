@@ -133,7 +133,6 @@ def trim_transcripts(transcripts, overhang_threshold):
         t.exons[0].start = trim_start
         t.exons[-1].end = trim_end 
 
-
 def find_exon_boundaries(transcripts):
     '''
     input: a list of transcripts (not Node objects, these are transcripts)
@@ -199,50 +198,48 @@ class TranscriptGraph(object):
         tdata: TranscriptData object with 'score' equal to the coverage 
         density
         """
-        nfirst = None
-        n1 = None
-        n2 = None        
+        nodes = []  
         for start, end, score in split_exon(exon, tdata.score, boundaries):
-            n2 = Exon(start, end)
+            n = Exon(start, end)
             exon_tdata = TranscriptData(id=tdata.id, strand=tdata.strand, 
                                         score=score)
-            self._add_node(n2, exon_tdata)
+            self._add_node(n, exon_tdata)
             # add edges between split exon according to 
             # strand being assembled.
-            if n1 is None:
-                nfirst = n2
-            else:
+            if len(nodes) > 0:
                 if cmp_strand(tdata.strand, NEG_STRAND):
-                    self._add_edge(n2, n1, tdata)
+                    self._add_edge(n, nodes[-1], tdata)
                 if cmp_strand(tdata.strand, POS_STRAND):
-                    self._add_edge(n1, n2, tdata)
+                    self._add_edge(nodes[-1], n, tdata)
             # continue loop
-            n1 = n2
-        assert n2.end == exon.end
-        return nfirst, n2
+            nodes.append(n)
+        assert nodes[-1].end == exon.end
+        return nodes
 
     def _add_transcript(self, transcript, boundaries):
-        exons = transcript.exons        
+        exons = transcript.exons
         strand = transcript.strand
         density = transcript.score / transcript.length
         tdata = TranscriptData(id=transcript.id, strand=strand, 
                                score=density)
+        # split exons that cross boundaries and get the
+        # new exons of the path
+        split_exons = []
         # add the first exon to initialize the loop
         # (all transcripts must have at least one exon)
-        e1_start_node, e1_end_node = \
-            self._add_exon(exons[0], tdata, boundaries)
+        split_exons.extend(self._add_exon(exons[0], tdata, boundaries))
         for e2 in exons[1:]:
             # add exon
-            e2_start_node, e2_end_node = \
-                self._add_exon(e2, tdata, boundaries)
+            e2_exons = self._add_exon(e2, tdata, boundaries)
             # add intron -> exon edges
             if strand != NO_STRAND:
                 if strand == NEG_STRAND:
-                    self._add_edge(e2_start_node, e1_end_node, tdata)
+                    self._add_edge(e2_exons[0], split_exons[-1], tdata)
                 else:
-                    self._add_edge(e1_end_node, e2_start_node, tdata)
+                    self._add_edge(split_exons[-1], e2_exons[0], tdata)
             # continue loop
-            e1_end_node = e2_end_node
+            split_exons.extend(e2_exons)
+        return split_exons
 
     def add_transcripts(self, transcripts, overhang_threshold=0):
         '''
@@ -253,16 +250,23 @@ class TranscriptGraph(object):
         
         note: this method cannot be called multiple times.  each time this
         function is invoked, the previously stored transcripts will be 
-        deleting and overwritten        
+        deleted and overwritten        
         '''
         self.G = nx.DiGraph()
         # trim the transcripts (modifies transcripts in place)
         trim_transcripts(transcripts, overhang_threshold)
         # find the intron domains of the transcripts
         boundaries = find_exon_boundaries(transcripts)
+        # keep a dictionary where a partial path is the key,
+        # and the set of allowable destination nodes is the value
+        allowed_paths = collections.defaultdict(lambda: set())
         # add transcripts
         for t in transcripts:
-            self._add_transcript(t, boundaries)
+            nodes = self._add_transcript(t, boundaries)
+            # update partial paths dictionary
+            for i in xrange(1, len(nodes)):
+                allowed_paths[tuple(nodes[:i])].add(i)
+
 
     def assemble(self, max_paths, fraction_major_path=0.10):
         if fraction_major_path <= 0:

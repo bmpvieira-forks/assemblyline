@@ -4,6 +4,12 @@ Created on Feb 15, 2011
 @author: mkiyer
 '''
 
+# assembler graph attributes
+NODE_WEIGHT = 'weight'
+EDGE_OUT_FRAC = 'outfrac'
+EDGE_IN_FRAC = 'infrac'
+EDGE_DENSITY = 'density'
+
 # strand constants
 POS_STRAND = 0
 NEG_STRAND = 1
