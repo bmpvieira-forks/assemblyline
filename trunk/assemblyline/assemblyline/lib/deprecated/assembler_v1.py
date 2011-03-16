@@ -5,22 +5,22 @@ Created on Feb 20, 2011
 '''
 import collections
 import logging
-import operator
 import networkx as nx
 
 from bx.cluster import ClusterTree
 
-from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand
-from base import NODE_WEIGHT, EDGE_OUT_FRAC, EDGE_IN_FRAC, EDGE_DENSITY
 from smoothen import smoothen_graph_leastsq
-from path_finder import find_suboptimal_paths
+from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand
+from base import NODE_WEIGHT, EDGE_OUT_FRAC
 
-# private constants for fake 'start' and 'end' nodes
+# constants for fake 'start' and 'end' nodes
 DUMMY_START_NODE = Exon(-1,-1)
 DUMMY_END_NODE = Exon(-2,-2)
 
-# private constants for use as graph attributes
+# constants for use as graph attributes
 NODE_TSS_ID = 'tss_id'
+EDGE_DENSITY = 'density'
+EDGE_IN_FRAC = 'infrac'
 PLEN = 'plen'
 PWEIGHT = 'pweight'
 PDENSITY = 'pdensity'
@@ -162,6 +162,130 @@ def calculate_edge_attrs(G):
     # reverse the edges back to normal
     G.reverse(copy=False)
 
+def visit_node_from_parent(G, parent, child):    
+    # compute length, coverage, and rpkm of the current
+    # path when extended to include the child
+    pattrs = G.node[parent]
+    # new path length is parent length + child length    
+    path_length = pattrs.get(PLEN, 0) + (child.end - child.start)    
+    # to compute the coverage going from the parent to the child, take
+    # the existing path coverage at the parent node and multiply it by
+    # the outgoing fraction, then add the child coverage multiplied by
+    # its incoming fraction.
+    parent_cov = pattrs.get(PWEIGHT, pattrs[NODE_WEIGHT])
+    child_cov = G.node[child].get(NODE_WEIGHT, 0)
+    edata = G.edge[parent][child]    
+    path_cov = ((parent_cov * edata[EDGE_OUT_FRAC]) + 
+                (child_cov * edata[EDGE_IN_FRAC]))
+    # score is total coverage divided by the length of the path
+    path_density = path_cov / path_length
+    return path_length, path_cov, path_density
+
+def dyn_prog_search(G, source):
+    """Find the highest scoring path by dynamic programming"""
+    # Taken from NetworkX source code http://networkx.lanl.gov
+    stack = [source]
+    while stack:
+        parent = stack[0]
+        for child in G.successors_iter(parent):
+            logging.debug('Visiting %s -> %s' % (parent, child))            
+            path_length, path_cov, path_density = visit_node_from_parent(G, parent, child)
+            logging.debug('\tlen=%d cov=%f density=%f child_density=%f' %
+                          (path_length, path_cov, path_density, G.node[child].get(PDENSITY,-1)))
+            # only update this node if it has not been visited
+            # or if the new score is higher than the old score
+            cattrs = G.node[child]
+            if path_density > cattrs.get(PDENSITY, -1):
+                # keep pointer to parent node that produced this high scoring path
+                cattrs[PLEN] = path_length
+                cattrs[PWEIGHT] = path_cov
+                cattrs[PDENSITY] = path_density
+                cattrs[PSRC] = parent
+                logging.debug('\tupdated child len=%d cov=%f density=%f' % 
+                              (path_length, path_cov, path_density))
+                # continue iterating through the child path
+                stack.append(child)
+        stack.pop(0)
+
+def find_best_path(G, source, sink):
+    '''
+    use dynamic programming to find the highest scoring path through 
+    the graph starting from 'source' and ending at 'sink'
+    '''
+    # run the dynamic programming algorithm to
+    # score paths
+    dyn_prog_search(G, source)
+    # traceback
+    path = [sink]
+    pattrs = G.node[sink]
+    score = pattrs[PDENSITY]
+    length = pattrs[PLEN]
+    cov = pattrs[PWEIGHT]
+    while path[-1] != source:
+        #logging.debug('path=%s node=%s attrs=%s' %
+        #              (path, path[-1], G.node[path[-1]]))
+        path.append(G.node[path[-1]][PSRC])
+    path.reverse()
+    #logging.debug("FINAL path=%s" % (path))
+    return path, length, cov, score
+
+def clear_path_attributes(G):
+    '''
+    remove dynamic programming node attributes that are 
+    added to the graph temporarily
+    
+    must call this before calling the dynamic programming
+    algorithm again on the same graph    
+    '''
+    # clear path attributes
+    for n in G.nodes_iter():
+        nattrs = G.node[n]
+        if PLEN in nattrs:
+            del nattrs[PLEN]
+            del nattrs[PWEIGHT]
+            del nattrs[PDENSITY]
+            del nattrs[PSRC]    
+
+def recalculate_edge_attrs(G, u, v):
+    # find total weight leaving node 'u'
+    u_succs = G.successors(u)
+    out_density_total = sum(G.edge[u][x][EDGE_DENSITY] for x in u_succs)
+    if out_density_total == 0:
+        out_density_total = 1.0
+    # compute edge attributes leaving node 'u'
+    for succ in u_succs:
+        eattrs = G.edge[u][succ]
+        out_frac = eattrs[EDGE_DENSITY]/float(out_density_total)
+        eattrs[EDGE_OUT_FRAC] = out_frac
+    # find total density entering node 'v'
+    v_preds = G.predecessors(v)
+    in_density_total = sum(G.edge[x][v][EDGE_DENSITY] for x in v_preds)
+    if in_density_total == 0:
+        in_density_total = 1
+    # compute edge density fractions entering node 'v'
+    for pred in v_preds:
+        eattrs = G.edge[pred][v]
+        in_frac = eattrs[EDGE_DENSITY]/float(in_density_total)
+        eattrs[EDGE_IN_FRAC] = in_frac
+
+def subtract_path(G, path, path_density):
+    '''
+    subtract the coverage density incurred by traversing the 
+    given path from each node and edge in the graph
+    '''
+    for i,v in enumerate(path):
+        # subtract coverage from node
+        v_cov = path_density * (v.end - v.start)
+        G.node[v][NODE_WEIGHT] = max(0, G.node[v][NODE_WEIGHT] - v_cov)
+        if i == 0:
+            continue
+        # subtract density from edge
+        u = path[i-1]
+        eattrs = G.edge[u][v]
+        eattrs[EDGE_DENSITY] = max(0, eattrs[EDGE_DENSITY] - path_density)
+        # recompute edge attrs
+        recalculate_edge_attrs(G, u, v)
+
 def add_dummy_start_end_nodes(G, start_nodes, end_nodes):
     # add 'dummy' tss nodes if necessary
     G.add_node(DUMMY_START_NODE, weight=0)
@@ -180,11 +304,9 @@ def add_dummy_start_end_nodes(G, start_nodes, end_nodes):
                      EDGE_IN_FRAC: 0.0}
         G.add_edge(end_node, DUMMY_END_NODE, attr_dict=attr_dict)
 
-def assemble_subgraph(G, strand, fraction_major_path, max_paths):
-    # find start and end nodes in graph
-    start_nodes, end_nodes = find_start_and_end_nodes(G, strand)
-    logging.debug("START NODES (TSSs): %s" % start_nodes)
-    logging.debug("END NODES: %s" % end_nodes)
+def find_suboptimal_paths(G, start_nodes, end_nodes, 
+                          fraction_major_path,
+                          max_paths):
     # compute initial edge weights and coverage flow in/out of nodes
     calculate_edge_attrs(G)
     # redistribute node weights in order to minimize error in graph
@@ -192,31 +314,52 @@ def assemble_subgraph(G, strand, fraction_major_path, max_paths):
     # at an artificial node at the start and end so that all start
     # nodes are searched together for the best path
     add_dummy_start_end_nodes(G, start_nodes, end_nodes)
-    # find up to 'max_paths' paths through graph
-    paths = []
-    for path, weight, length in \
-        find_suboptimal_paths(G, DUMMY_START_NODE, DUMMY_END_NODE, 
-                              max_paths):
-        # remove dummy nodes from path
-        path = path[1:-1]
-        # compute density
-        density = 1.0e3 * weight / float(length)
-        # get tss_id from path
-        tss_id = G.node[path[0]][NODE_TSS_ID]
-        paths.append((density, tss_id, path))
-    # sort by density
-    paths = sorted(paths, key=operator.itemgetter(0), reverse=True)
-    # return paths while density is greater than some fraction of the
-    # highest density
-    density_lower_bound = fraction_major_path * paths[0][0]
-    for density, tss_id, path in paths:
-        if density < density_lower_bound:
+    score_limit = -1
+    while True:
+        # find highest scoring path through graph
+        path, path_length, path_cov, path_density = \
+            find_best_path(G, DUMMY_START_NODE, DUMMY_END_NODE)
+        logging.debug("Path density=%f limit=%f cov=%.2f length=%d path=%s" % 
+                      (path_density, score_limit, path_cov, path_length, path))
+        # set score limit if this is the first path
+        if score_limit < 0:
+            score_limit = path_density * fraction_major_path
+        elif path_density <= score_limit:
             break
-        yield tss_id, density, path
+        yield path_density, path[1:-1]
+        # DEBUG OUTPUT
+        for u,nbrdict in G.adjacency_iter():
+            logging.debug("NODE(%s) -> %f" % (u, G.node[u][NODE_WEIGHT]))
+            for v, eattrs in nbrdict.iteritems():
+                logging.debug("EDGE(%s,%s) -> %s" % (u, v, eattrs))
+        # subtract the coverage of this path from the graph and recompute 
+        # the edge weights
+        subtract_path(G, path[1:-1], path_density)
+
+        # DEBUG OUTPUT
+        for u,nbrdict in G.adjacency_iter():
+            logging.debug("AFTER NODE(%s) -> %f" % (u, G.node[u][NODE_WEIGHT]))
+            for v, eattrs in nbrdict.iteritems():
+                logging.debug("AFTER EDGE(%s,%s) -> %s" % (u, v, eattrs))
+
+        # remove path node attributes from graph before
+        # calling dynamic programming algorithm again
+        clear_path_attributes(G)
     # remove dummy nodes from graph
     G.remove_node(DUMMY_START_NODE)
     G.remove_node(DUMMY_END_NODE)
 
+def assemble_subgraph(G, strand, fraction_major_path, max_paths):
+    # find start and end nodes in graph
+    start_nodes, end_nodes = find_start_and_end_nodes(G, strand)
+    logging.debug("START NODES (TSSs): %s" % start_nodes)
+    logging.debug("END NODES: %s" % end_nodes)
+    for density, path in find_suboptimal_paths(G, start_nodes, end_nodes,
+                                               fraction_major_path=fraction_major_path,
+                                               max_paths=max_paths):
+        # get tss_id from path
+        tss_id = G.node[path[0]][NODE_TSS_ID]
+        yield tss_id, 1.0e3 * density, path
 
 def assemble_transcript_graph(G, fraction_major_path, max_paths):
     if fraction_major_path <= 0:

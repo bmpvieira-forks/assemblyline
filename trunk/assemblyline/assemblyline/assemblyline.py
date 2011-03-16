@@ -135,7 +135,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--overhang", type=int, dest="overhang_threshold", default=100)
     parser.add_argument("--fraction-major-isoform", dest="fraction_major_isoform", type=float, default=0.10)
-    parser.add_argument("--max-paths", dest="max_paths", type=int, default=10)
+    parser.add_argument("--max-paths", dest="max_paths", type=int, default=1000)
     parser.add_argument("--score-attr", dest="score_attr", default="FPKM")
     parser.add_argument("filename")
     options = parser.parse_args()
