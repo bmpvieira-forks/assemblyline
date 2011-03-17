@@ -10,6 +10,41 @@ EDGE_OUT_FRAC = 'outfrac'
 EDGE_IN_FRAC = 'infrac'
 EDGE_DENSITY = 'density'
 
+class Exon(object):
+    __slots__ = ('start', 'end')
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end    
+
+    def __str__(self):
+        return ("%s-%s" % (self.start, self.end))
+
+    def __repr__(self):
+        return ("<%s(start=%d end=%d)>" %
+                (self.__class__.__name__, self.start, self.end))
+
+    def __eq__(self, other):
+        return (self.start == other.start) and (self.end == other.end)
+    def __ne__(self, other):
+        return (self.start != other.start) or (self.end != other.end)
+    def __lt__(self, other):
+        return self.start < other.start
+    def __le__(self, other):
+        return self.start <= other.start
+    def __gr__(self, other):
+        return self.start > other.start
+    def __ge__(self, other):
+        return self.start >= other.start        
+    def __hash__(self):
+        return (self.start << 16) | (self.end)
+
+    def is_overlapping(self, other):
+        return interval_overlap(self, other)
+
+# constants for fake 'start' and 'end' nodes
+SOURCE_NODE = Exon(-1,-1)
+SINK_NODE = Exon(-2,-2)
+
 # strand constants
 POS_STRAND = 0
 NEG_STRAND = 1
@@ -45,34 +80,4 @@ def interval_overlap(a, b):
 def interval_overlap_threshold(a, b, d=0):
     return (a.start < b.end + d) and (b.start < a.end + d)
 
-class Exon(object):
-    __slots__ = ('start', 'end')
-    def __init__(self, start, end):
-        self.start = start
-        self.end = end    
-
-    def __str__(self):
-        return ("%s-%s" % (self.start, self.end))
-
-    def __repr__(self):
-        return ("<%s(start=%d end=%d)>" %
-                (self.__class__.__name__, self.start, self.end))
-
-    def __eq__(self, other):
-        return (self.start == other.start) and (self.end == other.end)
-    def __ne__(self, other):
-        return (self.start != other.start) or (self.end != other.end)
-    def __lt__(self, other):
-        return self.start < other.start
-    def __le__(self, other):
-        return self.start <= other.start
-    def __gr__(self, other):
-        return self.start > other.start
-    def __ge__(self, other):
-        return self.start >= other.start        
-    def __hash__(self):
-        return (self.start << 16) | (self.end)
-
-    def is_overlapping(self, other):
-        return interval_overlap(self, other)
 

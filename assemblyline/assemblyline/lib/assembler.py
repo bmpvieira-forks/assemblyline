@@ -12,12 +12,9 @@ from bx.cluster import ClusterTree
 
 from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand
 from base import NODE_WEIGHT, EDGE_OUT_FRAC, EDGE_IN_FRAC, EDGE_DENSITY
+from base import SOURCE_NODE, SINK_NODE
 from smoothen import smoothen_graph_leastsq
 from path_finder import find_suboptimal_paths
-
-# private constants for fake 'start' and 'end' nodes
-DUMMY_START_NODE = Exon(-1,-1)
-DUMMY_END_NODE = Exon(-2,-2)
 
 # private constants for use as graph attributes
 NODE_TSS_ID = 'tss_id'
@@ -25,7 +22,6 @@ PLEN = 'plen'
 PWEIGHT = 'pweight'
 PDENSITY = 'pdensity'
 PSRC = 'psrc'
-
 
 def calculate_strand_fraction(G):
     '''
@@ -164,23 +160,24 @@ def calculate_edge_attrs(G):
 
 def add_dummy_start_end_nodes(G, start_nodes, end_nodes):
     # add 'dummy' tss nodes if necessary
-    G.add_node(DUMMY_START_NODE, weight=0)
+    G.add_node(SOURCE_NODE, weight=0)
     for start_node in start_nodes:        
-        logging.debug('adding dummy %s -> %s' % (DUMMY_START_NODE, start_node))
+        logging.debug('adding dummy %s -> %s' % (SOURCE_NODE, start_node))
         attr_dict = {EDGE_DENSITY: 0.0,
                      EDGE_OUT_FRAC: 0.0,
                      EDGE_IN_FRAC: 1.0}                     
-        G.add_edge(DUMMY_START_NODE, start_node, attr_dict=attr_dict)
+        G.add_edge(SOURCE_NODE, start_node, attr_dict=attr_dict)
     # add a single 'dummy' end node
-    G.add_node(DUMMY_END_NODE, weight=0)
+    G.add_node(SINK_NODE, weight=0)
     for end_node in end_nodes:
-        logging.debug('adding dummy %s -> %s' % (end_node, DUMMY_END_NODE))
+        logging.debug('adding dummy %s -> %s' % (end_node, SINK_NODE))
         attr_dict = {EDGE_DENSITY: 0.0,
                      EDGE_OUT_FRAC: 1.0,
                      EDGE_IN_FRAC: 0.0}
-        G.add_edge(end_node, DUMMY_END_NODE, attr_dict=attr_dict)
+        G.add_edge(end_node, SINK_NODE, attr_dict=attr_dict)
 
-def assemble_subgraph(G, strand, fraction_major_path, max_paths):
+def assemble_subgraph(G, strand, fraction_major_path, 
+                      max_paths):
     # find start and end nodes in graph
     start_nodes, end_nodes = find_start_and_end_nodes(G, strand)
     logging.debug("START NODES (TSSs): %s" % start_nodes)
@@ -195,8 +192,7 @@ def assemble_subgraph(G, strand, fraction_major_path, max_paths):
     # find up to 'max_paths' paths through graph
     paths = []
     for path, weight, length in \
-        find_suboptimal_paths(G, DUMMY_START_NODE, DUMMY_END_NODE, 
-                              max_paths):
+        find_suboptimal_paths(G, SOURCE_NODE, SINK_NODE, max_paths):
         # remove dummy nodes from path
         path = path[1:-1]
         # compute density
@@ -214,8 +210,8 @@ def assemble_subgraph(G, strand, fraction_major_path, max_paths):
             break
         yield tss_id, density, path
     # remove dummy nodes from graph
-    G.remove_node(DUMMY_START_NODE)
-    G.remove_node(DUMMY_END_NODE)
+    G.remove_node(SOURCE_NODE)
+    G.remove_node(SINK_NODE)
 
 
 def assemble_transcript_graph(G, fraction_major_path, max_paths):
@@ -226,19 +222,22 @@ def assemble_transcript_graph(G, fraction_major_path, max_paths):
     # edge weights
     GG = build_strand_specific_graphs(G)
     # assemble strands one at a time
-    gene_id = 0
-    tss_id = 0 
+    current_gene_id = 0
+    current_tss_id = 0 
     for strand, Gstrand in enumerate(GG):
         logging.debug("STRAND: %s" % strand) 
         # get connected components - unconnected components are considered
         # different genes
         for Gsub in nx.weakly_connected_component_subgraphs(Gstrand):
             tss_id_map = {}
-            for sub_tss_id, score, path in assemble_subgraph(Gsub, strand, 
-                                                             fraction_major_path=fraction_major_path, 
-                                                             max_paths=max_paths):
+            for sub_tss_id, score, path in \
+                assemble_subgraph(Gsub, strand,
+                                  fraction_major_path=fraction_major_path, 
+                                  max_paths=max_paths):
                 if sub_tss_id not in tss_id_map:
-                    tss_id_map[sub_tss_id] = tss_id
-                    tss_id += 1
-                yield strand, gene_id, tss_id_map[sub_tss_id], score, path
-            gene_id += 1
+                    tss_id_map[sub_tss_id] = current_tss_id
+                    current_tss_id += 1
+                tss_id = tss_id_map[sub_tss_id]
+                yield strand, current_gene_id, tss_id, score, path
+            current_gene_id += 1
+
