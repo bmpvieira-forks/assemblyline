@@ -10,7 +10,8 @@ import itertools
 import operator
 import bisect
 
-from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand, strand_int_to_str
+from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand, \
+    strand_int_to_str
 from bx.intersection import Interval, IntervalTree
 from bx.cluster import ClusterTree
 from assembler import assemble_transcript_graph
@@ -107,8 +108,8 @@ def trim_transcripts(transcripts, overhang_threshold):
                               intron_starts[t.strand], 
                               intron_ends[t.strand], 
                               overhang_threshold)
-        logging.debug('strand=%d txstart=%d txend=%d trimstart=%d trimend=%d' % 
-                      (t.strand, t.tx_start, t.tx_end, trim_start, trim_end))
+        #logging.debug('strand=%d txstart=%d txend=%d trimstart=%d trimend=%d' % 
+        #              (t.strand, t.tx_start, t.tx_end, trim_start, trim_end))
         # if both start and end were trimmed it is
         # possible that they could be trimmed to 
         # match different introns and generate a 
@@ -259,13 +260,14 @@ class TranscriptGraph(object):
         boundaries = find_exon_boundaries(transcripts)
         # keep a dictionary where a partial path is the key,
         # and the set of allowable destination nodes is the value
-        allowed_paths = collections.defaultdict(lambda: set())
+        #allowed_paths = collections.defaultdict(lambda: set())
         # add transcripts
         for t in transcripts:
             nodes = self._add_transcript(t, boundaries)
-            # update partial paths dictionary
-            for i in xrange(1, len(nodes)):
-                allowed_paths[tuple(nodes[:i])].add(i)
+            # update allowed partial paths dictionary
+        #    for i in xrange(1, len(nodes)):
+        #        allowed_paths[tuple(nodes[:i])].add(nodes[i])
+        #self.allowed_paths = allowed_paths
 
 
     def assemble(self, max_paths, fraction_major_path=0.10):
