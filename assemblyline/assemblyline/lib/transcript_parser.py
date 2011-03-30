@@ -16,7 +16,7 @@ from base import Exon, NO_STRAND, POS_STRAND, NEG_STRAND, strand_int_to_str, \
 
 class Transcript(object):
     __slots__ = ('chrom', 'start', 'end', 'strand', 'id', 'label', 
-                 'score', 'length', 'exons')
+                 'score', 'length', 'exons', 'attrs')
     def __init__(self):
         self.chrom = None
         self.start = -1
@@ -27,12 +27,13 @@ class Transcript(object):
         self.score = 0
         self.length = 0
         self.exons = {}
+        self.attrs = {}
     def __str__(self):
         return ("<%s(chrom='%s', start='%d', end='%d', strand='%s', "
-                "id='%s', label='%s', score='%f', length='%d', exons=%s)>" %
+                "id='%s', label='%s', score='%f', length='%d', exons=%s, attrs='%s')>" %
                 (self.__class__.__name__, self.chrom, self.start, self.end, 
                  strand_int_to_str(self.strand), self.id, self.label, 
-                 self.score, self.length, self.exons))
+                 self.score, self.length, self.exons, self.attrs))
     @property
     def tx_start(self):
         return self.exons[0].start
@@ -131,7 +132,6 @@ def separate_loci(feature_iter):
         yield window
 
 def parse_gtf(fileh, attr_defs=None, score_attr="FPKM"):
-    logging.debug("Reading features")
     for locus_features in separate_loci(gtf.GTFFeature.parse(fileh, attr_defs)):
         locus_transcripts = separate_transcripts(locus_features, score_attr)
         yield locus_transcripts

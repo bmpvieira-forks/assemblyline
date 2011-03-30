@@ -7,21 +7,23 @@ import logging
 import collections
 import networkx as nx
 
-from base import NODE_WEIGHT, EDGE_OUT_FRAC, EDGE_IN_FRAC 
-
-# TODO: for 'best k paths' algorithm
-NodePtr = collections.namedtuple("NodePtr", ["density", "weight", "length", "src"])
-PATH_PTRS = 'pptrs'
+from base import NODE_WEIGHT, EDGE_OUT_FRAC, EDGE_IN_FRAC, EDGE_DENSITY
 
 # for get num paths algorithm
 PNPATHS = 'pnpaths'
 
 # for dynamic programming algorithm
 TMP_NODE_WEIGHT = 'tmpnw'
+TMP_EDGE_DENSITY = 'tmpdensity'
+TMP_EDGE_OUT_FRAC = 'tmpoutfrac'
+TMP_EDGE_IN_FRAC = 'tmpinfrac'
 PATH_LENGTH = 'plen'
 PATH_WEIGHT = 'pweight'
 PATH_DENSITY = 'pdensity'
 PATH_NODES = 'pnodes'
+
+# constant minimum edge density
+MIN_EDGE_DENSITY = 0.001
 
 def visit_node(G, src, dst):
     # get path attributes of src node
@@ -38,8 +40,8 @@ def visit_node(G, src, dst):
     # the outgoing fraction, then add the child coverage multiplied by
     # its incoming fraction.
     edata = G.edge[src][dst]
-    weight = (src_weight * edata[EDGE_OUT_FRAC] + 
-              dst_weight * edata[EDGE_IN_FRAC])
+    weight = (src_weight * edata[TMP_EDGE_OUT_FRAC] + 
+              dst_weight * edata[TMP_EDGE_IN_FRAC])
     return weight, length
 
 def dynprog_search(G, source):
@@ -129,6 +131,26 @@ def clear_path_attributes(G):
         del d[PATH_DENSITY]
         del d[PATH_NODES]
 
+def recalculate_edge_attrs(G, u, v):
+    # find total weight leaving node 'u'
+    u_succs = G.successors(u)
+    out_density_total = sum(G.edge[u][x][TMP_EDGE_DENSITY] for x in u_succs)
+    assert out_density_total > 0
+    # compute edge attributes leaving node 'u'
+    for succ in u_succs:
+        eattrs = G.edge[u][succ]
+        out_frac = eattrs[TMP_EDGE_DENSITY]/out_density_total
+        eattrs[TMP_EDGE_OUT_FRAC] = out_frac
+    # find total density entering node 'v'
+    v_preds = G.predecessors(v)
+    in_density_total = sum(G.edge[x][v][TMP_EDGE_DENSITY] for x in v_preds)
+    assert in_density_total > 0
+    # compute edge density fractions entering node 'v'
+    for pred in v_preds:
+        eattrs = G.edge[pred][v]
+        in_frac = eattrs[TMP_EDGE_DENSITY]/in_density_total
+        eattrs[TMP_EDGE_IN_FRAC] = in_frac
+
 def subtract_path(G, path, weight, length):
     """
     subtract the coverage density incurred by traversing the given path
@@ -142,12 +164,20 @@ def subtract_path(G, path, weight, length):
             pos_weight += G.node[v][TMP_NODE_WEIGHT] 
     if pos_length == 0:
         return 0
-    density = max(weight, pos_weight) / float(pos_length)
-    for v in path:
+    density = max(weight, pos_weight) / float(pos_length)   
+    for i,v in enumerate(path):
         v_weight_used = density * (v.end - v.start)
         #new_weight = G.node[v][TMP_NODE_WEIGHT] - v_weight_used        
         #G.node[v][TMP_NODE_WEIGHT] = max(0, new_weight)
         G.node[v][TMP_NODE_WEIGHT] -= v_weight_used
+        if i == 0:
+            continue
+        # subtract density from edge
+        u = path[i-1]
+        eattrs = G.edge[u][v]
+        eattrs[TMP_EDGE_DENSITY] = max(MIN_EDGE_DENSITY, eattrs[TMP_EDGE_DENSITY] - density)
+        # recompute edge attrs
+        recalculate_edge_attrs(G, u, v)
     return pos_weight
 
 def get_num_paths(G, source, sink):
@@ -173,15 +203,19 @@ def find_suboptimal_paths(G, source, sink,
     # manipulation them in the algorithm
     for n,d in G.nodes_iter(data=True):
         d[TMP_NODE_WEIGHT] = d[NODE_WEIGHT]
+    for u,v,d in G.edges_iter(data=True):
+        d[TMP_EDGE_DENSITY] = d[EDGE_DENSITY]
+        d[TMP_EDGE_OUT_FRAC] = d[EDGE_OUT_FRAC]
+        d[TMP_EDGE_IN_FRAC] = d[EDGE_IN_FRAC]
     # find the best path
-    path_results = {}
     logging.debug("\tFinding overall best path")
+    path_results = {}
     init_path_attributes(G)
     dynprog_search(G, source)    
     path, tmp_weight, weight, length = traceback(G, source, sink)
     path_results[path] = (weight, length)
-    logging.debug("\t\tweight=%f length=%d density=%f" % 
-                  (weight, length, weight/float(length)))
+    logging.debug("\t\ttmp_weight=%f weight=%f length=%d density=%f" % 
+                  (tmp_weight, weight, length, weight/float(length)))
     # find suboptimal paths
     logging.debug("\tFinding suboptimal paths")
     iterations = 0
@@ -194,8 +228,8 @@ def find_suboptimal_paths(G, source, sink,
         path, tmp_weight, weight, length = traceback(G, source, sink)
         if path not in path_results:
             path_results[path] = (weight, length)
-        logging.debug("\t\tweight=%f length=%d density=%f" % 
-                      (weight, length, weight/float(length)))
+        logging.debug("\t\ttmp_weight=%f weight=%f length=%d density=%f" % 
+                      (tmp_weight, weight, length, weight/float(length)))
         # count loops
         iterations += 1
     logging.debug("\t\tpath finding iterations=%d" % iterations)
@@ -206,3 +240,7 @@ def find_suboptimal_paths(G, source, sink,
     clear_path_attributes(G) 
     for n,d in G.nodes_iter(data=True):
         del d[TMP_NODE_WEIGHT]
+    for u,v,d in G.edges_iter(data=True):
+        del d[TMP_EDGE_DENSITY]
+        del d[TMP_EDGE_OUT_FRAC]
+        del d[TMP_EDGE_IN_FRAC]
