@@ -121,8 +121,8 @@ def run_assemblyline(gtf_file, overhang_threshold,
                 path.reverse()           
             fields = write_bed(chrom, gene_name, strand, score, path)
             # append extra columns to BED format
-            fields.append(str(len(tx_ids)))
-            fields.append(str(len(tx_labels)))
+            #fields.append(str(len(tx_ids)))
+            #fields.append(str(len(tx_labels)))
             print '\t'.join(fields)
             tx_id += 1
         gene_id += loc_gene_id + 1
