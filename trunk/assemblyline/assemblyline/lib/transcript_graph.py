@@ -118,7 +118,7 @@ def trim_transcripts(transcripts, overhang_threshold):
         # introns. resolve these situations by choosing
         # the smaller of the two trimmed distances as
         # the more likely
-        if trim_end < trim_start:
+        if trim_end <= trim_start:
             logging.warning('Trimming produced strand=%d txstart=%d txend=%d trimstart=%d trimend=%d' % 
                             (t.strand, t.tx_start, t.tx_end, trim_start, trim_end))
             left_trim_dist = trim_start - t.tx_start
@@ -129,6 +129,7 @@ def trim_transcripts(transcripts, overhang_threshold):
                 trim_start, trim_end = trim_start, t.tx_end
             else:
                 trim_start, trim_end = t.tx_start, trim_end
+            logging.warning('\tresolved to trimstart=%d trimend=%d' % (trim_start, trim_end))
         assert trim_start < trim_end
         # finally, modify the transcript
         t.exons[0].start = trim_start

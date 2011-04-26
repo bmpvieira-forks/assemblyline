@@ -121,19 +121,22 @@ def annotate_recurrence_and_density(transcripts):
         # keep track of data on each strand        
         for f_id in f_ids:
             t = transcripts[f_id]
-            overlap = get_overlapping_bases(t, start, end)
-            score = t.score * (overlap / float(t.length))
+            if t.length == 0:
+                overlap = 0
+                score = 0
+            else:
+                overlap = get_overlapping_bases(t, start, end)
+                score = t.score * (overlap / float(t.length))
             strand_data[t.strand].weight += score
             strand_data[t.strand].length += overlap
             strand_data[t.strand].recur.add(t.label)
             strand_data[t.strand].num_txs += 1
         # compute density
-        for strand,data in enumerate(strand_data):
-            if data.length == 0:
-                data.density = 0
+        for strand,d in enumerate(strand_data):
+            if d.length == 0:
+                d.density = 0
             else:
-                data.density = data.weight / float(data.length)
-            data.recur = len(data.recur)
+                d.density = d.weight / float(d.length)
         total_density = (strand_data[POS_STRAND].density +
                          strand_data[NEG_STRAND].density)
         if total_density == 0:
@@ -144,25 +147,34 @@ def annotate_recurrence_and_density(transcripts):
             # proportionally assign unstranded coverage based on amount of
             # plus and minus strand coverage
             pos_frac = strand_data[POS_STRAND].density / float(total_density)
-        # allocate recurrence/density from unstranded transcripts        
+        # allocate density from unstranded transcripts        
         strand_fracs = (pos_frac, 1.0 - pos_frac)
         for s in (POS_STRAND, NEG_STRAND):
             d = strand_data[s]
             d.weight += strand_fracs[s] * strand_data[NO_STRAND].weight
             d.length += strand_fracs[s] * strand_data[NO_STRAND].length
             d.num_txs += strand_fracs[s] * strand_data[NO_STRAND].num_txs
-            d.recur += strand_fracs[s] * strand_data[NO_STRAND].recur
             if d.length == 0:
                 d.density = 0
             else:
                 d.density = d.weight / float(d.length)
+        # hard to allocate unstranded transcripts to one strand or the
+        # other.  try to do this proportionately
+        num_pos_recur = int(round(strand_fracs[POS_STRAND] * 
+                                  len(strand_data[NO_STRAND].recur)))
+        recur_txs = list(strand_data[NO_STRAND].recur)
+        strand_data[POS_STRAND].recur.update(recur_txs[:num_pos_recur])
+        strand_data[NEG_STRAND].recur.update(recur_txs[num_pos_recur:])
         # assign 'unstranded' transcript stats to the 'best' strand
         d = strand_data[NO_STRAND]
         d.weight = max(strand_data[x].weight for x in (POS_STRAND, NEG_STRAND))               
         d.length = max(strand_data[x].length for x in (POS_STRAND, NEG_STRAND))               
         d.density = max(strand_data[x].density for x in (POS_STRAND, NEG_STRAND))               
-        d.num_txs = max(strand_data[x].num_txs for x in (POS_STRAND, NEG_STRAND))               
-        d.recur = max(strand_data[x].recur for x in (POS_STRAND, NEG_STRAND))               
+        d.num_txs = max(strand_data[x].num_txs for x in (POS_STRAND, NEG_STRAND))
+        if len(strand_data[POS_STRAND].recur) >= len(strand_data[NEG_STRAND].recur):
+            d.recur = strand_data[POS_STRAND].recur
+        else:                           
+            d.recur = strand_data[NEG_STRAND].recur
         # annotate transcripts with statistics
         for f_id in f_ids:
             tx = transcripts[f_id]            
@@ -170,16 +182,20 @@ def annotate_recurrence_and_density(transcripts):
                 tx.attrs[OVERLAP_WEIGHT] = 0
                 tx.attrs[OVERLAP_LENGTH] = 0
                 tx.attrs[OVERLAP_NUM_TXS] = 0
-                tx.attrs[OVERLAP_RECUR] = 0
+                tx.attrs[OVERLAP_RECUR] = set()
                 tx.attrs[OVERLAP_DENSITY] = 0
             d = strand_data[tx.strand]
             tx.attrs[OVERLAP_WEIGHT] += d.weight
             tx.attrs[OVERLAP_LENGTH] += d.length
             tx.attrs[OVERLAP_NUM_TXS] += d.num_txs
-            tx.attrs[OVERLAP_RECUR] += d.recur
-    # now that all exons are accounted for, compute density 
-    for tx in transcripts:        
-        tx.attrs[OVERLAP_DENSITY] += tx.attrs[OVERLAP_WEIGHT] / float(tx.attrs[OVERLAP_LENGTH])
+            tx.attrs[OVERLAP_RECUR].update(d.recur)
+    # now that all exons are accounted for, compute density and recurrence
+    for tx in transcripts:
+        if tx.attrs[OVERLAP_LENGTH] == 0:
+            tx.attrs[OVERLAP_DENSITY] = 0
+        else:
+            tx.attrs[OVERLAP_DENSITY] += tx.attrs[OVERLAP_WEIGHT] / float(tx.attrs[OVERLAP_LENGTH])
+        tx.attrs[OVERLAP_RECUR] = len(tx.attrs[OVERLAP_RECUR])
 
 def annotate_overlap(transcripts, exon_trees, intron_trees):
     for tx in transcripts:
@@ -198,27 +214,56 @@ def annotate_overlap(transcripts, exon_trees, intron_trees):
         tx.attrs[INTRON_FRAC] = intronic_frac        
     return transcripts
 
+
+def read_classify_R_output(outdict):
+    # read all of the transcripts
+    tx_id_result_map = {}
+    label_cutoff_map = {}
+    for label,files in outdict.iteritems():
+        outfile, cutfile = files
+        for line in open(outfile):
+            file_tx_id, is_known, within_gene, prob = line.strip().split('\t')
+            is_known = int(is_known)
+            within_gene = int(within_gene)
+            prob = float(prob)
+            tx_id_result_map[file_tx_id] = (is_known, within_gene, prob)
+        # get cutoff value
+        cutoff = float(open(cutfile).next().strip())
+        label_cutoff_map[label] = cutoff
+    return tx_id_result_map, label_cutoff_map
+
 def collect_stats(known_genes_file, gtf_file, output_dir,
-                  outfh=None, bgfh=None, 
-                  intron_overlap_threshold=DEFAULT_INTRON_OVERLAP_THRESHOLD):
+                  outfh=None, bgfh=None):
     if outfh is None:
         outfh = sys.stdout
     # read known transcripts
-    logging.debug("Reading known genes")
+    logging.debug("Reading known genes file '%s'" % (known_genes_file))
     exon_trees, intron_trees  = build_known_transcript_trees(open(known_genes_file))
     # annotate transcripts with properties
     logging.debug("Annotating transcripts")
-    header = ["tx_id", "sense_overlap", "antisense_overlap", "intronic_overlap", 
-              "length", "num_exons", "mydensity", "recur", "avgdensity"]
+    header = ["tx_id", "known", "within_gene", "length", "num_exons", 
+              "mydensity", "recur", "avgdensity"]
     fhdict = {}
     for locus_transcripts in parse_gtf(open(gtf_file)):
         annotate_recurrence_and_density(locus_transcripts)
         annotate_overlap(locus_transcripts, exon_trees, intron_trees)
-        for tx in locus_transcripts:            
+        for tx in locus_transcripts:
+            if tx.attrs[SENSE_EXON_FRAC] > 0:
+                # overlaps known gene
+                known = 1
+                within_gene = 1
+            elif ((tx.attrs[INTRON_FRAC] > 0) or
+                  (tx.attrs[ANTISENSE_EXON_FRAC] > 0)):
+                # within gene boundaries
+                known = 0
+                within_gene = 1
+            else:
+                # intergenic
+                known = 0
+                within_gene = 0
             fields = [tx.id,
-                      tx.attrs[SENSE_EXON_FRAC], 
-                      tx.attrs[ANTISENSE_EXON_FRAC],
-                      1 if tx.attrs[INTRON_FRAC] >= intron_overlap_threshold else 0,
+                      known,
+                      within_gene,
                       tx.length,
                       len(tx.exons),
                       tx.score / float(tx.length),
@@ -253,35 +298,41 @@ def collect_stats(known_genes_file, gtf_file, output_dir,
             outdict[label] = (outfile, cutfile)
     # write output
     logging.debug("Merging results and writing output")
-    # read all of the transcripts
-    tx_id_prob_map = {}
-    label_cutoff_map = {}
-    for label,files in outdict.iteritems():
-        outfile, cutfile = files
-        for line in open(outfile):
-            file_tx_id, prob = line.strip().split('\t')
-            prob = float(prob)
-            tx_id_prob_map[file_tx_id] = prob
-        # get cutoff value
-        cutoff = float(open(cutfile).next().strip())
-        label_cutoff_map[label] = cutoff
+    # read and store the classification results
+    tx_id_result_map, label_cutoff_map = read_classify_R_output(outdict)
     # write probabilities to GTF
+    tp, fp, tn, fn = 0, 0, 0, 0
     for feature in gtf.GTFFeature.parse(open(gtf_file)):
         tx_id = feature.attrs["transcript_id"]
         # TODO: need different way to get label
         label = feature.attrs["gene_id"].split(".")[0]
-        if tx_id not in tx_id_prob_map:
-            logging.warning("\t%s - MISSING data" % (tx_id))
-            prob = 0.0
-            cutoff = 0.5
-        else:
-            prob = tx_id_prob_map[tx_id]
-            cutoff = label_cutoff_map[label]
+        # lookup transcript info and cutoff
+        is_known, within_gene, prob = tx_id_result_map[tx_id]        
+        cutoff = label_cutoff_map[label]
+        # store transcript properties to GTF
+        feature.attrs["known"] = is_known
+        feature.attrs["within_gene"] = within_gene
         feature.attrs["prob"] = prob
-        if prob >= cutoff:
+        # keep track of statistics
+        if is_known and (prob >= cutoff):
+            tp += 1
+        elif is_known:
+            fn += 1
+        elif (prob >= cutoff):
+            fp += 1
+        else:
+            tn += 1
+        if is_known or (prob >= cutoff):
             print >>outfh, str(feature)
         elif bgfh is not None:
             print >>bgfh, str(feature)
+    spec = (tn / float(tn + fp))
+    sens = (tp / float(tp + fn))
+    acc = 2 * (spec * sens) / (sens + spec)
+    logging.info("TP=%d FN=%d FP=%d TN=%d" % (tp, fn, fp, tn))
+    logging.info("Sensitivity: %f" % (spec))
+    logging.info("Specificity: %f" % (sens))
+    logging.info("Accuracy: %f" % (acc))
     for fh in fhdict.itervalues():
         fh.close()
     
@@ -290,8 +341,6 @@ def main():
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser()
-    parser.add_argument("--intron-overlap", type=float, 
-                        dest="intron_overlap", default=0.90)
     parser.add_argument("--bg", "--background", dest="background_file", 
                         default=None) 
     parser.add_argument("-o", "--expressed", dest="output_file", default=None) 
@@ -303,7 +352,7 @@ def main():
     output_dir = options.output_dir
     if os.path.exists(output_dir):
         parser.error("output directory already exists.. aborting")        
-    logging.debug("Creating output directory")
+    logging.debug("Creating output directory '%s'" % (output_dir))
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
     if options.output_file is None:
@@ -314,8 +363,8 @@ def main():
         bgfh = None
     else:
         bgfh = open(options.background_file, "w")    
-    collect_stats(options.known_genes_file, options.gtf_file, output_dir,
-                  outfh, bgfh, intron_overlap_threshold=options.intron_overlap)
+    collect_stats(options.known_genes_file, options.gtf_file, 
+                  output_dir, outfh, bgfh)
     logging.debug("Finished")
 
 if __name__ == '__main__': main()
