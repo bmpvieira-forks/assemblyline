@@ -136,7 +136,7 @@ def categorize_transcripts(bedfile, format, format_args, basename, output_dir,
 
     # annotated genes (not pseudogenes)
     input_file = notpseudo_file
-    prefix = os.path.splitext(input_file)[0]
+    prefix = os.path.basename(os.path.splitext(input_file)[0])
     annot_file = os.path.join(output_dir, prefix + '.annotated.bed')
     notannot_file = os.path.join(output_dir, prefix + '.notannotated.bed')
     # intersect non-pseudogenes with annotated genes
@@ -145,7 +145,7 @@ def categorize_transcripts(bedfile, format, format_args, basename, output_dir,
 
     # completely unannotated (including strand)
     input_file = notpseudo_file
-    prefix = os.path.splitext(input_file)[0]
+    prefix = os.path.basename(os.path.splitext(input_file)[0])
     nostrand_annot_file = os.path.join(output_dir, prefix + '.nostrand_annotated.bed')
     nostrand_notannot_file = os.path.join(output_dir, prefix + '.nostrand_notannotated.bed')
     # intersect non-pseudogenes with annotated genes
@@ -154,7 +154,7 @@ def categorize_transcripts(bedfile, format, format_args, basename, output_dir,
 
     # annotated proteins
     input_file = annot_file
-    prefix = os.path.splitext(input_file)[0]
+    prefix = os.path.basename(os.path.splitext(input_file)[0])
     annot_protein_file = os.path.join(output_dir, prefix + '.protein.bed') 
     annot_notprotein_file = os.path.join(output_dir, prefix + '.notprotein.bed')
     # intersect annotated genes with protein coding genes
@@ -163,7 +163,7 @@ def categorize_transcripts(bedfile, format, format_args, basename, output_dir,
 
     # annotated antisense non-coding RNAs
     input_file = annot_notprotein_file
-    prefix = os.path.splitext(input_file)[0]
+    prefix = os.path.basename(os.path.splitext(input_file)[0])
     annot_notprotein_antisense_file = os.path.join(output_dir, prefix + '.antisense.bed') 
     annot_notprotein_notantisense_file = os.path.join(output_dir, prefix + '.notantisense.bed') 
     # intersect
@@ -172,7 +172,7 @@ def categorize_transcripts(bedfile, format, format_args, basename, output_dir,
 
     # annotated non-coding RNAs
     input_file = annot_notprotein_notantisense_file
-    prefix = os.path.splitext(input_file)[0]
+    prefix = os.path.basename(os.path.splitext(input_file)[0])
     annot_notprotein_intronic_file = os.path.join(output_dir, prefix + '.intronic.bed') 
     annot_notprotein_intergenic_file = os.path.join(output_dir, prefix + '.intergenic.bed')
     # intersect annotated non-codings to see whether the are intronic/intergenic
@@ -181,7 +181,7 @@ def categorize_transcripts(bedfile, format, format_args, basename, output_dir,
 
     # unannotated antisense transcripts that overlap proteins
     input_file = notannot_file
-    prefix = os.path.splitext(input_file)[0]
+    prefix = os.path.basename(os.path.splitext(input_file)[0])
     notannot_antisense_file = os.path.join(output_dir, prefix + '.antisense.bed') 
     notannot_notantisense_file = os.path.join(output_dir, prefix + '.notantisense.bed') 
     # intersect
@@ -190,7 +190,7 @@ def categorize_transcripts(bedfile, format, format_args, basename, output_dir,
     
     # unannotated intronic/intergenic transcripts
     input_file = notannot_notantisense_file
-    prefix = os.path.splitext(input_file)[0]
+    prefix = os.path.basename(os.path.splitext(input_file)[0])
     notannot_intronic_file = os.path.join(output_dir, prefix + '.intronic.bed') 
     notannot_intergenic_file = os.path.join(output_dir, prefix + '.intergenic.bed') 
     # intersect
@@ -199,7 +199,7 @@ def categorize_transcripts(bedfile, format, format_args, basename, output_dir,
     
     # overall number of protein vs. non-coding
     input_file = notpseudo_file
-    prefix = os.path.splitext(input_file)[0]    
+    prefix = os.path.basename(os.path.splitext(input_file)[0])
     protein_file = os.path.join(output_dir, prefix + '.protein.bed') 
     notprotein_file = os.path.join(output_dir, prefix + '.notprotein.bed') 
     # intersect
@@ -208,7 +208,7 @@ def categorize_transcripts(bedfile, format, format_args, basename, output_dir,
 
     # overall antisense noncoding
     input_file = notprotein_file
-    prefix = os.path.splitext(input_file)[0]
+    prefix = os.path.basename(os.path.splitext(input_file)[0])
     notprotein_antisense_file = os.path.join(output_dir, prefix + '.antisense.bed') 
     notprotein_notantisense_file = os.path.join(output_dir, prefix + '.notantisense.bed') 
     # intersect
@@ -217,7 +217,7 @@ def categorize_transcripts(bedfile, format, format_args, basename, output_dir,
 
     # overall intronic/intergenic noncoding
     input_file = notprotein_notantisense_file
-    prefix = os.path.splitext(input_file)[0]
+    prefix = os.path.basename(os.path.splitext(input_file)[0])
     notprotein_intronic_file = os.path.join(output_dir, prefix + '.intronic.bed') 
     notprotein_intergenic_file = os.path.join(output_dir, prefix + '.intergenic.bed') 
     # intersect
@@ -247,15 +247,19 @@ def main():
         parser.error("protein BED file not found")
     if not os.path.exists(options.annotated_bed_file):
         parser.error("annotated BED file not found")
+    if not os.path.exists(options.output_dir):
+        logging.info("Creating output directory '%s'" % (options.output_dir))
+        os.makedirs(options.output_dir)
     # run the categorization
     if options.format == "bed12":
-        categorize_transcripts(options.bedfile, options.format, {}, options.basename, options.output_dir)
+        format_args = {}
     elif options.format == "tabular":
         format_args = {'chrom_col': options.chrom_col,
                        'start_col': options.start_col,
                        'end_col': options.end_col,
                        'strand_col': options.strand_col}
-        categorize_transcripts(options.bedfile, options.format, format_args, options.basename, options.output_dir)
+    categorize_transcripts(options.bedfile, options.format, format_args, options.basename, options.output_dir,
+                           options.pseudo_bed_file, options.protein_bed_file, options.annotated_bed_file)                               
 
 if __name__ == '__main__':
     main()

@@ -167,15 +167,16 @@ def subtract_path(G, path, weight, length):
     density = max(weight, pos_weight) / float(pos_length)   
     for i,v in enumerate(path):
         v_weight_used = density * (v.end - v.start)
-        #new_weight = G.node[v][TMP_NODE_WEIGHT] - v_weight_used        
-        #G.node[v][TMP_NODE_WEIGHT] = max(0, new_weight)
-        G.node[v][TMP_NODE_WEIGHT] -= v_weight_used
+        new_weight = G.node[v][TMP_NODE_WEIGHT] - v_weight_used        
+        G.node[v][TMP_NODE_WEIGHT] = max(0, new_weight)
+        #G.node[v][TMP_NODE_WEIGHT] -= v_weight_used
         if i == 0:
             continue
         # subtract density from edge
         u = path[i-1]
         eattrs = G.edge[u][v]
-        eattrs[TMP_EDGE_DENSITY] = max(MIN_EDGE_DENSITY, eattrs[TMP_EDGE_DENSITY] - density)
+        new_edge_density = eattrs[TMP_EDGE_DENSITY] - density
+        eattrs[TMP_EDGE_DENSITY] = max(MIN_EDGE_DENSITY, new_edge_density)
         # recompute edge attrs
         recalculate_edge_attrs(G, u, v)
     return pos_weight

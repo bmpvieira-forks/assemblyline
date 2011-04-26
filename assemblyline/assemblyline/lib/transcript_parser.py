@@ -9,6 +9,7 @@ import collections
 import subprocess
 import os
 import sys
+import math
 
 import gtf
 from base import Exon, NO_STRAND, POS_STRAND, NEG_STRAND, strand_int_to_str, \
@@ -85,7 +86,11 @@ def separate_transcripts(gtf_features, score_attr="FPKM"):
             transcript.chrom = feature.seqid
             transcript.start = feature.start
             transcript.end = feature.end
-            transcript.score = float(feature.attrs[score_attr])
+            score = float(feature.attrs[score_attr])
+            if math.isnan(score):
+                logging.warning("Encountered score='nan' for transcript %s" % (transcript.id))
+                score = 0.0
+            transcript.score = score
         elif feature.feature_type == "exon":
             exon_num = int(feature.attrs["exon_number"])
             transcript.exons[exon_num] = Exon(feature.start, feature.end)

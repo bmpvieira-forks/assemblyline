@@ -94,7 +94,7 @@ def build_strand_specific_graphs(G):
                 w = strand_weights[strand] + strand_fracs[strand] * strand_weights[NO_STRAND] 
                 if w > 0:
                     GG[strand].add_node(n, attr_dict={NODE_WEIGHT: w})        
-            #print 'NODE', n, 'WEIGHTS', strand_weights, 'W', w                            
+            #print 'NODE', n, 'FRACS', strand_fracs, 'WEIGHTS', strand_weights, 'W', w                            
     # add edges
     for u,v,d in G.edges_iter(data=True):            
         # determine strand based on coordinates of nodes
