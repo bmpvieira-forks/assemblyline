@@ -1,5 +1,5 @@
 '''
-Created on Oct 26, 2011
+Created on Nov 11, 2011
 
 @author: mkiyer
 '''
@@ -9,19 +9,19 @@ import logging
 import argparse
 import pysam
 import subprocess
-import tempfile
-import itertools
 
-from lib.seq import DNA_reverse_complement
-from lib.batch_sort import batch_sort
+from assemblyline.lib.seq import DNA_reverse_complement
+from assemblyline.lib.batch_sort import batch_sort
 
 # R script to call for classifying junctions
-R_SCRIPT = os.path.join(os.path.dirname(__file__), "lib", "classify_juncs.R")
+import assemblyline
+_module_dir = assemblyline.__path__[0]
+R_SCRIPT = os.path.join(_module_dir, "lib", "classify_juncs.R")
+
 # splice motifs considered "common"
 PREVALENT_SPLICE_MOTIFS = set(["GTAG", "GCAG"])
 # number of reads considered "enough" for nominating junctions  
 ABS_READ_THRESHOLD = 2
-
 
 class JunctionData(object):
     """
@@ -171,15 +171,12 @@ def output_junc_info(chrom, start, end, strand, patients, reads, cov,
                                  is_known]))
     return fields
 
-def annotate_juncs(junc_data_file, output_file, sample_table, ref_fasta_file, 
+def annotate_juncs(junc_data_file, output_file, ref_fasta_file, 
                    known_raw_juncs_file):
     """
     given a sorted aggregated junctions file supplied by the collect_juncs_data
     function, annotates each junction with number of reads, coverage, overhang, and
     recurrence across multiple samples
-    
-    creates two output files: one for "known junctions" (training set) and one for
-    unannotated junctions (test set)
     """ 
     # read known junctions
     logging.debug("\treading list of known junctions")
@@ -188,8 +185,8 @@ def annotate_juncs(junc_data_file, output_file, sample_table, ref_fasta_file,
         known_juncs.add((chrom, start, end, strand))
     # prepare output files    
     outfh = open(output_file, "w")
-    header_fields = ["chrom", "start", "end", "strand", "enough_reads", 
-                     "cov", "overhang", "motif", "recur", "annotated"]   
+    header_fields = ["chrom", "start", "end", "strand", "best_reads", 
+                     "best_cov", "best_overhang", "motif", "recur", "annotated"]   
     print >>outfh, '\t'.join(header_fields)
     # read junction data
     patients = set()
@@ -198,7 +195,7 @@ def annotate_juncs(junc_data_file, output_file, sample_table, ref_fasta_file,
     best_overhang = 0
     prev = None
     ref_fa = pysam.Fastafile(ref_fasta_file)
-    logging.debug("\tanalyzing junctions")
+    logging.debug("\tcondensing and annotating junctions")
     for line in open(junc_data_file):
         j = JunctionData.from_fields(line.strip().split('\t'))
         if (prev != (j.chrom, j.start, j.end, j.strand)):
@@ -225,7 +222,7 @@ def annotate_juncs(junc_data_file, output_file, sample_table, ref_fasta_file,
     outfh.close()
 
 def classify_juncs(infile, output_dir):
-    prefix = os.path.splitext(infile)[0]
+    prefix = os.path.splitext(os.path.basename(infile))[0]
     outfile = os.path.join(output_dir, prefix + ".classify.txt")
     cutfile = os.path.join(output_dir, prefix + ".classify.cutoff")
     epsfile = os.path.join(output_dir, prefix + ".classify.eps")
@@ -248,8 +245,6 @@ def classify_juncs(infile, output_dir):
     result_index = header_fields.index("result")
     goodfh = open(os.path.join(output_dir, "good_juncs.txt"), "w")
     badfh = open(os.path.join(output_dir, "bad_juncs.txt"), "w")
-    print >>goodfh, '\t'.join(header_fields)
-    print >>badfh, '\t'.join(header_fields)
     for line in fh:
         fields = line.strip().split('\t')
         prob = float(fields[result_index])
@@ -285,21 +280,20 @@ def main():
     parser.add_argument('known_raw_juncs_file')
     parser.add_argument('sample_table')
     args = parser.parse_args()
-    logging.info("Aggregating junction data...")
     junc_data_file = os.path.join(args.output_dir, "aggregated_juncs.txt")
-    #collect_juncs_data(args.sample_table,
-    #                   junc_data_file,
-    #                   tmp_dir=args.tmp_dir)
-    logging.info("Sorting junctions by genomic position")
     sorted_junc_data_file = os.path.join(args.output_dir, "aggregated_juncs.srt.txt")
-    #sort_juncs_by_pos(junc_data_file, sorted_junc_data_file, args.tmp_dir)
-    logging.info("Annotating junctions...")
     consensus_junc_file = os.path.join(args.output_dir, "consensus_juncs.srt.txt")
+    logging.info("Aggregating junction data...")
+    collect_juncs_data(args.sample_table,
+                       junc_data_file,
+                       tmp_dir=args.tmp_dir)
+    logging.info("Sorting junctions by genomic position")
+    sort_juncs_by_pos(junc_data_file, sorted_junc_data_file, args.tmp_dir)
+    logging.info("Annotating junctions...")
     annotate_juncs(sorted_junc_data_file, consensus_junc_file, args.sample_table, 
                    args.reference_genome, args.known_raw_juncs_file)
     logging.info("Classifying unannotated junctions...")
-    classify_juncs("test_juncs.srt.txt", args.output_dir)
-
+    classify_juncs(consensus_junc_file, args.output_dir)
 
 
 if __name__ == '__main__':
