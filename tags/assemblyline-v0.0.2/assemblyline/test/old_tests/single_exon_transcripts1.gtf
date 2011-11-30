@@ -1,0 +1,43 @@
+# a multi-exon transcript to test clustering constraints
+chr1	Cufflinks	transcript	0	3000	1000	+	.	gene_id "A.1"; transcript_id "A.1.1"; FPKM "1.0"
+chr1	Cufflinks	exon	0	500	1000	+	.	gene_id "A.1"; transcript_id "A.1.1"; exon_number "1"; FPKM "1.0"
+chr1	Cufflinks	exon	1000	1500	1000	+	.	gene_id "A.1"; transcript_id "A.1.1"; exon_number "2"; FPKM "1.0"
+chr1	Cufflinks	exon	2500	3000	1000	+	.	gene_id "A.1"; transcript_id "A.1.1"; exon_number "3"; FPKM "1.0"
+
+# unstranded single-exon transcripts to be clustered
+chr1	Cufflinks	transcript	0	100	1000	.	.	gene_id "A.2"; transcript_id "A.2.1"; FPKM "1.0"
+chr1	Cufflinks	exon	0	100	1000	.	.	gene_id "A.2"; transcript_id "A.2.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	100	200	1000	.	.	gene_id "B.1"; transcript_id "B.1.1"; FPKM "1.0"
+chr1	Cufflinks	exon	100	200	1000	.	.	gene_id "B.1"; transcript_id "B.1.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	500	600	1000	.	.	gene_id "A.3"; transcript_id "A.3.1"; FPKM "1.0"
+chr1	Cufflinks	exon	500	600	1000	.	.	gene_id "A.3"; transcript_id "A.3.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	550	650	1000	.	.	gene_id "B.2"; transcript_id "B.2.1"; FPKM "1.0"
+chr1	Cufflinks	exon	550	650	1000	.	.	gene_id "B.2"; transcript_id "B.2.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	700	900	1000	.	.	gene_id "C.1"; transcript_id "C.1.1"; FPKM "1.0"
+chr1	Cufflinks	exon	700	900	1000	.	.	gene_id "C.1"; transcript_id "C.1.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	700	999	1000	.	.	gene_id "C.1"; transcript_id "C.1.2"; FPKM "1.0"
+chr1	Cufflinks	exon	700	999	1000	.	.	gene_id "C.1"; transcript_id "C.1.2"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	800	1200	1000	.	.	gene_id "D.1"; transcript_id "D.1.1"; FPKM "1.0"
+chr1	Cufflinks	exon	800	1200	1000	.	.	gene_id "D.1"; transcript_id "D.1.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	900	1100	1000	.	.	gene_id "D.2"; transcript_id "D.2.1"; FPKM "1.0"
+chr1	Cufflinks	exon	900	1100	1000	.	.	gene_id "D.2"; transcript_id "D.2.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	995	1100	1000	.	.	gene_id "A.4"; transcript_id "A.4.1"; FPKM "1.0"
+chr1	Cufflinks	exon	995	1100	1000	.	.	gene_id "A.4"; transcript_id "A.4.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	1005	1100	1000	.	.	gene_id "E.1"; transcript_id "E.1.1"; FPKM "1.0"
+chr1	Cufflinks	exon	1005	1100	1000	.	.	gene_id "E.1"; transcript_id "E.1.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	1050	1150	1000	.	.	gene_id "E.2"; transcript_id "E.2.1"; FPKM "1.0"
+chr1	Cufflinks	exon	1050	1100	1000	.	.	gene_id "E.2"; transcript_id "E.2.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	1075	1600	1000	.	.	gene_id "F.1"; transcript_id "F.1.1"; FPKM "1.0"
+chr1	Cufflinks	exon	1075	1600	1000	.	.	gene_id "F.1"; transcript_id "F.1.1"; exon_number "1"; FPKM "1.0"
+
