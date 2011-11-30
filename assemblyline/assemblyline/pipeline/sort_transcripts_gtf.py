@@ -4,7 +4,7 @@ Created on Nov 4, 2010
 @author: mkiyer
 '''
 import sys
-from lib.transcript_parser import sort_gtf
+from assemblyline.lib.gtf import sort_gtf
 
 if __name__ == '__main__':
     input_file = sys.argv[1]

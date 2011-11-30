@@ -141,12 +141,6 @@ def parse_gtf(fileh, attr_defs=None, score_attr="FPKM"):
         locus_transcripts = separate_transcripts(locus_features, score_attr)
         yield locus_transcripts
 
-def sort_gtf(filename, output_file):
-    args = ["sort", "-k1,1", "-k4,4n", "-k3,3r", filename]
-    myenv = os.environ.copy()
-    myenv["LC_ALL"] = "C"
-    subprocess.call(args, stdout=open(output_file, "w"), env=myenv)
-
 if __name__ == '__main__':
     import argparse
     logging.basicConfig(level=logging.DEBUG,

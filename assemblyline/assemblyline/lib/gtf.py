@@ -3,9 +3,18 @@ Created on Nov 2, 2010
 
 @author: mkiyer
 '''
+import subprocess
+import os
+
 GTF_EMPTY_FIELD = '.'
 GTF_ATTR_SEP = ';'
 GTF_ATTR_TAGVALUE_SEP = ' '
+
+def sort_gtf(filename, output_file):
+    args = ["sort", "-k1,1", "-k4,4n", "-k3,3r", filename]
+    myenv = os.environ.copy()
+    myenv["LC_ALL"] = "C"
+    subprocess.call(args, stdout=open(output_file, "w"), env=myenv)
 
 class GTFFeature(object):
     '''
@@ -20,8 +29,7 @@ class GTFFeature(object):
 
     chr1    Cufflinks       transcript      136546  137059  1000    .       .       gene_id "VCAP_SHEZH2.657699"; transcript_id "VCAP_SHEZH2.657699.1"; FPKM "100.7219943204"; frac "1.000000"; conf_lo "80.649925"; conf_hi "120.794064"; cov "2.198209";
     '''
-    __slots__ = ('seqid', 'source', 'feature_type', 'start', 'end', 'score', 'strand', 'phase', 'attrs', 
-                 'gene_id', 'transcript_id') 
+    __slots__ = ('seqid', 'source', 'feature_type', 'start', 'end', 'score', 'strand', 'phase', 'attrs') 
 
     def __str__(self):
         line = [self.seqid,
