@@ -17,6 +17,7 @@ from assemblyline.lib.seq import DNA_reverse_complement
 from assemblyline.lib.batch_sort import batch_sort
 from assemblyline.lib.base import up_to_date
 from assemblyline.lib.juncs import parse_raw_juncs
+from assemblyline.lib.sampletable import LaneInfo
 
 # R script to call for classifying junctions
 import assemblyline
@@ -27,53 +28,6 @@ R_SCRIPT = os.path.join(_module_dir, "lib", "classify_juncs.R")
 PREVALENT_SPLICE_MOTIFS = set(["GTAG", "GCAG"])
 # number of reads considered "enough" for nominating junctions  
 ABS_READ_THRESHOLD = 2
-
-class LaneInfo(object):
-    __slots__ = ('cohort', 'patient', 'sample', 'lib', 'lane', 'qc',
-                 'use_juncs', 'use_transcripts',  'valid', 
-                 'aligned_reads', 'read_length', 'tophat_juncs_file')    
-    
-    @staticmethod
-    def from_fields(fields):
-        l = LaneInfo()
-        l.cohort = fields[0]
-        l.patient = fields[1]
-        l.sample = fields[2]
-        l.lib = fields[3]
-        l.lane = fields[4]
-        l.qc = fields[5]
-        l.use_juncs = int(fields[6])
-        l.use_transcripts = int(fields[7])        
-        l.valid = int(fields[8])
-        if fields[9] == "NA":
-            l.aligned_reads = None
-        else:
-            l.aligned_reads = int(float(fields[9]))
-        l.read_length = int(fields[10])
-        if fields[11] == "NA":
-            l.tophat_juncs_file = None
-        else:
-            l.tophat_juncs_file = fields[11]
-        return l
-
-    def is_valid(self):
-        if self.qc == "FAIL":
-            return False
-        if self.aligned_reads is None:
-            return False
-        if self.use_juncs and (self.tophat_juncs_file is not None):
-            return True
-        return False
-
-    @staticmethod
-    def from_file(filename):
-        fh = open(filename)
-        # skip header
-        fh.next()
-        for line in fh:
-            fields = line.strip().split('\t')
-            yield LaneInfo.from_fields(fields)
-        fh.close()
 
 class JunctionData(object):
     """
