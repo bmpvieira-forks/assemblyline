@@ -3,6 +3,8 @@ Created on Nov 30, 2011
 
 @author: mkiyer
 '''
+from gtf import GTFFeature
+
 # strand constants
 POS_STRAND = 0
 NEG_STRAND = 1
@@ -114,3 +116,28 @@ class Transcript(object):
                        ','.join(map(str,block_sizes)) + ',',
                        ','.join(map(str,block_starts)) + ','])
         return s
+    
+#    def to_gtf(self):
+#        f = GTFFeature()
+#        f.seqid = self.chrom
+#        f.source = 'assemblyline'
+#        f.feature_type = 'transcript'
+#        f.start = self.start
+#        f.end = self.end
+#        f.score = 1000.0
+#        f.strand = strand_int_to_str(self.strand)
+#        f.phase = '.'
+#        f.attrs = {}
+#        self.id = None
+#        self.library = None
+#        self.sample = None
+#        self.cohort = None
+#        self.fpkm = 0.0
+#        self.cov = 0.0
+#        self.frac = 0.0
+#        self.exons = None
+#        self.attrs = None
+
+    
+    
+    

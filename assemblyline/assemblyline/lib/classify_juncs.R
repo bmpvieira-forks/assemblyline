@@ -65,8 +65,8 @@ classifyjuncs <- function(t, rpart_control, outfile, cutoff_file, plotfile) {
 	# create plots
 	pdf(file=plotfile)	
 	# create attractive postscript plot of tree
-	try(plot(fit.prune, compress=TRUE))
-	try(text(fit.prune, use.n=TRUE))
+	try(plot(fit.prune, uniform=TRUE))
+	try(text(fit.prune, use.n=TRUE, all=TRUE, cex=0.7))
 	# plot histogram of distribution of the probabilities
 	try(hist(result, breaks=50))	
 	# plot overall cutoff
