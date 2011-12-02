@@ -3,6 +3,7 @@ Created on Nov 1, 2011
 
 @author: mkiyer
 '''
+import argparse
 import sys
 
 chrom_names = [["chr1", "1"],
@@ -32,11 +33,22 @@ chrom_names = [["chr1", "1"],
                ["chrM", "MT"]]
 
 ucsc_to_ensembl_dict = dict(chrom_names)
+ensembl_to_ucsc_dict = dict((v,k) for k,v in ucsc_to_ensembl_dict.iteritems())
 
-for line in open(sys.argv[1]):
+parser = argparse.ArgumentParser()
+parser.add_argument("-r", action="store_true", default=False, dest="reverse")
+parser.add_argument("filename")
+args = parser.parse_args()
+
+if args.reverse:
+    mydict = ensembl_to_ucsc_dict
+else:
+    mydict = ucsc_to_ensembl_dict
+
+for line in open(args.filename):
     fields = line.strip().split('\t')
-    if fields[0] not in ucsc_to_ensembl_dict:
+    if fields[0] not in mydict:
         print >>sys.stderr, "skipped line %s" % line
         continue
-    fields[0] = ucsc_to_ensembl_dict[fields[0]]
+    fields[0] = mydict[fields[0]]
     print '\t'.join(fields)

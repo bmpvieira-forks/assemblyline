@@ -24,30 +24,27 @@ def separate_transcripts(gtf_features):
             transcript.chrom = feature.seqid
             transcript.start = feature.start
             transcript.end = feature.end
-            transcript.exons = {}
-            transcript.attrs = {}
             # convert from string strand notation ("+", "-", ".") 
             # to integer (0, 1)            
             transcript.strand = strand_str_to_int(feature.strand)
-            transcript.id = tx_id
-            transcript.library = feature.attrs["gene_id"].split(".")[0]            
-            transcript.sample = feature.attrs["sample"]
-            transcript.cohort = feature.attrs["cohort"]
+            transcript.exons = {}
+            transcript.attrs = feature.attrs
+            # convert non-string types
             fpkm = float(feature.attrs["FPKM"])
             if math.isnan(fpkm):
-                logging.warning("Encountered fpkm='nan' for transcript %s" % (transcript.id))
+                logging.warning("Encountered fpkm='nan' for transcript %s" % (tx_id))
                 fpkm = 0.0
-            transcript.fpkm = fpkm
+            transcript.attrs["FPKM"] = fpkm
             cov = float(feature.attrs["cov"])
             if math.isnan(cov):
                 logging.warning("Encountered cov='nan' for transcript %s" % (transcript.id))
                 cov = 0.0
-            transcript.cov = cov
+            transcript.attrs["cov"] = cov
             frac = float(feature.attrs["frac"])
             if math.isnan(frac):
                 logging.warning("Encountered frac='nan' for transcript %s" % (transcript.id))
                 frac = 0.0
-            transcript.frac = frac
+            transcript.attrs["frac"] = frac
         elif feature.feature_type == "exon":
             exon_num = int(feature.attrs["exon_number"])
             transcript.exons[exon_num] = Exon(feature.start, feature.end)

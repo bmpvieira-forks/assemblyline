@@ -25,9 +25,15 @@ from assemblyline.lib import gtf
 # constant transcript attribute names
 DENSITY = 'd'
 RECUR = 'r'
-SENSE_EXON_FRAC = 'sf'
-ANTISENSE_EXON_FRAC = 'asf'
-INTRON_FRAC = 'if'
+SENSE_EXON_FRAC = 'sense_frac'
+ANTISENSE_EXON_FRAC = 'antisense_frac'
+INTRON_FRAC = 'intron_frac'
+
+# constant category names
+INTERGENIC = 0
+WITHIN_GENES = 1
+category_int_to_str = {INTERGENIC: "intergenic", WITHIN_GENES: "within_gene"}
+category_str_to_int = dict((v,k) for k,v in category_int_to_str.items())
 
 # overlap necessary to consider a transcript "annotated"
 MIN_SENSE_EXON_FRAC = 0.9
@@ -109,6 +115,56 @@ def annotate_overlap(transcripts, exon_trees, intron_trees):
         tx.attrs[ANTISENSE_EXON_FRAC] = antisense_frac
         tx.attrs[INTRON_FRAC] = intronic_frac        
 
+def categorize_transcripts(known_genes_bed_file, transcripts_gtf_file,
+                           output_gtf_file_dict):
+    # read known transcripts
+    logging.debug("Reading known genes file '%s'" % (known_genes_bed_file))
+    exon_trees, intron_trees = build_known_transcript_trees(open(known_genes_bed_file))
+    # setup output gtf files by category
+    fh_dict = {}
+    for category, filename in output_gtf_file_dict.iteritems():
+        fh_dict[category] = open(filename, "w")
+    # read transcripts by locus
+    logging.debug("Categorizing transcripts")
+    for locus_transcripts in parse_gtf(open(transcripts_gtf_file)):
+        # compute overlap with known genes
+        annotate_overlap(locus_transcripts, exon_trees, intron_trees)
+        category_features = {INTERGENIC: [], WITHIN_GENES: []}
+        for tx in locus_transcripts:
+            # define "annotated" transcripts that have exonic overlap
+            # greater than a pre-specified cutoff
+            annotated = int(tx.attrs[SENSE_EXON_FRAC] >= MIN_SENSE_EXON_FRAC)
+            # categorize unannotated transcript as 
+            # 'within_gene' (or intergenic)
+            if ((tx.attrs[SENSE_EXON_FRAC] > 0) or
+                (tx.attrs[INTRON_FRAC] > 0) or
+                (tx.attrs[ANTISENSE_EXON_FRAC] > 0)):
+                # within genes category
+                category = WITHIN_GENES
+            else:
+                category = INTERGENIC
+            # add to transcript attributes
+            tx.attrs["annotated"] = annotated
+            tx.attrs["category"] = category_int_to_str[category]
+            # convert from Transcript object to GTF
+            features = tx.to_gtf_features()
+            if not annotated:
+                category_features[category].extend(features)
+            else:
+                category_features[INTERGENIC].extend(features)
+                category_features[WITHIN_GENES].extend(features)
+        # sort and output category features
+        for category, features in category_features.iteritems():
+            # sort so that 'transcript' features appear before 'exon'
+            features.sort(key=lambda f: f.feature_type, reverse=True)
+            features.sort(key=lambda f: f.start)
+            # output transcripts to gtf
+            for f in features:
+                print >>fh_dict[category], str(f) 
+    # cleanup
+    for fh in fh_dict.itervalues():
+        fh.close()
+
 def annotate_recurrence_and_density(transcripts, libs_per_sample):
     # group transcripts by sample
     sample_tx_dict = collections.defaultdict(lambda: [])
@@ -163,12 +219,12 @@ def annotate_recurrence_and_density(transcripts, libs_per_sample):
         tx.attrs[DENSITY] = density
         tx.attrs[RECUR] = recur
 
-def annotate_transcripts(known_genes_bed_file, lib_table_file, 
-                         transcripts_gtf_file, output_dir):
+def annotate_transcripts(lib_table_file, transcripts_gtf_file, ctree_dir, 
+                         lib_info_file):
     # read library table
     logging.debug("Reading library file '%s'" % (lib_table_file))
     libinfos = list(LibInfo.from_file(lib_table_file))
-    # make sample -> library dict
+    # make sample -> library dict and
     sample_lib_dict = collections.defaultdict(lambda: set())
     for libinfo in libinfos:
         sample_lib_dict[libinfo.sample].add(libinfo.library)
@@ -176,61 +232,71 @@ def annotate_transcripts(known_genes_bed_file, lib_table_file,
     libs_per_sample = {}
     for sample,libs in sample_lib_dict.iteritems():
         libs_per_sample[sample] = len(libs)
-    # read known transcripts
-    logging.debug("Reading known genes file '%s'" % (known_genes_bed_file))
-    exon_trees, intron_trees  = build_known_transcript_trees(open(known_genes_bed_file))
-    # create directory for classification tree files
-    ctree_dir = os.path.join(output_dir, "ctrees")
-    if not os.path.exists(ctree_dir):
-        logging.debug("Creating directory '%s'" % (ctree_dir))
-        os.makedirs(ctree_dir)
+    # setup library annotation files by creating a dictionary of 
+    # open file handles to write data to
+    header = ["chrom", "start", "tx_id", "annotated", "length", 
+              "num_exons", "cov", "fpkm", "recur", "avgdensity"]
+    filename_dict = {}
+    fh_dict = {}
+    lib_count_dict = collections.defaultdict(lambda: [0, 0])
+    for libinfo in libinfos:
+        filename = os.path.join(ctree_dir, libinfo.library + ".txt")
+        filename_dict[libinfo.library] = filename 
     # read transcripts by locus
     logging.debug("Annotating transcripts")
-    header = ["chrom", "start", "tx_id", "annotated", "sense_frac", "antisense_frac", 
-              "intron_frac", "length", "num_exons", "cov", "fpkm", 
-              "recur", "avgdensity"] 
-    library_fh_dict = {}
-    library_filename_dict = {}
     for locus_transcripts in parse_gtf(open(transcripts_gtf_file)):
         # compute recurrence and expression density
         annotate_recurrence_and_density(locus_transcripts, libs_per_sample)        
-        # compute overlap with known genes
-        annotate_overlap(locus_transcripts, exon_trees, intron_trees)
         for tx in locus_transcripts:
-            # define "annotated" transcripts that have exonic overlap
-            # greater than a pre-specified cutoff
-            annotated = int(tx.attrs[SENSE_EXON_FRAC] >= MIN_SENSE_EXON_FRAC)
+            # setup list of annotation fields
             fields = [tx.chrom,
                       tx.start,
                       tx.id,
-                      annotated,
-                      '%.3f' % tx.attrs[SENSE_EXON_FRAC],
-                      '%.3f' % tx.attrs[ANTISENSE_EXON_FRAC],
-                      '%.3f' % tx.attrs[INTRON_FRAC],
+                      tx.attrs["annotated"],
                       tx.length,
                       len(tx.exons),
                       tx.cov,
                       tx.fpkm,
                       tx.attrs[RECUR],
                       tx.attrs[DENSITY]]
-            # write transcript to file
-            if tx.library not in library_fh_dict:
-                filename = os.path.join(ctree_dir, tx.library + ".txt")
-                library_filename_dict[tx.library] = filename
-                fh = open(filename, "w")
-                library_fh_dict[tx.library] = fh
-                print >>fh, '\t'.join(header)
-            fh = library_fh_dict[tx.library]                
-            print >>fh, '\t'.join(map(str, fields))
-    for fh in library_fh_dict.itervalues():
+            # lookup file handle and open new file if necessary
+            if not tx.library in fh_dict:
+                fh_dict[tx.library] = open(filename_dict[tx.library], "w")            
+                print >>fh_dict[tx.library], '\t'.join(header)
+            # write to file            
+            print >>fh_dict[tx.library], '\t'.join(map(str, fields))
+            # keep track of # of annotated/unannotated transcripts per file
+            annotated = int(tx.attrs["annotated"])
+            lib_count_dict[tx.library][annotated] += 1
+    # close open file handles
+    for fh in fh_dict.itervalues():
         fh.close()
-    return library_filename_dict
+    # write library filename and count information
+    fh = open(lib_info_file, "w")
+    for library,filename in filename_dict.iteritems():
+        counts = lib_count_dict[library]
+        print >>fh, '\t'.join(map(str, [library, counts[0], counts[1], filename]))
+    fh.close()
 
-def classify_transcripts(library_filename_dict, result_file, cutoff_file):
+def classify_transcripts(lib_info_file, result_file, cutoff_file):
+    # read library, category, count information to determine
+    # which files need to be classified
+    classify_task_list = []
+    for line in open(lib_info_file):
+        fields = line.strip().split('\t')
+        library = fields[0]
+        unannotated_count = int(fields[1])
+        annotated_count = int(fields[2])
+        filename = fields[3]
+        total_count = unannotated_count + annotated_count
+        if total_count == 0:
+            logging.debug("\tskipping empty library %s" % (library))
+            continue
+        classify_task_list.append((library, filename))
     # open output files
     result_fh = open(result_file, "w")
     cutoff_fh = open(cutoff_file, "w")
-    for library, filename in library_filename_dict.iteritems():
+    for library, filename in classify_task_list:
         # setup classification result files on per-library basis
         prefix = os.path.splitext(filename)[0]
         outfile = prefix + ".classify.txt"
@@ -267,8 +333,7 @@ def sort_classification_results(input_file, output_file, tmp_dir):
                tempdirs=[tmp_dir])
 
 class ClassificationResult(object):
-    __slots__ = ('chrom', 'start', 'tx_id', 'annotated', 'sense_frac', 
-                 'antisense_frac', 'intron_frac', 'recur', 
+    __slots__ = ('chrom', 'start', 'tx_id', 'annotated', 'recur', 
                  'avgdensity', 'prob')
     @staticmethod
     def from_line(line):
@@ -278,27 +343,24 @@ class ClassificationResult(object):
         c.start = int(fields[1])
         c.tx_id = fields[2]
         c.annotated = int(fields[3])
-        c.sense_frac = float(fields[4])
-        c.antisense_frac = float(fields[5])
-        c.intron_frac = float(fields[6])
-        c.recur = float(fields[7])
-        c.avgdensity = float(fields[8])
-        c.prob = float(fields[9])
+        c.recur = float(fields[4])
+        c.avgdensity = float(fields[5])
+        c.prob = float(fields[6])
         return c
 
 def summarize_results(result_file, cutoff_file, gtf_file, 
-                      expressed_file, background_file):
+                      annotated_file, expressed_file, background_file,
+                      stats_file):
     # load cutoff file
     library_cutoff_dict = collections.defaultdict(lambda: 1.0)
     for line in open(cutoff_file):
         fields = line.strip().split('\t')
-        library_cutoff_dict[fields[0]] = float(fields[1])
-    # setup output files
-    expressed_fh = open(expressed_file, "w")
-    background_fh = open(background_file, "w")
+        library = fields[0]
+        cutoff = float(fields[1])
+        library_cutoff_dict[library] = float(cutoff)
     # keep track of prediction outcomes
     tp, fp, tn, fn = 0, 0, 0, 0
-    attr_names = ('annotated', 'sense_frac', 'antisense_frac', 'intron_frac', 'recur', 'avgdensity', 'prob')
+    attr_names = ('recur', 'avgdensity', 'prob')
     # maintain predictions in a dictionary where key is transcript id and 
     # value is boolean prediction decision for transcript.
     tx_id_decisions = {}
@@ -317,6 +379,10 @@ def summarize_results(result_file, cutoff_file, gtf_file,
     # read result file and gtf file in sync
     result_fh = open(result_file)
     gtf_fh = open(gtf_file)
+    # open output files
+    annotated_fh = open(annotated_file, "w")
+    expressed_fh = open(expressed_file, "w")
+    background_fh = open(background_file, "w")
     for feature in gtf.GTFFeature.parse(gtf_fh):
         # get transcript id used to lookup expressed/background 
         # prediction decision
@@ -355,37 +421,41 @@ def summarize_results(result_file, cutoff_file, gtf_file,
             # get library name from gene_id attribute (by convention)
             library = feature.attrs["gene_id"].split(".")[0]
             # lookup cutoff value for classification
-            cutoff = library_cutoff_dict[library]                
+            cutoff = library_cutoff_dict[library]
             # add results as transcript attributes
             for attr_name in attr_names:
                 feature.attrs[attr_name] = getattr(result, attr_name)
-            # keep track of prediction statistics
-            if result.annotated and (result.prob > cutoff):
-                tp += 1
-            elif result.annotated:
-                fn += 1
-            elif (result.prob > cutoff):
-                fp += 1
+            # add cutoff to feature
+            feature.attrs["prob_cutoff"] = cutoff
+            # keep track of prediction decision and statistics
+            # remember decision in tx_id_decision dict so that it can be 
+            # applied to the transcript exons as well
+            if result.annotated:
+                tx_id_decisions[tx_id] = "annotated"
+                if result.prob > cutoff:
+                    tp += 1
+                else:
+                    fn += 1
             else:
-                tn += 1
-            # remember decision so that it can be applied to the
-            # transcript exons as well
-            if result.annotated or (result.prob > cutoff):
-                tx_id_decisions[tx_id] = True
-                print >>expressed_fh, str(feature)
-            else:
-                tx_id_decisions[tx_id] = False
-                print >>background_fh, str(feature)
-        elif feature.feature_type == "exon":
-            # get the decision associated with the exon's transcript id
-            if tx_id_decisions[tx_id]:
-                print >>expressed_fh, str(feature)
-            else:
-                print >>background_fh, str(feature)
+                if result.prob > cutoff:
+                    tx_id_decisions[tx_id] = "expressed"
+                    fp += 1
+                else:
+                    tx_id_decisions[tx_id] = "background"
+                    tn += 1
+        # lookup the decision associated with the transcript id
+        decision = tx_id_decisions[tx_id]
+        if decision == "annotated":
+            print >>annotated_fh, str(feature)
+        elif decision == "expressed":
+            print >>expressed_fh, str(feature)
+        else:
+            assert decision == "background"
+            print >>background_fh, str(feature)
     # cleanup
-    result_fh.close()    
     expressed_fh.close()
     background_fh.close()
+    result_fh.close()    
     # compute statistics
     prec = tp / float(tp + fp)
     rec = tp / float(tp + fn)
@@ -396,13 +466,34 @@ def summarize_results(result_file, cutoff_file, gtf_file,
         F = 0
     else:
         F = 2 * (prec * rec) / (prec + rec)    
+    fh = open(stats_file, "w")
+    print >>fh, "TP: %d" % (tp)
+    print >>fh, "FN: %d" % (fn)
+    print >>fh, "FP: %d" % (fp)
+    print >>fh, "TN: %d" % (tn)
+    print >>fh, "Precision: %f" % (prec)
+    print >>fh, "Recall: %f" % (rec)
+    print >>fh, "Sensitivity: %f" % (sens)
+    print >>fh, "Specificity: %f" % (spec)
+    print >>fh, "F: %f" % (F)
+    print >>fh, "Accuracy: %f" % (acc)
+    fh.close()
     logging.info("TP=%d FN=%d FP=%d TN=%d" % (tp, fn, fp, tn))
     logging.info("Precision=%f Recall/Sensitivity=%f" % (prec, rec))
     logging.info("Specificity=%f" % (spec))
     logging.info("F=%f" % F)
     logging.info("Accuracy=%f" % (acc))
 
+def merge_sort_gtf_files(gtf_files, output_file):
+    tmp_file = os.path.splitext(output_file)[0] + ".unsorted.gtf"
+    outfh = open(tmp_file, "w")
+    for filename in gtf_files:
+        shutil.copyfileobj(open(filename), outfh)
+    outfh.close()
+    gtf.sort_gtf(tmp_file, output_file)
+    os.remove(tmp_file)
 
+    
 def main():
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -418,23 +509,65 @@ def main():
     if not os.path.exists(args.output_dir):
         logging.debug("Creating output directory '%s'" % (args.output_dir))
         os.makedirs(args.output_dir)
-    # setup output file names
-    result_file = os.path.join(args.output_dir, "classification_results.txt")
-    cutoff_file = os.path.join(args.output_dir, "classification_cutoffs.txt")
-    sorted_result_file = os.path.join(args.output_dir, "classification_results.srt.txt")
-    expressed_file = os.path.join(args.output_dir, "expressed.gtf")
-    background_file = os.path.join(args.output_dir, "background.gtf")
+    # setup output file names for each category
+    class CategoryData(object):
+        pass
+    category_data = {}
+    for category in (INTERGENIC, WITHIN_GENES):
+        c = CategoryData()
+        c.output_dir = os.path.join(args.output_dir, category_int_to_str[category])
+        if not os.path.exists(c.output_dir):
+            logging.debug("Creating directory: %s" % (c.output_dir))
+            os.makedirs(c.output_dir)
+        c.gtf_file = os.path.join(c.output_dir, "transcripts.srt.gtf")
+        c.ctree_dir = os.path.join(c.output_dir, "ctrees")
+        c.lib_info_file = os.path.join(c.output_dir, "library_file_info.txt")
+        c.result_file = os.path.join(c.output_dir, "classification_results.txt")
+        c.cutoff_file = os.path.join(c.output_dir, "classification_cutoffs.txt")
+        c.sorted_result_file = os.path.join(c.output_dir, "classification_results.srt.txt")
+        c.annotated_file = os.path.join(c.output_dir, "annotated.gtf")
+        c.expressed_file = os.path.join(c.output_dir, "expressed.gtf")
+        c.background_file = os.path.join(c.output_dir, "background.gtf")
+        c.stats_file = os.path.join(c.output_dir, "stats.txt")
+        category_data[category] = c
 
-    logging.info("Annotating transcripts")
-    library_filename_dict = annotate_transcripts(args.known_genes_file, args.lib_table, 
-                                                 args.gtf_file, args.output_dir)
-    logging.info("Classifying transcripts")
-    classify_transcripts(library_filename_dict, result_file, cutoff_file)
-    logging.info("Sorting classification results")
-    sort_classification_results(result_file, sorted_result_file, args.output_dir)
-    logging.info("Summarizing results")
-    summarize_results(sorted_result_file, cutoff_file, 
-                      args.gtf_file, expressed_file, background_file)
+    # place transcripts into categories
+    logging.info("Categorizing transcripts")
+    category_gtf_files = {INTERGENIC: category_data[INTERGENIC].gtf_file,
+                          WITHIN_GENES: category_data[WITHIN_GENES].gtf_file}
+    categorize_transcripts(args.known_genes_file, args.gtf_file, category_gtf_files)
+
+    # merge annotated/expressed transcripts into a single GTF
+    merged_expressed_gtf_files = [category_data[INTERGENIC].annotated_file]
+    merged_background_gtf_files = []
+
+    # process transcripts in each category         
+    for category in (INTERGENIC, WITHIN_GENES):
+        logging.info("Classifying category %s" % (category_int_to_str[category]))
+        c = category_data[category]
+        if not os.path.exists(c.ctree_dir):
+            logging.debug("\tcreating directory: %s" % (c.ctree_dir))
+            os.makedirs(c.ctree_dir)
+        logging.info("\tannotating transcripts gtf_file=%s output_dir=%s" % (c.gtf_file, c.ctree_dir))
+        annotate_transcripts(args.lib_table, c.gtf_file, c.ctree_dir, c.lib_info_file) 
+        logging.info("\tclassifying transcripts")
+        classify_transcripts(c.lib_info_file, c.result_file, c.cutoff_file)
+        logging.info("\tsorting classification results")
+        sort_classification_results(c.result_file, c.sorted_result_file, c.output_dir)
+        logging.info("\tsummarizing results")
+        summarize_results(c.sorted_result_file, c.cutoff_file, 
+                          c.gtf_file, c.annotated_file, 
+                          c.expressed_file, c.background_file,
+                          c.stats_file)
+        merged_expressed_gtf_files.append(c.expressed_file)
+        merged_background_gtf_files.append(c.background_file)
+        
+    # merge the GTF files from different categories
+    logging.info("Merging classification results")
+    expressed_gtf_filename = os.path.join(args.output_dir, "expressed.gtf")
+    background_gtf_filename = os.path.join(args.output_dir, "background.gtf")
+    merge_sort_gtf_files(merged_expressed_gtf_files, expressed_gtf_filename)
+    merge_sort_gtf_files(merged_background_gtf_files, background_gtf_filename)
     
-if __name__ == '__main__': 
+if __name__ == "__main__":
     main()
