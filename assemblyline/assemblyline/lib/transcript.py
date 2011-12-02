@@ -52,39 +52,46 @@ class Exon(object):
         return interval_overlap(self, other)
     
 class Transcript(object):
-    __slots__ = ('chrom', 'start', 'end', 'strand', 'id', 'library', 
-                 'sample', 'cohort', 'fpkm', 'cov', 'frac', 'exons', 
-                 'attrs')
+    __slots__ = ('chrom', 'start', 'end', 'strand', 'exons', 'attrs') 
 
     def __init__(self):
         self.chrom = None
         self.start = -1
         self.end = -1
         self.strand = NO_STRAND
-        self.id = None
-        self.library = None
-        self.sample = None
-        self.cohort = None
-        self.fpkm = 0.0
-        self.cov = 0.0
-        self.frac = 0.0
         self.exons = None
-        self.attrs = None
+        self.attrs = {}
 
     def __str__(self):
         return ("<%s(chrom='%s', start='%d', end='%d', strand='%s', "
-                "id='%s', library='%s', cohort='%s', sample='%s', fpkm='%s', " 
-                "cov='%s', frac='%s', length='%s', exons='%s'" % 
+                "exons='%s', attrs='%s'" %
                 (self.__class__.__name__, self.chrom, self.start, self.end, 
-                 strand_int_to_str(self.strand), self.id, self.cohort, 
-                 self.sample, self.fpkm, self.cov, self.frac, self.length, self.exons))
+                 strand_int_to_str(self.strand), self.exons, self.attrs))
 
     @property
-    def tx_start(self):
-        return self.exons[0].start
+    def id(self):
+        return self.attrs["transcript_id"]
     @property
-    def tx_end(self):
-        return self.exons[-1].end
+    def gene_id(self):
+        return self.attrs["gene_id"]
+    @property
+    def library(self):
+        return self.attrs["gene_id"].split(".")[0]
+    @property
+    def sample(self):
+        return self.attrs["sample"]
+    @property
+    def cohort(self):
+        return self.attrs["cohort"]
+    @property
+    def fpkm(self):
+        return self.attrs["FPKM"]
+    @property
+    def cov(self):
+        return self.attrs["cov"]
+    @property
+    def frac(self):
+        return self.attrs["frac"]
     @property
     def length(self):
         return sum((e.end - e.start) for e in self.exons)
@@ -104,40 +111,46 @@ class Transcript(object):
             block_sizes.append(e1 - e0)        
         # write
         s = '\t'.join([self.chrom, 
-                       str(self.tx_start), 
-                       str(self.tx_end),
-                       str(self.id),
+                       str(self.start), 
+                       str(self.end),
+                       str(self.transcript_id),
                        str(self.fpkm),
                        strand_int_to_str(self.strand),
-                       str(self.tx_start),
-                       str(self.tx_start),
+                       str(self.start),
+                       str(self.start),
                        '0',
                        str(len(self.exons)),
                        ','.join(map(str,block_sizes)) + ',',
                        ','.join(map(str,block_starts)) + ','])
         return s
     
-#    def to_gtf(self):
-#        f = GTFFeature()
-#        f.seqid = self.chrom
-#        f.source = 'assemblyline'
-#        f.feature_type = 'transcript'
-#        f.start = self.start
-#        f.end = self.end
-#        f.score = 1000.0
-#        f.strand = strand_int_to_str(self.strand)
-#        f.phase = '.'
-#        f.attrs = {}
-#        self.id = None
-#        self.library = None
-#        self.sample = None
-#        self.cohort = None
-#        self.fpkm = 0.0
-#        self.cov = 0.0
-#        self.frac = 0.0
-#        self.exons = None
-#        self.attrs = None
-
-    
-    
-    
+    def to_gtf_features(self):
+        # transcript feature
+        f = GTFFeature()
+        f.seqid = self.chrom
+        f.source = 'assemblyline'
+        f.feature_type = 'transcript'
+        f.start = self.start
+        f.end = self.end
+        f.score = 1000.0
+        f.strand = strand_int_to_str(self.strand)
+        f.phase = '.'
+        f.attrs = self.attrs
+        features = [f]
+        # exon features
+        for i,e in enumerate(self.exons):
+            f = GTFFeature()
+            f.seqid = self.chrom
+            f.source = 'assemblyline'
+            f.feature_type = 'exon'
+            f.start = e.start
+            f.end = e.end
+            f.score = 1000.0
+            f.strand = strand_int_to_str(self.strand)
+            f.phase = '.'
+            f.attrs = {}
+            f.attrs["gene_id"] = self.attrs["gene_id"]
+            f.attrs["transcript_id"] = self.attrs["transcript_id"]
+            f.attrs["exon_number"] = i
+            features.append(f)
+        return features

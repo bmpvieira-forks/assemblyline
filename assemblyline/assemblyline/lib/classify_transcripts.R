@@ -68,7 +68,7 @@ best_cutoff <- cutoffs[min(which(F == max(F)))]
 write(c(best_cutoff), file=cutoff_file, ncolumns=1)
 
 # write to output file
-m <- matrix(cbind(t$chrom, t$start, t$tx_id, t$annotated, t$sense_frac, t$antisense_frac, t$intron_frac, t$recur, t$avgdensity, result), ncol=10)
+m <- matrix(cbind(t$chrom, t$start, t$tx_id, t$annotated, t$recur, t$avgdensity, result), ncol=7)
 write.table(m, file=outfile, quote=FALSE, row.names=FALSE, col.names=FALSE, sep="\t")
 
 # print statistics from classification
