@@ -561,7 +561,7 @@ def main():
                           c.stats_file)
         merged_expressed_gtf_files.append(c.expressed_file)
         merged_background_gtf_files.append(c.background_file)
-        
+
     # merge the GTF files from different categories
     logging.info("Merging classification results")
     expressed_gtf_filename = os.path.join(args.output_dir, "expressed.gtf")

@@ -10,25 +10,25 @@ import itertools
 import operator
 import bisect
 
-from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand, \
-    strand_int_to_str
 from bx.intersection import Interval, IntervalTree
 from bx.cluster import ClusterTree
+from transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, \
+    cmp_strand, strand_int_to_str
 from assembler import assemble_transcript_graph
 
 class TranscriptData(object):
-    __slots__ = ('id', 'strand', 'score')
-    def __init__(self, id, strand, score):
+    __slots__ = ('id', 'strand', 'density')
+    def __init__(self, id, strand, density):
         self.id = id
         self.strand = strand
-        self.score = float(score)
+        self.density = float(density)
     def __repr__(self):
-        return ("<%s(id='%s',strand='%s',score='%s')>" % 
+        return ("<%s(id='%s',strand='%s',density='%s')>" % 
                 (self.__class__.__name__, self.id, self.strand, 
-                 str(self.score))) 
+                 str(self.density))) 
     def __str__(self):
-        return ("[id=%s,strand=%s,score=%.6f]" % 
-                (self.id, strand_int_to_str(self.strand), self.score))
+        return ("[id=%s,strand=%s,density=%.6f]" % 
+                (self.id, strand_int_to_str(self.strand), self.density))
 
 def find_intron_starts_and_ends(transcripts):
     '''
@@ -168,7 +168,6 @@ def split_exon(exon, coverage_density, boundaries):
         cov = float(end - start) * coverage_density
         yield start, end, cov
 
-
 class TranscriptGraph(object):
     def __init__(self):
         pass
@@ -176,12 +175,6 @@ class TranscriptGraph(object):
     def get_exon_ids(self, n):
         exon_data_list = self.G.node[n]['data']
         return [x.id for x in exon_data_list]
-
-    @staticmethod
-    def from_transcripts(transcripts, overhang_threshold=0):
-        g = TranscriptGraph()
-        g.add_transcripts(transcripts, overhang_threshold)
-        return g
 
     def _add_node(self, n, tdata):
         if n not in self.G:  
@@ -197,14 +190,15 @@ class TranscriptGraph(object):
     
     def _add_exon(self, exon, tdata, boundaries):
         """
-        tdata: TranscriptData object with 'score' equal to the coverage 
+        exon: Exon object to split
+        tdata: TranscriptData object with 'density' equal to the coverage 
         density
         """
         nodes = []  
-        for start, end, score in split_exon(exon, tdata.score, boundaries):
+        for start, end, density in split_exon(exon, tdata.density, boundaries):
             n = Exon(start, end)
             exon_tdata = TranscriptData(id=tdata.id, strand=tdata.strand, 
-                                        score=score)
+                                        density=density)
             self._add_node(n, exon_tdata)
             # add edges between split exon according to 
             # strand being assembled.
@@ -221,9 +215,8 @@ class TranscriptGraph(object):
     def _add_transcript(self, transcript, boundaries):
         exons = transcript.exons
         strand = transcript.strand
-        density = transcript.score / transcript.length
         tdata = TranscriptData(id=transcript.id, strand=strand, 
-                               score=density)
+                               density=transcript.fpkm)
         # split exons that cross boundaries and get the
         # new exons of the path
         split_exons = []

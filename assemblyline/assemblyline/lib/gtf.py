@@ -35,7 +35,8 @@ class GTFFeature(object):
         line = [self.seqid,
                 self.source,
                 self.feature_type,
-                str(self.start),
+                # convert to 1-based intervals
+                str(self.start + 1),
                 str(self.end),
                 str(self.score),
                 str(self.strand),
@@ -52,7 +53,8 @@ class GTFFeature(object):
         f.seqid = fields[0]
         f.source = fields[1]
         f.feature_type = fields[2]
-        f.start = int(fields[3])
+        # convert from 1-based (inclusive) to 0-based (exclusive) intervals
+        f.start = int(fields[3])-1
         f.end = int(fields[4])
         f.score = 0 if (fields[5] == '.') else float(fields[5])
         strand = fields[6]
