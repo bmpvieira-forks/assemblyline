@@ -92,7 +92,7 @@ def trim_right(start, end, intron_starts, intron_ends, overhang_threshold):
     return trim_end
 
 def trim_transcripts(transcripts, overhang_threshold):
-    if overhang_threshold == 0:
+    if overhang_threshold <= 0:
         return
     # find the set of intron boundaries that govern 
     # trimming
@@ -236,7 +236,8 @@ class TranscriptGraph(object):
             split_exons.extend(e2_exons)
         return split_exons
 
-    def add_transcripts(self, transcripts, overhang_threshold=0):
+    @staticmethod
+    def from_transcripts(transcripts, overhang_threshold=0):
         '''
         overhang_threshold: integer greater than zero specifying the 
         maximum exon overhang that can be trimmed to match an intron
@@ -247,7 +248,8 @@ class TranscriptGraph(object):
         function is invoked, the previously stored transcripts will be 
         deleted and overwritten        
         '''
-        self.G = nx.DiGraph()
+        tg = TranscriptGraph()
+        tg.G = nx.DiGraph()
         # trim the transcripts (modifies transcripts in place)
         trim_transcripts(transcripts, overhang_threshold)
         # find the intron domains of the transcripts
@@ -257,12 +259,12 @@ class TranscriptGraph(object):
         #allowed_paths = collections.defaultdict(lambda: set())
         # add transcripts
         for t in transcripts:
-            nodes = self._add_transcript(t, boundaries)
+            nodes = tg._add_transcript(t, boundaries)
             # update allowed partial paths dictionary
         #    for i in xrange(1, len(nodes)):
         #        allowed_paths[tuple(nodes[:i])].add(nodes[i])
         #self.allowed_paths = allowed_paths
-
+        return tg
 
     def assemble(self, max_paths, fraction_major_path=0.10):
         if fraction_major_path <= 0:

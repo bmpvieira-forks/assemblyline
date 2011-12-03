@@ -6,7 +6,7 @@ Created on Feb 20, 2011
 import os
 import networkx as nx
 
-from assemblyline.lib.base import Exon, strand_str_to_int
+from assemblyline.lib.transcript import Exon, strand_str_to_int
 from assemblyline.lib.transcript_graph import TranscriptGraph, TranscriptData
 from assemblyline.lib.transcript_parser import Transcript, parse_gtf
 
