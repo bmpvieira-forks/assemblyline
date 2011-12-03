@@ -26,9 +26,9 @@ class TestTranscriptGraph(unittest.TestCase):
         # plus strand
         test_basename = "basic_graph1"
         gtf_file = test_basename + ".gtf"
-        dot_file = test_basename + "_b4.dot"
+        dot_file = test_basename + ".dot"
         txgraph = read_gtf(gtf_file)
-        write_dot(txgraph, dot_file)
+        #write_dot(txgraph, dot_file)
         self.assertTrue(compare_dot(txgraph, dot_file))
         # minus strand
         test_basename = "basic_graph2"
@@ -44,37 +44,41 @@ class TestTranscriptGraph(unittest.TestCase):
         txgraph = read_gtf(gtf_file)
         #write_dot(txgraph, dot_file)
         self.assertTrue(compare_dot(txgraph, dot_file))
-#        nx.spring_layout(txgraph.G)
-#        nx.draw(txgraph.G)
-#        plt.show()
+        #nx.spring_layout(txgraph.G)
+        #nx.draw(txgraph.G)
+        #plt.show()
 
-#
-#    def test_basic_split(self):
-#        """test that initial graph construction correctly splits exons"""
-#        # plus strand
-#        test_basename = "basic_split1"
-#        gtf_file = test_basename + ".gtf"
-#        dot_file = test_basename + ".dot"
-#        txgraph = read_gtf(gtf_file)
-#        #write_dot(txgraph, dot_file)
-#        self.assertTrue(compare_dot(txgraph, dot_file))
-#        # minus strand
-#        test_basename = "basic_split2"
-#        gtf_file = test_basename + ".gtf"
-#        dot_file = test_basename + ".dot"
-#        txgraph = read_gtf(gtf_file)
-#        #write_dot(txgraph, dot_file)
-#        self.assertTrue(compare_dot(txgraph, dot_file))
-#        # unstranded
-#        test_basename = "basic_split3"
-#        gtf_file = test_basename + ".gtf"
-#        dot_file = test_basename + ".dot"
-#        txgraph = read_gtf(gtf_file)
-#        #write_dot(txgraph, dot_file)
-#        self.assertTrue(compare_dot(txgraph, dot_file))
-#        #nx.spring_layout(txgraph.G)
-#        #nx.draw(txgraph.G)
-#        #plt.show()
+
+    def test_basic_split(self):
+        """test that initial graph construction correctly splits exons"""
+        # plus strand
+        test_basename = "basic_split1"
+        gtf_file = test_basename + ".gtf"
+        dot_file = test_basename + ".dot"
+        txgraph = read_gtf(gtf_file)
+        write_dot(txgraph, dot_file)
+        self.assertTrue(compare_dot(txgraph, dot_file))
+        nx.spring_layout(txgraph.G)
+        nx.draw(txgraph.G)
+        plt.show()
+        return        
+        # minus strand
+        test_basename = "basic_split2"
+        gtf_file = test_basename + ".gtf"
+        dot_file = test_basename + ".dot"
+        txgraph = read_gtf(gtf_file)
+        #write_dot(txgraph, dot_file)
+        self.assertTrue(compare_dot(txgraph, dot_file))
+        # unstranded
+        test_basename = "basic_split3"
+        gtf_file = test_basename + ".gtf"
+        dot_file = test_basename + ".dot"
+        txgraph = read_gtf(gtf_file)
+        #write_dot(txgraph, dot_file)
+        self.assertTrue(compare_dot(txgraph, dot_file))
+        #nx.spring_layout(txgraph.G)
+        #nx.draw(txgraph.G)
+        #plt.show()
 #
 #    def test_complex_split(self):
 #        """test some more complicated exon splitting cases"""
