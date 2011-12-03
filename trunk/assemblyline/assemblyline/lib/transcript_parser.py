@@ -12,6 +12,16 @@ import math
 import gtf
 from transcript import Exon, Transcript, strand_str_to_int
 
+def check_nan(x):
+    x = float(x)
+    if math.isnan(x):
+        return 0.0
+    return x
+
+_cufflinks_attr_defs = {"FPKM": check_nan,
+                        "cov": check_nan,
+                        "frac": check_nan}
+
 def separate_transcripts(gtf_features):
     transcripts = collections.defaultdict(lambda: Transcript())
     for feature in gtf_features:
@@ -29,22 +39,6 @@ def separate_transcripts(gtf_features):
             transcript.strand = strand_str_to_int(feature.strand)
             transcript.exons = {}
             transcript.attrs = feature.attrs
-            # convert non-string types
-            fpkm = float(feature.attrs["FPKM"])
-            if math.isnan(fpkm):
-                logging.warning("Encountered fpkm='nan' for transcript %s" % (tx_id))
-                fpkm = 0.0
-            transcript.attrs["FPKM"] = fpkm
-            cov = float(feature.attrs["cov"])
-            if math.isnan(cov):
-                logging.warning("Encountered cov='nan' for transcript %s" % (transcript.id))
-                cov = 0.0
-            transcript.attrs["cov"] = cov
-            frac = float(feature.attrs["frac"])
-            if math.isnan(frac):
-                logging.warning("Encountered frac='nan' for transcript %s" % (transcript.id))
-                frac = 0.0
-            transcript.attrs["frac"] = frac
         elif feature.feature_type == "exon":
             exon_num = int(feature.attrs["exon_number"])
             transcript.exons[exon_num] = Exon(feature.start, feature.end)

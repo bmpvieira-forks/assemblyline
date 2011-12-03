@@ -11,19 +11,10 @@ import numpy as np
 
 from bx.cluster import ClusterTree
 
-from transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand
-from smoothen import smoothen_graph_leastsq
+from transcript import POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand
+from assembler_base import NODE_WEIGHT, EDGE_OUT_FRAC, EDGE_IN_FRAC, \
+    EDGE_DENSITY, SOURCE_NODE, SINK_NODE
 from path_finder import find_suboptimal_paths
-
-# assembler graph attributes
-NODE_WEIGHT = 'weight'
-EDGE_OUT_FRAC = 'outfrac'
-EDGE_IN_FRAC = 'infrac'
-EDGE_DENSITY = 'density'
-
-# constants for fake 'start' and 'end' nodes
-SOURCE_NODE = Exon(-1,-1)
-SINK_NODE = Exon(-2,-2)
 
 # private constants for use as graph attributes
 NODE_TSS_ID = 'tss_id'
