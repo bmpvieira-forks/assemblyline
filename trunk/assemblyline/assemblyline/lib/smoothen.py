@@ -8,8 +8,8 @@ import operator
 import numpy as np
 import networkx as nx
 
-from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, NODE_WEIGHT, \
-    EDGE_OUT_FRAC
+from transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
+from assmbler import NODE_WEIGHT, EDGE_OUT_FRAC
 
 def get_chains(G):
     """find chains of nodes with degree of '1' and smoothen their 

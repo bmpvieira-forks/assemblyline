@@ -7,14 +7,23 @@ import collections
 import logging
 import operator
 import networkx as nx
+import numpy as np
 
 from bx.cluster import ClusterTree
 
-from base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand
-from base import NODE_WEIGHT, EDGE_OUT_FRAC, EDGE_IN_FRAC, EDGE_DENSITY
-from base import SOURCE_NODE, SINK_NODE
+from transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand
 from smoothen import smoothen_graph_leastsq
 from path_finder import find_suboptimal_paths
+
+# assembler graph attributes
+NODE_WEIGHT = 'weight'
+EDGE_OUT_FRAC = 'outfrac'
+EDGE_IN_FRAC = 'infrac'
+EDGE_DENSITY = 'density'
+
+# constants for fake 'start' and 'end' nodes
+SOURCE_NODE = Exon(-1,-1)
+SINK_NODE = Exon(-2,-2)
 
 # private constants for use as graph attributes
 NODE_TSS_ID = 'tss_id'
@@ -175,6 +184,46 @@ def add_dummy_start_end_nodes(G, start_nodes, end_nodes):
                      EDGE_OUT_FRAC: 1.0,
                      EDGE_IN_FRAC: 0.0}
         G.add_edge(end_node, SINK_NODE, attr_dict=attr_dict)
+
+def smoothen_graph_leastsq(G):
+    # cannot smooth a graph with just one node
+    if len(G) == 1:
+        return
+    # label nodes
+    cur_id = 0
+    eqns = {}
+    cols = {}
+    y = np.zeros(len(G), dtype=np.float)
+    # assign numeric ids to nodes
+    for n,d in G.nodes_iter(data=True):
+        d['id'] = cur_id
+        y[cur_id] = d[NODE_WEIGHT]
+        if G.in_degree(n) > 0:
+            a = np.zeros(len(G), dtype=np.float)
+            a[cur_id] = -1.0
+            eqns[cur_id] = a
+        cols[cur_id] = n
+        cur_id += 1
+    # setup equations for each node
+    for u,v,d in G.edges_iter(data=True):
+        u_id = G.node[u]['id']
+        v_id = G.node[v]['id']
+        out_frac = d[EDGE_OUT_FRAC]
+        eqns[v_id][u_id] = out_frac
+    # build matrix for least squares error
+    # minimization
+    row_ids = sorted(eqns)
+    A = np.vstack(eqns[id] for id in row_ids)
+    A = np.asmatrix(A)
+    I = np.identity(len(G), dtype=np.float)
+    # perform least squares minimization
+    beta = (I - A.T*((A*A.T).I)*A).dot(y)
+    # set new node weights
+    for col_id,n in cols.iteritems():
+        G.node[n][NODE_WEIGHT] = beta[0,col_id]
+        del G.node[n]['id']
+    #for n,d in G.nodes_iter(data=True):
+    #    print 'NEW NODE', n, d
 
 def assemble_subgraph(G, strand, fraction_major_path, 
                       max_paths):

@@ -20,9 +20,26 @@ def strand_str_to_int(strand):
 def strand_int_to_str(strand):
     return _strand_int_to_str[strand]
 
+def merge_strand(strand1, strand2):
+    if strand1 == strand2:
+        return strand1
+    elif strand1 == NO_STRAND:
+        return strand2
+    elif strand2 == NO_STRAND:
+        return strand1
+    else:
+        assert False
+
+def cmp_strand(a, b):
+    if (a == NO_STRAND) or (b == NO_STRAND):
+        return True
+    return a == b
+
 def interval_overlap(a, b):
-    """return True if two intervals overlap, False otherwise"""
     return (a.start < b.end) and (b.start < a.end)
+
+def interval_overlap_threshold(a, b, d=0):
+    return (a.start < b.end + d) and (b.start < a.end + d)
 
 class Exon(object):
     __slots__ = ('start', 'end')
