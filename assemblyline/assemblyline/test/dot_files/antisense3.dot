@@ -1,0 +1,17 @@
+strict digraph G {
+"1560-1600" [data="[id=G1.1,strand=+,density=1.000000],[id=G2.1,strand=-,density=1.000000]"];
+"0-100" [data="[id=G1.1,strand=+,density=1.000000]"];
+"1000-1100" [data="[id=G2.1,strand=-,density=1.000000]"];
+"1500-1550" [data="[id=G1.1,strand=+,density=1.000000],[id=G2.1,strand=-,density=1.000000]"];
+"1900-2000" [data="[id=G1.1,strand=+,density=1.000000]"];
+"1550-1560" [data="[id=G1.1,strand=+,density=1.000000],[id=G2.1,strand=-,density=1.000000],[id=G3.1,strand=.,density=1.000000]"];
+"2900-3000" [data="[id=G2.1,strand=-,density=1.000000]"];
+"1560-1600" -> "1900-2000"  [data="[id=G1.1,strand=+,density=1.000000]"];
+"1560-1600" -> "1550-1560"  [data="[id=G2.1,strand=-,density=1.000000]"];
+"0-100" -> "1500-1550"  [data="[id=G1.1,strand=+,density=1.000000]"];
+"1500-1550" -> "1550-1560"  [data="[id=G1.1,strand=+,density=1.000000]"];
+"1500-1550" -> "1000-1100"  [data="[id=G2.1,strand=-,density=1.000000]"];
+"1550-1560" -> "1560-1600"  [data="[id=G1.1,strand=+,density=1.000000]"];
+"1550-1560" -> "1500-1550"  [data="[id=G2.1,strand=-,density=1.000000]"];
+"2900-3000" -> "1560-1600"  [data="[id=G2.1,strand=-,density=1.000000]"];
+}
