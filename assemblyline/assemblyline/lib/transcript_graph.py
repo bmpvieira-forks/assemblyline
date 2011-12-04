@@ -9,6 +9,7 @@ import collections
 import itertools
 import operator
 import bisect
+import numpy as np
 
 from bx.intersection import Interval, IntervalTree
 from bx.cluster import ClusterTree
@@ -174,6 +175,117 @@ def split_exon(exon, boundaries):
         start, end = exon_splits[j-1], exon_splits[j]
         yield start, end
 
+def add_exon(exon, tdata, boundaries):
+    """
+    exon: Exon object to split
+    tdata: TranscriptData object
+    
+    returns lists of (node,data) and (edge,data) tuples
+    """
+    nodes = []
+    edges = []
+    for start, end in split_exon(exon, boundaries):
+        # make node
+        n = Exon(start, end)
+        exon_tdata = TranscriptData(id=tdata.id, strand=tdata.strand, 
+                                    density=tdata.density)
+        nodes.append((n, exon_tdata))
+        # make edges between split exon according to 
+        # strand being assembled.
+        if len(nodes) > 0:
+            if cmp_strand(tdata.strand, NEG_STRAND):
+                edges.append((n, nodes[-1], tdata))
+            if cmp_strand(tdata.strand, POS_STRAND):
+                edges.append((nodes[-1], n, tdata))
+    assert nodes[-1][0].end == exon.end
+    return nodes, edges
+
+def add_transcript(transcript, boundaries):
+    exons = transcript.exons
+    strand = transcript.strand
+    tdata = TranscriptData(id=transcript.id, strand=strand, 
+                           density=transcript.fpkm)
+    # split exons that cross boundaries and get the
+    # new exons of the path
+    tnodes = []
+    tedges = []
+    # add the first exon to initialize the loop
+    # (all transcripts must have at least one exon)
+    enodes, eedges = add_exon(exons[0], tdata, boundaries)
+    tnodes.extend(enodes)
+    tedges.extend(eedges)
+    for e2 in exons[1:]:
+        # add exon
+        enodes, eedges = add_exon(e2, tdata, boundaries)
+        # add intron -> exon edges
+        if strand != NO_STRAND:
+            if strand == NEG_STRAND:
+                tedges.append((enodes[0], tnodes[-1][0], tdata))
+            else:
+                tedges.append((tnodes[-1][0], enodes[0], tdata))
+        # update nodes/edges
+        tnodes.extend(enodes)
+        tedges.extend(eedges)
+    return tnodes, tedges
+
+def sum_strand_densities(G):
+    '''
+    compute the fraction of (+) versus (-) transcription at each node
+    '''
+    nodes = G.nodes()
+    for n in nodes:
+        d = G.node[n]
+        # sum density at each node
+        strand_density = [0.0, 0.0, 0.0]
+        for ndata in d['data']:
+            strand_density[ndata.strand] += ndata.density
+        d['strand_density'] = strand_density
+
+def redistribute_unstranded_density(G, transcripts, transcript_nodes):
+    '''
+    build separate subgraphs of G - a forward strand graph and a 
+    reverse strand graph (if necessary)
+    
+    pos_frac: fraction of all 'stranded' coverage that is on the 
+    positive strand.  this is used to partition unstranded coverage
+    proportionally
+ 
+    nodes in the graph will have a 'weight' attribute equal to the
+    total strand-specific coverage for that node
+
+    edges (u,v) in the graph will have a 'weight' attribute corresponding
+    to the fraction of total coverage flowing out of node 'u' that goes 
+    to 'v'
+    '''
+    # compute fraction of fwd/rev strand coverage at each node    
+    sum_strand_densities(G)
+    # compute the fraction of fwd/rev coverage for each transcript
+    for t in transcripts:
+        # only re-apportion the density for unstranded transcripts
+        if t.strand != NO_STRAND:
+            continue
+        tnodes = transcript_nodes[t.id]        
+        # sum the coverage mass across the transcript
+        strand_mass = np.zeros(3,float)
+        for n in tnodes:
+            strand_mass += (n.end - n.start) * G.node[n]['strand_density']            
+        # calculate total mass across transcript
+        total_strand_mass = strand_mass[POS_STRAND] + strand_mass[NEG_STRAND]        
+        # if there is "stranded" mass on any of the nodes comprising
+        # this transcript, then use the proportion of fwd/rev mass
+        # to re-apportion the unstranded mass 
+        if total_strand_mass > 0:
+            # proportionally assign unstranded mass based on amount of
+            # plus and minus strand mass
+            pos_frac = strand_mass[POS_STRAND] / float(total_strand_mass)
+            strand_fracs = np.array((pos_frac, 1.0 - pos_frac, -1.0))
+            for n in tnodes:
+                # subtract density from unstranded and add to stranded
+                G.node[n]['strand_density'] += (t.density * strand_fracs)
+
+
+
+
 class TranscriptGraph(object):
     def __init__(self):
         pass
@@ -200,7 +312,8 @@ class TranscriptGraph(object):
         tdata: TranscriptData object with 'density' equal to the coverage 
         density
         """
-        nodes = []  
+        nodes = []
+        edges = []
         for start, end in split_exon(exon, boundaries):
             n = Exon(start, end)
             exon_tdata = TranscriptData(id=tdata.id, strand=tdata.strand, 
@@ -260,16 +373,21 @@ class TranscriptGraph(object):
         trim_transcripts(transcripts, overhang_threshold)
         # find the intron domains of the transcripts
         boundaries = find_exon_boundaries(transcripts)
-        # keep a dictionary where a partial path is the key,
-        # and the set of allowable destination nodes is the value
-        #allowed_paths = collections.defaultdict(lambda: set())
+        # keep mapping of transcripts to graph nodes
+        unstranded_transcripts = []
         # add transcripts
         for t in transcripts:
+            # save NO_STRAND transcripts for later
+            if t.strand == NO_STRAND:
+                unstranded_transcripts.append(t)
+            else:
+                nodes = tg._add_transcript(t, boundaries)
+        # now add unstranded transcripts
+        for t in unstranded_transcripts:            
             nodes = tg._add_transcript(t, boundaries)
-            # update allowed partial paths dictionary
-        #    for i in xrange(1, len(nodes)):
-        #        allowed_paths[tuple(nodes[:i])].add(nodes[i])
-        #self.allowed_paths = allowed_paths
+
+        # reallocate unstranded transcript coverage to fwd/rev strand 
+        redistribute_unstranded_density(tg.G, transcripts, transcript_nodes)
         return tg
 
     def assemble(self, max_paths, fraction_major_path=0.10):
