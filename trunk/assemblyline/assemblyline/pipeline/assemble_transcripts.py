@@ -94,7 +94,7 @@ def run(gtf_file, overhang_threshold, fraction_major_isoform, max_paths):
                        locus_transcripts[0].start, locus_transcripts[-1].end))
         # build and refine transcript graph        
         transcript_graph = \
-            TranscriptGraph.from_transcripts(locus_transcripts, 
+            TranscriptGraph.from_transcripts(locus_transcripts,
                                              overhang_threshold)
         continue
         #transcript_graph.collapse(overhang_threshold=overhang_threshold)

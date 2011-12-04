@@ -91,6 +91,41 @@ def trim_right(start, end, intron_starts, intron_ends, overhang_threshold):
                 trim_end = nearest_intron_start    
     return trim_end
 
+def trim_transcript(exons, intron_starts, intron_ends, 
+                    overhang_threshold):
+    # only the very first and last exon of each transcript can be 
+    # trimmed
+    trim_start = trim_left(exons[0].start, exons[0].end, 
+                           intron_starts, intron_ends, 
+                           overhang_threshold)
+    trim_end = trim_right(exons[-1].start, exons[-1].end, 
+                          intron_starts, intron_ends, 
+                          overhang_threshold)
+    #logging.debug('strand=%d txstart=%d txend=%d trimstart=%d trimend=%d' % 
+    #              (t.strand, t.tx_start, t.tx_end, trim_start, trim_end))
+    # if both start and end were trimmed it is
+    # possible that they could be trimmed to 
+    # match different introns and generate a 
+    # weird and useless trimmed exon that is not
+    # compatible with either the left or right
+    # introns. resolve these situations by choosing
+    # the smaller of the two trimmed distances as
+    # the more likely
+    if trim_end <= trim_start:
+        #logging.warning('Trimming produced txstart=%d txend=%d trimstart=%d trimend=%d' % 
+        #                (exons[0].start, exons[-1].end, trim_start, trim_end))
+        left_trim_dist = trim_start - exons[0].start
+        right_trim_dist = exons[-1].end - trim_end
+        assert left_trim_dist >= 0
+        assert right_trim_dist >= 0
+        if left_trim_dist <= right_trim_dist:
+            trim_start, trim_end = trim_start, exons[-1].end
+        else:
+            trim_start, trim_end = exons[0].start, trim_end
+        #logging.warning('\tresolved to trimstart=%d trimend=%d' % (trim_start, trim_end))
+    assert trim_start < trim_end
+    return trim_start, trim_end
+
 def trim_transcripts(transcripts, overhang_threshold):
     if overhang_threshold <= 0:
         return
@@ -98,38 +133,10 @@ def trim_transcripts(transcripts, overhang_threshold):
     # trimming
     intron_starts, intron_ends = find_intron_starts_and_ends(transcripts)    
     for t in transcripts:
-        # only the very first and last exon of each transcript can be 
-        # trimmed
-        trim_start = trim_left(t.exons[0].start, t.exons[0].end, 
-                               intron_starts[t.strand], 
-                               intron_ends[t.strand], 
-                               overhang_threshold)
-        trim_end = trim_right(t.exons[-1].start, t.exons[-1].end, 
-                              intron_starts[t.strand], 
-                              intron_ends[t.strand], 
-                              overhang_threshold)
-        #logging.debug('strand=%d txstart=%d txend=%d trimstart=%d trimend=%d' % 
-        #              (t.strand, t.tx_start, t.tx_end, trim_start, trim_end))
-        # if both start and end were trimmed it is
-        # possible that they could be trimmed to 
-        # match different introns and generate a 
-        # weird and useless trimmed exon that is not
-        # compatible with either the left or right
-        # introns. resolve these situations by choosing
-        # the smaller of the two trimmed distances as
-        # the more likely
-        if trim_end <= trim_start:
-            logging.warning('Trimming produced strand=%d txstart=%d txend=%d trimstart=%d trimend=%d' % 
-                            (t.strand, t.tx_start, t.tx_end, trim_start, trim_end))
-            left_trim_dist = trim_start - t.tx_start
-            right_trim_dist = t.tx_end - trim_end
-            assert left_trim_dist >= 0
-            assert right_trim_dist >= 0
-            if left_trim_dist <= right_trim_dist:
-                trim_start, trim_end = trim_start, t.tx_end
-            else:
-                trim_start, trim_end = t.tx_start, trim_end
-            logging.warning('\tresolved to trimstart=%d trimend=%d' % (trim_start, trim_end))
+        trim_start, trim_end = trim_transcript(t.exons, 
+                                               intron_starts[t.strand],
+                                               intron_ends[t.strand],
+                                               overhang_threshold)
         assert trim_start < trim_end
         # finally, modify the transcript
         t.exons[0].start = trim_start
@@ -155,7 +162,7 @@ def find_exon_boundaries(transcripts):
     # sort the intron boundary positions and add them to interval trees
     return sorted(exon_boundaries)
 
-def split_exon(exon, coverage_density, boundaries):
+def split_exon(exon, boundaries):
     # find the indexes into the intron boundaries list that
     # border the exon.  all the indexes in between these two
     # are overlapping the exon and we must use them to break
@@ -165,8 +172,7 @@ def split_exon(exon, coverage_density, boundaries):
     exon_splits = [exon.start] + boundaries[start_ind:end_ind] + [exon.end]
     for j in xrange(1, len(exon_splits)):
         start, end = exon_splits[j-1], exon_splits[j]
-        cov = float(end - start) * coverage_density
-        yield start, end, cov
+        yield start, end
 
 class TranscriptGraph(object):
     def __init__(self):
@@ -195,10 +201,10 @@ class TranscriptGraph(object):
         density
         """
         nodes = []  
-        for start, end, density in split_exon(exon, tdata.density, boundaries):
+        for start, end in split_exon(exon, boundaries):
             n = Exon(start, end)
             exon_tdata = TranscriptData(id=tdata.id, strand=tdata.strand, 
-                                        density=density)
+                                        density=tdata.density)
             self._add_node(n, exon_tdata)
             # add edges between split exon according to 
             # strand being assembled.
