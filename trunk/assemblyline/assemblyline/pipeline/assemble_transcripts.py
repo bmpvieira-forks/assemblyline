@@ -9,7 +9,7 @@ import os
 
 from assemblyline.lib.transcript_parser import parse_gtf
 from assemblyline.lib.transcript import Exon, strand_int_to_str, NEG_STRAND, POS_STRAND
-from assemblyline.lib.transcript_graph import TranscriptGraph
+from assemblyline.lib.transcript_graph import create_transcript_graph
 from assemblyline.lib.gtf import GTFFeature
 
 def write_bed(chrom, name, strand, score, exons):
@@ -92,11 +92,17 @@ def run(gtf_file, overhang_threshold, fraction_major_isoform, max_paths):
         logging.debug("Locus with %d transcripts chrom=%s start=%d end=%d" % 
                       (len(locus_transcripts), locus_transcripts[0].chrom,
                        locus_transcripts[0].start, locus_transcripts[-1].end))
-        # build and refine transcript graph        
-        transcript_graph = \
-            TranscriptGraph.from_transcripts(locus_transcripts,
-                                             overhang_threshold)
+        # build and refine transcript graph
+        GG = create_transcript_graph(locus_transcripts, overhang_threshold)
         continue
+
+        #def assemble(self, max_paths, fraction_major_path=0.10):
+        #    if fraction_major_path <= 0:
+        #        fraction_major_path = 1e-8        
+        #    for res in assemble_transcript_graph(self.G, fraction_major_path, 
+        #                                         max_paths):
+        #        yield res
+    
         #transcript_graph.collapse(overhang_threshold=overhang_threshold)
         chrom = locus_transcripts[0].chrom
         # get transcript id -> transcript object mappings
@@ -138,7 +144,6 @@ def main():
     parser.add_argument("--score-attr", dest="score_attr", default="FPKM")
     parser.add_argument("filename")
     args = parser.parse_args()
-
     # set logging level
     if args.verbose:
         level = logging.DEBUG
@@ -146,7 +151,6 @@ def main():
         level = logging.WARNING
     logging.basicConfig(level=level,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")    
-
     # start algorithm
     run(args.filename, 
         args.overhang_threshold,

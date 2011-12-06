@@ -12,7 +12,7 @@ import numpy as np
 from bx.cluster import ClusterTree
 
 from transcript import POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand
-from assembler_base import NODE_WEIGHT, EDGE_OUT_FRAC, EDGE_IN_FRAC, \
+from assembler_base import NODE_DENSITY, EDGE_OUT_FRAC, EDGE_IN_FRAC, \
     EDGE_DENSITY, SOURCE_NODE, SINK_NODE
 from path_finder import find_suboptimal_paths
 

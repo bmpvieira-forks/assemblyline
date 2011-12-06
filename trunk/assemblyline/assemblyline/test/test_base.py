@@ -7,7 +7,7 @@ import os
 import networkx as nx
 
 from assemblyline.lib.transcript import Exon, strand_str_to_int
-from assemblyline.lib.transcript_graph import TranscriptGraph, TranscriptData
+from assemblyline.lib import transcript_graph
 from assemblyline.lib.transcript_parser import Transcript, parse_gtf
 
 DOT_DIR = "dot_files"
@@ -39,20 +39,20 @@ def get_dot_path(filename):
 def get_gtf_path(filename):
     return os.path.join(os.path.dirname(__file__), GTF_DIR, filename)
 
-def convert_data_to_string(exondata):
-    return ','.join([str(d) for d in exondata])    
+def convert_data_to_string(tdata_dict):
+    return ','.join([str(tdata_dict[k]) for k in sorted(tdata_dict.keys())])
 
 def convert_attrs_to_strings(H):
     G = H.copy()
-    for n in G:
-        G.node[n]['data'] = convert_data_to_string(G.node[n]['data'])
+    for n,d in G.nodes_iter(data=True):
+        d['data'] = convert_data_to_string(d['data'])
     for u,v,d in G.edges_iter(data=True):
         d['data'] = convert_data_to_string(d['data'])
     return G
 
-def compare_dot(transcript_graph, filename):
+def compare_dot(H, filename):
     Gcorrect = nx.read_dot(get_dot_path(filename))
-    G = convert_attrs_to_strings(transcript_graph.G)
+    G = convert_attrs_to_strings(H)
     for n in G:
         node_str = str(n)
         if node_str not in Gcorrect:
@@ -68,13 +68,16 @@ def compare_dot(transcript_graph, filename):
         test_data = '"%s"' % d['data']
         if correct_data != test_data:
             return False
-    return nx.is_isomorphic(transcript_graph.G, Gcorrect)
+    return nx.is_isomorphic(H, Gcorrect)
 
-def write_dot(transcript_graph, filename):
-    G = convert_attrs_to_strings(transcript_graph.G)
+def write_dot(H, filename):
+    G = convert_attrs_to_strings(H)
     nx.write_dot(G, get_dot_path(filename))
 
 def read_gtf(filename):
+    """
+    reads and returns graph from first locus in GTF file
+    """
     for locus_transcripts in parse_gtf(open(get_gtf_path(filename))):
-        isoform_graph = TranscriptGraph.from_transcripts(locus_transcripts)
-        return isoform_graph
+        G, a, b = transcript_graph.add_transcripts_to_graph(locus_transcripts)
+        return G

@@ -15,7 +15,6 @@ from bx.intersection import Interval, IntervalTree
 from bx.cluster import ClusterTree
 from transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, \
     cmp_strand, strand_int_to_str
-from assembler import assemble_transcript_graph
 
 class TranscriptData(object):
     __slots__ = ('id', 'strand', 'density')
@@ -175,7 +174,7 @@ def split_exon(exon, boundaries):
         start, end = exon_splits[j-1], exon_splits[j]
         yield start, end
 
-def add_exon(exon, tdata, boundaries):
+def get_exon_node_edges(exon, tdata, boundaries):
     """
     exon: Exon object to split
     tdata: TranscriptData object
@@ -187,20 +186,27 @@ def add_exon(exon, tdata, boundaries):
     for start, end in split_exon(exon, boundaries):
         # make node
         n = Exon(start, end)
-        exon_tdata = TranscriptData(id=tdata.id, strand=tdata.strand, 
+        exon_tdata = TranscriptData(id=tdata.id, 
+                                    strand=tdata.strand, 
                                     density=tdata.density)
-        nodes.append((n, exon_tdata))
         # make edges between split exon according to 
         # strand being assembled.
         if len(nodes) > 0:
             if cmp_strand(tdata.strand, NEG_STRAND):
-                edges.append((n, nodes[-1], tdata))
+                edges.append((n, nodes[-1][0], tdata))
             if cmp_strand(tdata.strand, POS_STRAND):
-                edges.append((nodes[-1], n, tdata))
+                edges.append((nodes[-1][0], n, tdata))
+        nodes.append((n, exon_tdata))
     assert nodes[-1][0].end == exon.end
     return nodes, edges
 
-def add_transcript(transcript, boundaries):
+def get_transcript_nodes_edges(transcript, boundaries):
+    """
+    transcript: Transcript object
+    boundaries: list of exon/intron boundaries
+    
+    returns list of (node,data) tuples and list of (u,v,data) edge tuples
+    """
     exons = transcript.exons
     strand = transcript.strand
     tdata = TranscriptData(id=transcript.id, strand=strand, 
@@ -211,63 +217,107 @@ def add_transcript(transcript, boundaries):
     tedges = []
     # add the first exon to initialize the loop
     # (all transcripts must have at least one exon)
-    enodes, eedges = add_exon(exons[0], tdata, boundaries)
+    enodes, eedges = get_exon_node_edges(exons[0], tdata, boundaries)
     tnodes.extend(enodes)
     tedges.extend(eedges)
     for e2 in exons[1:]:
         # add exon
-        enodes, eedges = add_exon(e2, tdata, boundaries)
+        enodes, eedges = get_exon_node_edges(e2, tdata, boundaries)
         # add intron -> exon edges
         if strand != NO_STRAND:
             if strand == NEG_STRAND:
-                tedges.append((enodes[0], tnodes[-1][0], tdata))
+                tedges.append((enodes[0][0], tnodes[-1][0], tdata))
             else:
-                tedges.append((tnodes[-1][0], enodes[0], tdata))
+                tedges.append((tnodes[-1][0], enodes[0][0], tdata))
         # update nodes/edges
         tnodes.extend(enodes)
         tedges.extend(eedges)
     return tnodes, tedges
 
+def add_node_to_graph(G, n, tdata):
+    if n not in G:  
+        G.add_node(n, data={})        
+    nd = G.node[n]
+    nd['data'][tdata.id] = tdata
+
+def add_edge_to_graph(G, u, v, tdata):
+    if not G.has_edge(u, v):
+        G.add_edge(u, v, data={})
+    ed = G.edge[u][v]
+    ed['data'][tdata.id] = tdata
+
+def add_transcripts_to_graph(transcripts, overhang_threshold=0):
+    '''
+    overhang_threshold: integer greater than zero specifying the 
+    maximum exon overhang that can be trimmed to match an intron
+    boundary.  exons that overhang more than this will be 
+    considered independent transcript start sites or end sites
+    '''
+    # trim the transcripts (modifies transcripts in place)
+    trim_transcripts(transcripts, overhang_threshold)
+    # find the intron domains of the transcripts
+    boundaries = find_exon_boundaries(transcripts)
+    # keep mapping of transcripts to graph nodes
+    transcript_graph_map = {}
+    unstranded_ids = []
+    # initialize transcript graph
+    G = nx.DiGraph()
+    # add transcripts
+    for t in transcripts:
+        if t.strand == NO_STRAND:
+            # save NO_STRAND transcripts for reprocessing later
+            unstranded_ids.append(t.id)
+        # add transcripts to graph
+        node_data_list, edge_data_list = get_transcript_nodes_edges(t, boundaries)
+        transcript_graph_map[t.id] = (node_data_list, edge_data_list)
+        for n,nd in node_data_list:
+            add_node_to_graph(G, n, nd)        
+        for u,v,ed in edge_data_list:
+            add_edge_to_graph(G, u, v, ed)
+    return G, transcript_graph_map, unstranded_ids
+
 def sum_strand_densities(G):
     '''
-    compute the fraction of (+) versus (-) transcription at each node
+    compute the total density per strand at each node/edge
+
+    a 'strand_density' numpy array will exist at each node/edge in the 
+    graph with this information    
     '''
-    nodes = G.nodes()
-    for n in nodes:
-        d = G.node[n]
+    for n,d in G.nodes_iter(data=True):
+        # access list of tdata objects
+        tdata_list = d['data'].values()
         # sum density at each node
-        strand_density = [0.0, 0.0, 0.0]
-        for ndata in d['data']:
-            strand_density[ndata.strand] += ndata.density
+        strand_density = np.zeros(3, float)
+        for tdata in tdata_list:
+            strand_density[tdata.strand] += tdata.density
+        d['strand_density'] = strand_density
+    for u,v,d in G.edges_iter(data=True):            
+        # access list of tdata objects
+        tdata_list = d['data'].values()
+        strand_density = np.zeros(3, float)
+        for tdata in tdata_list:
+            strand_density[tdata.strand] += tdata.density
         d['strand_density'] = strand_density
 
-def redistribute_unstranded_density(G, transcripts, transcript_nodes):
+def redistribute_unstranded_density(G, transcript_ids, transcript_graph_map):
     '''
-    build separate subgraphs of G - a forward strand graph and a 
-    reverse strand graph (if necessary)
-    
-    pos_frac: fraction of all 'stranded' coverage that is on the 
-    positive strand.  this is used to partition unstranded coverage
-    proportionally
- 
-    nodes in the graph will have a 'weight' attribute equal to the
-    total strand-specific coverage for that node
-
-    edges (u,v) in the graph will have a 'weight' attribute corresponding
-    to the fraction of total coverage flowing out of node 'u' that goes 
-    to 'v'
+    reallocate coverage mass of unstranded transcripts to the fwd/rev
+    strand proportionately.  must call sum_strand_densities(G) to set
+    the 'strand_density' attribute at each node/edge before calling this
+    method
+        
+    after this method no nodes should contain both stranded and
+    unstranded density
     '''
-    # compute fraction of fwd/rev strand coverage at each node    
-    sum_strand_densities(G)
     # compute the fraction of fwd/rev coverage for each transcript
-    for t in transcripts:
-        # only re-apportion the density for unstranded transcripts
-        if t.strand != NO_STRAND:
-            continue
-        tnodes = transcript_nodes[t.id]        
+    for id in transcript_ids:
+        tnodes,tedges = transcript_graph_map[id]        
         # sum the coverage mass across the transcript
         strand_mass = np.zeros(3,float)
-        for n in tnodes:
+        for n,d in tnodes:
+            # TODO: can remove this, but check strand and density            
+            assert d.strand == NO_STRAND
+            assert d.density == G.node[n]['data'][id].density
             strand_mass += (n.end - n.start) * G.node[n]['strand_density']            
         # calculate total mass across transcript
         total_strand_mass = strand_mass[POS_STRAND] + strand_mass[NEG_STRAND]        
@@ -278,121 +328,181 @@ def redistribute_unstranded_density(G, transcripts, transcript_nodes):
             # proportionally assign unstranded mass based on amount of
             # plus and minus strand mass
             pos_frac = strand_mass[POS_STRAND] / float(total_strand_mass)
-            strand_fracs = np.array((pos_frac, 1.0 - pos_frac, -1.0))
-            for n in tnodes:
+            redistribute_arr = np.array((pos_frac, 1.0 - pos_frac, -1.0))
+            #density_adjustment = t.density * np.array((pos_frac, 1.0 - pos_frac, -1.0), dtype=float)           
+            for n,d in tnodes:
                 # subtract density from unstranded and add to stranded
-                G.node[n]['strand_density'] += (t.density * strand_fracs)
+                G.node[n]['strand_density'] += d.density * redistribute_arr
+            for u,v,d in tedges:
+                # TODO: can remove this, but check strand and density
+                assert d.strand == NO_STRAND
+                assert d.density == G.edge[u][v]['data'][id].density
+                # subtract density from unstranded and add to stranded
+                G.edge[u][v]['strand_density'] += d.density * redistribute_arr 
 
+def create_strand_specific_graphs(G):
+    '''
+    build separate subgraphs of G for forward/reverse/unknown strands
+   
+    nodes in the graph will have a 'density' attribute equal to the
+    total strand-specific density for that node
 
-
-
-class TranscriptGraph(object):
-    def __init__(self):
-        pass
-
-    def get_exon_ids(self, n):
-        exon_data_list = self.G.node[n]['data']
-        return [x.id for x in exon_data_list]
-
-    def _add_node(self, n, tdata):
-        if n not in self.G:  
-            self.G.add_node(n, data=[])        
-        nd = self.G.node[n]
-        nd['data'].append(tdata)
-
-    def _add_edge(self, u, v, tdata):
-        if not self.G.has_edge(u, v):
-            self.G.add_edge(u, v, data=[])
-        ed = self.G.edge[u][v]
-        ed['data'].append(tdata)
+    edges (u,v) in the graph will have a 'density' attribute corresponding
+    to the fraction of total coverage flowing out of node 'u' that goes 
+    to 'v'
     
-    def _add_exon(self, exon, tdata, boundaries):
-        """
-        exon: Exon object to split
-        tdata: TranscriptData object with 'density' equal to the coverage 
-        density
-        """
-        nodes = []
-        edges = []
-        for start, end in split_exon(exon, boundaries):
-            n = Exon(start, end)
-            exon_tdata = TranscriptData(id=tdata.id, strand=tdata.strand, 
-                                        density=tdata.density)
-            self._add_node(n, exon_tdata)
-            # add edges between split exon according to 
-            # strand being assembled.
-            if len(nodes) > 0:
-                if cmp_strand(tdata.strand, NEG_STRAND):
-                    self._add_edge(n, nodes[-1], tdata)
-                if cmp_strand(tdata.strand, POS_STRAND):
-                    self._add_edge(nodes[-1], n, tdata)
-            # continue loop
-            nodes.append(n)
-        assert nodes[-1].end == exon.end
-        return nodes
+    NOTE: the unknown strand graph will not have any edges, just nodes
+    
+    returns a tuple containing (DiGraph,DiGraph,Graph) objects corresponding
+    to the forward/reverse/unknown strand
+    '''
+    # make graphs
+    GG = (nx.DiGraph(), nx.DiGraph(), nx.Graph())
+    # add nodes
+    for n,d in G.nodes_iter(data=True):
+        strand_density = d['strand_density']
+        for strand in (POS_STRAND, NEG_STRAND, NO_STRAND):
+            density = strand_density[strand]
+            # use a slightly non-zero value to overcome any numerical precision issues
+            if density > 1e-8:
+                GG[strand].add_node(n, density=density) 
+    # add edges
+    for u,v,d in G.edges_iter(data=True):            
+        # determine strand based on coordinates of nodes
+        strand = int(u.start >= v.end)        
+        # check against strand attribute
+        # TODO: can remove this
+        strands = set(x.strand for x in d['data'].itervalues())
+        assert all(cmp_strand(x, strand) for x in strands)
+        # consider both the edge strand as well as unknown (non-stranded) data
+        # and since non-stranded data uses a non-directional graph can add edges
+        # in either direction and it is the same        
+        for s in (strand, NO_STRAND):
+            # get strand density at this edge
+            density = d['strand_density'][s]
+            # add edge if there is positive density
+            # use a slightly non-zero value to overcome any numerical 
+            # precision issues
+            if density > 1e-8:
+                GG[s].add_edge(u, v, density=density)
+    return GG
 
-    def _add_transcript(self, transcript, boundaries):
-        exons = transcript.exons
-        strand = transcript.strand
-        tdata = TranscriptData(id=transcript.id, strand=strand, 
-                               density=transcript.fpkm)
-        # split exons that cross boundaries and get the
-        # new exons of the path
-        split_exons = []
-        # add the first exon to initialize the loop
-        # (all transcripts must have at least one exon)
-        split_exons.extend(self._add_exon(exons[0], tdata, boundaries))
-        for e2 in exons[1:]:
-            # add exon
-            e2_exons = self._add_exon(e2, tdata, boundaries)
-            # add intron -> exon edges
-            if strand != NO_STRAND:
-                if strand == NEG_STRAND:
-                    self._add_edge(e2_exons[0], split_exons[-1], tdata)
-                else:
-                    self._add_edge(split_exons[-1], e2_exons[0], tdata)
-            # continue loop
-            split_exons.extend(e2_exons)
-        return split_exons
+def get_chains(G, criteria_func):
+    """
+    find chains of nodes that are genomically adjacent
+    and have no other edges 
+    """
+    imin2 = lambda x,y: x if x<=y else y 
+    imax2 = lambda x,y: x if x>=y else y 
+    node_chain_map = {}
+    chains = {}
+    # initialize each node to be in a "chain" by itself
+    for n in G.nodes_iter():
+        node_chain_map[n] = n
+        chains[n] = set((n,))
+    for u,v in G.edges_iter():
+        if not criteria_func(G,u,v):
+            continue
+        # get chains containing these nodes
+        u_new = node_chain_map[u]
+        u_chain = chains[u_new]
+        del chains[u_new]
+        v_new = node_chain_map[v]
+        v_chain = chains[v_new]
+        del chains[v_new]
+        # merge chains        
+        merged_chain = u_chain.union(v_chain)
+        merged_node = Exon(imin2(u_new.start, v_new.start),
+                           imax2(u_new.end, v_new.end))
+        # point all nodes in chain to new parent
+        for n in merged_chain:
+            node_chain_map[n] = merged_node
+        chains[merged_node] = merged_chain
+    return node_chain_map, chains
 
-    @staticmethod
-    def from_transcripts(transcripts, overhang_threshold=0):
-        '''
-        overhang_threshold: integer greater than zero specifying the 
-        maximum exon overhang that can be trimmed to match an intron
-        boundary.  exons that overhang more than this will be 
-        considered independent transcript start sites or end sites
-        
-        note: this method cannot be called multiple times.  each time this
-        function is invoked, the previously stored transcripts will be 
-        deleted and overwritten        
-        '''
-        tg = TranscriptGraph()
-        tg.G = nx.DiGraph()
-        # trim the transcripts (modifies transcripts in place)
-        trim_transcripts(transcripts, overhang_threshold)
-        # find the intron domains of the transcripts
-        boundaries = find_exon_boundaries(transcripts)
-        # keep mapping of transcripts to graph nodes
-        unstranded_transcripts = []
-        # add transcripts
-        for t in transcripts:
-            # save NO_STRAND transcripts for later
-            if t.strand == NO_STRAND:
-                unstranded_transcripts.append(t)
-            else:
-                nodes = tg._add_transcript(t, boundaries)
-        # now add unstranded transcripts
-        for t in unstranded_transcripts:            
-            nodes = tg._add_transcript(t, boundaries)
+def add_chain_nodes(H, G, chains):
+    for parent, nodes in chains.iteritems():
+        # calculate density of all nodes in chain
+        total_mass = 0.0
+        total_length = 0
+        for n in nodes:
+            length = (n.end - n.start)
+            total_mass += length * G.node[n]['density']
+            total_length += length
+        density = total_mass / float(total_length)
+        # sort nodes by genome position and find the min/max
+        sorted_nodes = sorted(nodes, key=operator.attrgetter('start'))
+        # make new node
+        H.add_node(parent, chain=sorted_nodes, density=density, 
+                   length=total_length)
 
-        # reallocate unstranded transcript coverage to fwd/rev strand 
-        redistribute_unstranded_density(tg.G, transcripts, transcript_nodes)
-        return tg
+def add_chain_edges(H, G, node_chain_map):
+    for u,v,d in G.edges_iter(data=True):
+        u_chain_node = node_chain_map[u]
+        v_chain_node = node_chain_map[v]
+        if u_chain_node != v_chain_node:
+            H.add_edge(u_chain_node, v_chain_node, attr_dict=d)
 
-    def assemble(self, max_paths, fraction_major_path=0.10):
-        if fraction_major_path <= 0:
-            fraction_major_path = 1e-8        
-        for res in assemble_transcript_graph(self.G, fraction_major_path, 
-                                             max_paths):
-            yield res
+def collapse_chains(G, directed=True):
+    """
+    find groups of nodes are genomically adjacent e.g. (100,200)-(200,300)
+    and group them into a single node
+
+    returns new DiGraph object.  each node has a 'chain' attribute 
+    containing the child nodes making up the chain.  nodes also have
+    'density' and 'length' attributes    
+    """
+    def directed_func(G,u,v):
+        # check start/end coordinates
+        if (u.start != v.end) and (u.end != v.start):
+            return False
+        # see if edge nodes have degree larger than '1'
+        if ((G.out_degree(u) > 1) or (G.in_degree(v) > 1)):
+            return False
+        return True
+    def undirected_func(G,u,v):
+        # check start/end coordinates
+        if (u.start != v.end) and (u.end != v.start):
+            return False
+        return True
+    H = nx.DiGraph()
+    if len(G) > 0:
+        func = directed_func if directed else undirected_func
+        node_chain_map, chains = get_chains(G, criteria_func=func)
+        add_chain_nodes(H, G, chains)
+        add_chain_edges(H, G, node_chain_map)
+    return H
+
+def create_transcript_graph(transcripts, overhang_threshold=0):
+    '''
+    overhang_threshold: integer greater than zero specifying the 
+    maximum exon overhang that can be trimmed to match an intron
+    boundary.  exons that overhang more than this will be 
+    considered independent transcript start sites or end sites
+    
+    returns a 3-tuple containing fwd/rev/unknown transcript graphs
+    
+    nodes have the following attributes:
+    chain: list of children nodes
+    density: coverage density at node 
+    length: total length of node
+    
+    edges have the following attributes:
+    density: coverage density flowing through edge
+    '''
+    # build the initial transcript graph
+    G, transcript_graph_map, unstranded_ids = \
+        add_transcripts_to_graph(transcripts, overhang_threshold)
+    # compute fraction of fwd/rev strand coverage at each node
+    # this creates a 'strand_density' array at each node/edge
+    sum_strand_densities(G)
+    # reallocate unstranded transcripts to fwd/rev strand 
+    redistribute_unstranded_density(G, unstranded_ids, transcript_graph_map)
+    # separate graph into strand-specific subgraphs
+    HH = create_strand_specific_graphs(G)
+    # collapse chains of nodes in subgraphs, which reformats the graph
+    # attributes
+    GG = (collapse_chains(HH[POS_STRAND]),
+          collapse_chains(HH[NEG_STRAND]),
+          collapse_chains(HH[NO_STRAND], directed=False))
+    return GG

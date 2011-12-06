@@ -6,13 +6,15 @@ Created on Feb 14, 2011
 import logging
 import unittest
 import os
+import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from StringIO import StringIO
 
-from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND
+from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
 from assemblyline.lib.transcript_graph import trim_left, trim_right, trim_transcript
-from assemblyline.lib.transcript_parser import parse_gtf
+from assemblyline.lib import transcript_graph
+from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
 
 from test_base import compare_dot, write_dot, convert_attrs_to_strings, read_gtf, make_transcript, get_gtf_path
 
@@ -196,24 +198,103 @@ class TestTrimming(unittest.TestCase):
                               overhang_threshold)
         self.assertEquals((s,e), (200,202))
 
-#    def test_trimming(self):
-#        """test some examples of trimming transcripts"""
-#        # simple example
-#        test_basename = "trim1"
-#        gtf_file = test_basename + ".gtf"
-#        dot_file = test_basename + ".dot"
-#        # without trimming
-#        txgraph = read_gtf(gtf_file)
-#        #write_dot(txgraph, dot_file)
-#        self.assertTrue(compare_dot(txgraph, dot_file))        
-#        # with trimming
-#        dot_file = test_basename + "_trim15.dot"
-#        for locus_transcripts in parse_gtf(open(get_gtf_path(gtf_file))):
-#            txgraph = TranscriptGraph()
-#            txgraph.add_transcripts(locus_transcripts, overhang_threshold=15)
-#            break
-#        #write_dot(txgraph, dot_file)
-#        self.assertTrue(compare_dot(txgraph, dot_file))        
+
+class TestRedistributeDensity(unittest.TestCase):
+
+    def test_redistribute(self):
+        """
+        ensure that coverage from unstranded transcripts is allocated
+        proportionally to the coverage from overlapping stranded 
+        transcripts
+        """
+        #
+        # case where an unstranded transcript lies in UTR region and
+        # overlaps both a + and - strand transcript
+        #
+        test_basename = "redistribute1"
+        gtf_file = test_basename + ".gtf"
+        for locus_transcripts in parse_gtf(open(get_gtf_path(gtf_file)), cufflinks_attr_defs):
+            G, tgmap, unstranded = transcript_graph.add_transcripts_to_graph(locus_transcripts)
+            break
+        # sum strand densities
+        transcript_graph.sum_strand_densities(G)
+        # check density arrays at key nodes before redistribution
+        a = G.node[Exon(950,1000)]['strand_density']
+        self.assertTrue(np.array_equal(a, np.array((1.0, 0.0, 1.0))))
+        a = G.node[Exon(1000,1100)]['strand_density']
+        self.assertTrue(np.array_equal(a, np.array((0.0, 0.0, 1.0))))
+        a = G.node[Exon(1100,1150)]['strand_density']
+        self.assertTrue(np.array_equal(a, np.array((0.0, 1.0, 1.0))))
+        # redistribute coverage
+        transcript_graph.redistribute_unstranded_density(G, unstranded, tgmap)
+        # check density after redistribution
+        a = G.node[Exon(950,1000)]['strand_density']
+        self.assertTrue(np.array_equal(a, np.array((1.5, 0.5, 0.0))))
+        a = G.node[Exon(1000,1100)]['strand_density']
+        self.assertTrue(np.array_equal(a, np.array((0.5, 0.5, 0.0))))
+        a = G.node[Exon(1100,1150)]['strand_density']
+        self.assertTrue(np.array_equal(a, np.array((0.5, 1.5, 0.0))))
+        #
+        # case where several unstranded transcripts are alone and do not 
+        # overlap stranded transcripts
+        #
+        test_basename = "redistribute2"
+        gtf_file = test_basename + ".gtf"
+        for locus_transcripts in parse_gtf(open(get_gtf_path(gtf_file)), cufflinks_attr_defs):
+            G, tgmap, unstranded = transcript_graph.add_transcripts_to_graph(locus_transcripts)
+            break
+        # sum strand densities
+        transcript_graph.sum_strand_densities(G)
+        # check density arrays before redistribution
+        for n,d in G.nodes_iter(data=True):
+            self.assertAlmostEqual(d['strand_density'][POS_STRAND], 0)
+            self.assertAlmostEqual(d['strand_density'][NEG_STRAND], 0)
+            self.assertTrue(d['strand_density'][NO_STRAND] > 0)
+        # redistribute coverage
+        transcript_graph.redistribute_unstranded_density(G, unstranded, tgmap)
+        # check density arrays after redistribution
+        for n,d in G.nodes_iter(data=True):
+            self.assertAlmostEqual(d['strand_density'][POS_STRAND], 0)
+            self.assertAlmostEqual(d['strand_density'][NEG_STRAND], 0)
+            self.assertTrue(d['strand_density'][NO_STRAND] > 0)        
+
+
+class TestCollapseChains(unittest.TestCase):
+    
+    def load_gtf(self, gtf_file):
+        for locus_transcripts in parse_gtf(open(get_gtf_path(gtf_file)), cufflinks_attr_defs):
+            G, tgmap, unstranded = transcript_graph.add_transcripts_to_graph(locus_transcripts)
+            break
+        # sum strand densities
+        transcript_graph.sum_strand_densities(G)
+        # redistribute coverage
+        transcript_graph.redistribute_unstranded_density(G, unstranded, tgmap)
+        # partition into single-stranded graphs
+        GG = transcript_graph.create_strand_specific_graphs(G)
+        return GG
+        
+    def test_collapse_chains(self):
+        # test on purely unstranded data
+        gtf_file = "redistribute2.gtf"
+        GG = self.load_gtf(gtf_file)
+        G = GG[NO_STRAND]
+        self.assertEqual(G.number_of_nodes(), 3)
+        H = transcript_graph.collapse_chains(GG[NO_STRAND], directed=False)
+        self.assertEqual(H.number_of_nodes(), 1)
+        self.assertAlmostEqual(H.node[Exon(0,1000)]['density'], 1.6)
+        # test on single exon (+) strand transcript with several
+        # overlapping unknown-strand transcripts and a (-) strand
+        # transcript at end that should not interfere
+        gtf_file = "collapse1.gtf"
+        GG = self.load_gtf(gtf_file)
+        Hfwd = transcript_graph.collapse_chains(GG[POS_STRAND], directed=True)
+        Hrev = transcript_graph.collapse_chains(GG[NEG_STRAND], directed=True)
+        Hunknown = transcript_graph.collapse_chains(GG[NO_STRAND], directed=False)
+        self.assertEqual(Hfwd.number_of_nodes(), 1)
+        self.assertAlmostEqual(Hfwd.node[Exon(0,1000)]['density'], 1.5)
+        self.assertEqual(Hrev.number_of_nodes(), 1)
+        self.assertAlmostEqual(Hrev.node[Exon(900,1000)]['density'], 1.0)
+        self.assertEqual(Hunknown.number_of_nodes(), 0)
 
 
 if __name__ == "__main__":
