@@ -6,7 +6,7 @@ Created on Dec 3, 2011
 from transcript import Exon
 
 # assembler graph attributes
-NODE_WEIGHT = 'weight'
+NODE_DENSITY = 'density'
 EDGE_OUT_FRAC = 'outfrac'
 EDGE_IN_FRAC = 'infrac'
 EDGE_DENSITY = 'density'

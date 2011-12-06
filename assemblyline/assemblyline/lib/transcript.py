@@ -104,6 +104,10 @@ class Transcript(object):
     def fpkm(self):
         return self.attrs["FPKM"]
     @property
+    def density(self):
+        """same as fpkm"""
+        return self.fpkm
+    @property
     def cov(self):
         return self.attrs["cov"]
     @property

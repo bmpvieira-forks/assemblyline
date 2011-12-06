@@ -7,7 +7,7 @@ import logging
 import collections
 import networkx as nx
 
-from assembler_base import NODE_WEIGHT, EDGE_OUT_FRAC, EDGE_IN_FRAC, EDGE_DENSITY
+from assembler_base import NODE_DENSITY, EDGE_OUT_FRAC, EDGE_IN_FRAC, EDGE_DENSITY
 
 # for get num paths algorithm
 PNPATHS = 'pnpaths'
