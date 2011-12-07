@@ -265,6 +265,8 @@ def add_transcripts_to_graph(transcripts, overhang_threshold=0):
     # add transcripts
     for t in transcripts:
         if t.strand == NO_STRAND:
+            # ensure unstranded transcripts have only one exon
+            assert len(t.exons) == 1
             # save NO_STRAND transcripts for reprocessing later
             unstranded_ids.append(t.id)
         # add transcripts to graph
