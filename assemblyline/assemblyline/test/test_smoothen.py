@@ -13,10 +13,8 @@ logging.basicConfig(level=logging.DEBUG,
                     #filename="/exds/users/mkiyer/projects/assemblyline/test/test.log",
                     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-from assemblyline.lib.smoothen import get_chains, collapse_chains, smoothen_graph_leastsq
-from assemblyline.lib.assembler import calculate_edge_attrs
-from assemblyline.lib.base import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
-
+from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
+from assemblyline.lib.assembler import calculate_edge_attrs, smoothen_graph_leastsq
 
 def example1():
     G = nx.DiGraph()
@@ -69,33 +67,6 @@ def example2():
     return G
 
 class TestSmoothen(unittest.TestCase):
-
-    def test_get_chains(self):
-        G = example1()
-        chains = get_chains(G)
-#        correct_chains = [set([Exon(400, 500),
-#                               Exon(525, 575),
-#                               Exon(600, 700)])]
-#        self.assertEqual(chains[0], correct_chains[0])
-
-    def test_collapse_chains(self):
-        G = example1()
-        for n in G.nodes(data=True):
-            print n
-        for e in G.edges(data=True):
-            print e
-        
-        H = collapse_chains(G, POS_STRAND)
-        print 'AFTER'
-        for n in H.nodes(data=True):
-            print n
-        for e in H.edges(data=True):
-            print e
-
-        #smoothen_graph(G)
-        #self.assertTrue(G.node[Exon(400, 500)]['weight'] == 360.0)
-        #self.assertTrue(G.node[Exon(525, 575)]['weight'] == 180.0)
-        #self.assertTrue(G.node[Exon(600, 700)]['weight'] == 360.0)
 
     def test_smoothen_leastsq(self):
         G = example2()
