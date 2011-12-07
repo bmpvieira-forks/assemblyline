@@ -1,0 +1,30 @@
+chr1	Cufflinks	transcript	1	2000	1000	+	.	gene_id "G1"; transcript_id "G1.1"; FPKM "1.0"
+chr1	Cufflinks	exon	1	100	1000	+	.	gene_id "G1"; transcript_id "G1.1"; exon_number "1"; FPKM "1.0"
+chr1	Cufflinks	exon	301	400	1000	+	.	gene_id "G1"; transcript_id "G1.1"; exon_number "2"; FPKM "1.0"
+chr1	Cufflinks	exon	501	600	1000	+	.	gene_id "G1"; transcript_id "G1.1"; exon_number "3"; FPKM "1.0"
+chr1	Cufflinks	exon	701	800	1000	+	.	gene_id "G1"; transcript_id "G1.1"; exon_number "4"; FPKM "1.0"
+chr1	Cufflinks	exon	901	1000	1000	+	.	gene_id "G1"; transcript_id "G1.1"; exon_number "5"; FPKM "1.0"
+chr1	Cufflinks	exon	1501	2000	1000	+	.	gene_id "G1"; transcript_id "G1.1"; exon_number "6"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	1	1000	1000	+	.	gene_id "G2"; transcript_id "G2.1"; FPKM "1.0"
+chr1	Cufflinks	exon	1	1000	1000	+	.	gene_id "G2"; transcript_id "G2.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	1	1000	1000	-	.	gene_id "G3"; transcript_id "G3.1"; FPKM "1.0"
+chr1	Cufflinks	exon	1	100	1000	-	.	gene_id "G3"; transcript_id "G3.1"; exon_number "1"; FPKM "1.0"
+chr1	Cufflinks	exon	301	400	1000	-	.	gene_id "G3"; transcript_id "G3.1"; exon_number "2"; FPKM "1.0"
+chr1	Cufflinks	exon	501	600	1000	-	.	gene_id "G3"; transcript_id "G3.1"; exon_number "3"; FPKM "1.0"
+chr1	Cufflinks	exon	701	800	1000	-	.	gene_id "G3"; transcript_id "G3.1"; exon_number "4"; FPKM "1.0"
+chr1	Cufflinks	exon	901	1000	1000	-	.	gene_id "G3"; transcript_id "G3.1"; exon_number "5"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	1	1000	1000	-	.	gene_id "G4"; transcript_id "G4.1"; FPKM "1.0"
+chr1	Cufflinks	exon	1	1000	1000	-	.	gene_id "G4"; transcript_id "G4.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	451	750	1000	+	.	gene_id "G5"; transcript_id "G5.1"; FPKM "1.0"
+chr1	Cufflinks	exon	451	750	1000	+	.	gene_id "G5"; transcript_id "G5.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	451	750	1000	-	.	gene_id "G6"; transcript_id "G6.1"; FPKM "1.0"
+chr1	Cufflinks	exon	451	750	1000	-	.	gene_id "G6"; transcript_id "G6.1"; exon_number "1"; FPKM "1.0"
+
+chr1	Cufflinks	transcript	701	1000	1000	.	.	gene_id "G7"; transcript_id "G7.1"; FPKM "1.0"
+chr1	Cufflinks	exon	701	800	1000	.	.	gene_id "G7"; transcript_id "G7.1"; exon_number "1"; FPKM "1.0"
+chr1	Cufflinks	exon	901	1000	1000	.	.	gene_id "G7"; transcript_id "G7.1"; exon_number "2"; FPKM "1.0"
