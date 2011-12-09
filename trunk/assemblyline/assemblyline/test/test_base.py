@@ -8,7 +8,7 @@ import networkx as nx
 
 from assemblyline.lib.transcript import Exon, strand_str_to_int
 from assemblyline.lib import transcript_graph
-from assemblyline.lib.transcript_parser import Transcript, parse_gtf
+from assemblyline.lib.transcript_parser import Transcript, parse_gtf, cufflinks_attr_defs
 
 DOT_DIR = "dot_files"
 GTF_DIR = "gtf_files"
@@ -39,34 +39,30 @@ def get_dot_path(filename):
 def get_gtf_path(filename):
     return os.path.join(os.path.dirname(__file__), GTF_DIR, filename)
 
-def convert_data_to_string(tdata_dict):
-    return ','.join([str(tdata_dict[k]) for k in sorted(tdata_dict.keys())])
-
 def convert_attrs_to_strings(H):
     G = H.copy()
     for n,d in G.nodes_iter(data=True):
-        d['data'] = convert_data_to_string(d['data'])
-    for u,v,d in G.edges_iter(data=True):
-        d['data'] = convert_data_to_string(d['data'])
+        d['ids'] = str(sorted(d['ids']))
+        d['strand_density'] = str(['%.3f' % x for x in d['strand_density']])
     return G
 
 def compare_dot(H, filename):
     Gcorrect = nx.read_dot(get_dot_path(filename))
     G = convert_attrs_to_strings(H)
-    for n in G:
+    for n,d in G.nodes_iter(data=True):
         node_str = str(n)
         if node_str not in Gcorrect:
             return False
-        correct_data = Gcorrect.node[node_str]['data']
-        test_data = '"%s"' % (G.node[n]['data'])
-        if correct_data != test_data:
+        correct_ids = Gcorrect.node[node_str]['ids'].strip('"')
+        if correct_ids != d['ids']:
+            return False
+        correct_strand_density = Gcorrect.node[node_str]['strand_density'].strip('"')
+        if correct_strand_density != d['strand_density']:
             return False
     for u,v,d in G.edges_iter(data=True):
         ustr = str(u)
         vstr = str(v)
-        correct_data = Gcorrect.edge[ustr][vstr][0]['data']
-        test_data = '"%s"' % d['data']
-        if correct_data != test_data:
+        if not Gcorrect.has_edge(ustr, vstr):
             return False
     return nx.is_isomorphic(H, Gcorrect)
 
@@ -78,6 +74,6 @@ def read_gtf(filename):
     """
     reads and returns graph from first locus in GTF file
     """
-    for locus_transcripts in parse_gtf(open(get_gtf_path(filename))):
-        G, a, b = transcript_graph.add_transcripts_to_graph(locus_transcripts)
+    for locus_transcripts in parse_gtf(open(get_gtf_path(filename)), cufflinks_attr_defs):
+        G = transcript_graph.add_transcripts_to_graph(locus_transcripts)
         return G

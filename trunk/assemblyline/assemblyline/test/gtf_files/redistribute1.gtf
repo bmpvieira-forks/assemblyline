@@ -6,5 +6,5 @@ chr1	Cufflinks	transcript	951	1150	1000	.	.	gene_id "G3"; transcript_id "G3.1"; 
 chr1	Cufflinks	exon	951	1150	1000	.	.	gene_id "G3"; transcript_id "G3.1"; exon_number "1"; FPKM "1.0"
 
 chr1	Cufflinks	transcript	1101	2100	1000	-	.	gene_id "G2"; transcript_id "G2.1"; FPKM "1.0"
-chr1	Cufflinks	exon	1101	1201	1000	-	.	gene_id "G2"; transcript_id "G2.1"; exon_number "1"; FPKM "1.0"
+chr1	Cufflinks	exon	1101	1200	1000	-	.	gene_id "G2"; transcript_id "G2.1"; exon_number "1"; FPKM "1.0"
 chr1	Cufflinks	exon	2001	2100	1000	-	.	gene_id "G2"; transcript_id "G2.1"; exon_number "2"; FPKM "1.0"

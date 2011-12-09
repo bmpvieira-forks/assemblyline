@@ -7,7 +7,7 @@ import argparse
 import logging
 import os
 
-from assemblyline.lib.transcript_parser import parse_gtf
+from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
 from assemblyline.lib.transcript import Exon, strand_int_to_str, NEG_STRAND, POS_STRAND
 from assemblyline.lib.transcript_graph import create_transcript_graph
 from assemblyline.lib.assembler_base import GLOBAL_LOCUS_ID
@@ -96,22 +96,25 @@ def assemble_locus(transcripts, overhang_threshold, fraction_major_isoform, max_
     GG = create_transcript_graph(transcripts, overhang_threshold)    
     # assemble transcripts on each strand
     for strand, G in enumerate(GG):
-        logging.debug("[LOCUS][STRAND] %s" % strand_int_to_str(strand)) 
         for gene_id, path_info_list in assemble_transcript_graph(G, strand, fraction_major_isoform, max_paths):
+            logging.debug("[LOCUS][STRAND] %s assembled %d transcripts" % 
+                          (strand_int_to_str(strand), len(path_info_list))) 
             for p in path_info_list:                
                 # use locus/gene/tss/transcript id to make gene name
                 gene_name = "L%07d|G%07d|TSS%07d|TU%07d" % (GLOBAL_LOCUS_ID, gene_id, p.tss_id, p.tx_id)
-                # collapse contiguous nodes
-                path = collapse_contiguous_nodes(p.path, strand) 
-                # fix path
-                if strand == NEG_STRAND:
-                    path.reverse()           
-                fields = write_bed(locus_chrom, gene_name, strand, p.density, path)
+                fields = write_bed(locus_chrom, gene_name, strand, p.density, p.path)
                 print '\t'.join(fields)
+                # collapse contiguous nodes
+                # path = collapse_contiguous_nodes(p.path, strand) 
+                # fix path
+                #if strand == NEG_STRAND:
+                #    path.reverse()           
+                #fields = write_bed(locus_chrom, gene_name, strand, p.density, path)
+                #print '\t'.join(fields)
 
 def run(gtf_file, overhang_threshold, fraction_major_isoform, max_paths):    
     global GLOBAL_LOCUS_ID
-    for locus_transcripts in parse_gtf(open(gtf_file)):
+    for locus_transcripts in parse_gtf(open(gtf_file), cufflinks_attr_defs):
         assemble_locus(locus_transcripts, overhang_threshold, 
                        fraction_major_isoform, max_paths)
         GLOBAL_LOCUS_ID += 1

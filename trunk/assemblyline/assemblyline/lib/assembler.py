@@ -9,11 +9,12 @@ import operator
 import networkx as nx
 import numpy as np
 
-from transcript import NEG_STRAND
+from transcript import Exon, NEG_STRAND, NO_STRAND
+from collapse_chains import collapse_strand_specific_graph
 from assembler_base import NODE_DENSITY, EDGE_OUT_FRAC, EDGE_IN_FRAC, \
-    EDGE_DENSITY, SOURCE_NODE, SINK_NODE, MIN_EDGE_DENSITY, \
-    GLOBAL_GENE_ID, GLOBAL_TSS_ID, GLOBAL_TRANSCRIPT_ID
-from path_finder import find_suboptimal_paths, calculate_edge_attrs
+    SOURCE_NODE, SINK_NODE, MIN_NODE_DENSITY, GLOBAL_GENE_ID, \
+    GLOBAL_TSS_ID, GLOBAL_TRANSCRIPT_ID
+from path_finder import find_suboptimal_paths, calculate_edge_fractions
 
 class PathInfo(object):
     """object to store path finder results"""
@@ -77,6 +78,7 @@ def smoothen_graph_leastsq(G):
         u_id = G.node[u]['id']
         v_id = G.node[v]['id']
         out_frac = d[EDGE_OUT_FRAC]
+        #frac = d[EDGE_OUT_FRAC] * d[EDGE_IN_FRAC]
         eqns[v_id][u_id] = out_frac
     # build matrix for least squares error
     # minimization
@@ -95,47 +97,77 @@ def smoothen_graph_leastsq(G):
 
 def add_dummy_start_end_nodes(G, start_nodes, end_nodes):
     # add 'dummy' tss nodes if necessary
-    G.add_node(SOURCE_NODE, attr_dict={NODE_DENSITY: 0.0, 'length': 0})
-    source_attr_dict = {EDGE_DENSITY: MIN_EDGE_DENSITY,
-                        EDGE_IN_FRAC: 1.0,
-                        EDGE_OUT_FRAC: 1.0/len(start_nodes)}
+    G.add_node(SOURCE_NODE, attr_dict={NODE_DENSITY: MIN_NODE_DENSITY, 'length': 0})
+    #source_attr_dict = {EDGE_IN_FRAC: 1.0,
+    #                    EDGE_OUT_FRAC: 1.0/len(start_nodes)}
     for start_node in start_nodes:        
         logging.debug('adding dummy %s -> %s' % (SOURCE_NODE, start_node))
-        G.add_edge(SOURCE_NODE, start_node, attr_dict=source_attr_dict)
+        G.add_edge(SOURCE_NODE, start_node)
+        #G.add_edge(SOURCE_NODE, start_node, attr_dict=source_attr_dict)
     # add a single 'dummy' end node
-    G.add_node(SINK_NODE, attr_dict={NODE_DENSITY: 0.0, 'length': 0})
-    sink_attr_dict = {EDGE_DENSITY: MIN_EDGE_DENSITY,
-                      EDGE_IN_FRAC: 1.0/len(start_nodes),
-                      EDGE_OUT_FRAC: 1.0}
+    G.add_node(SINK_NODE, attr_dict={NODE_DENSITY: MIN_NODE_DENSITY, 'length': 0})
+    #sink_attr_dict = {EDGE_IN_FRAC: 1.0/len(start_nodes),
+    #                  EDGE_OUT_FRAC: 1.0}
     for end_node in end_nodes:
         logging.debug('adding dummy %s -> %s' % (end_node, SINK_NODE))
-        G.add_edge(end_node, SINK_NODE, attr_dict=sink_attr_dict)
+        G.add_edge(end_node, SINK_NODE)
+        #G.add_edge(end_node, SINK_NODE, attr_dict=sink_attr_dict)
+
+def expand_path_chains(G, strand, path):
+    # reverse negative stranded data so that all paths go from 
+    # small -> large genomic coords
+    if strand == NEG_STRAND:
+        path.reverse()
+    # get chains (children nodes) along path
+    newpath = []
+    for n in path:
+        newpath.extend(G.node[n]['chain'])
+    path = newpath
+    # collapse contiguous nodes along path
+    newpath = []
+    chain = [path[0]]
+    for v in path[1:]:
+        if chain[-1].end != v.start:
+            # update path with merge chain node
+            newpath.append(Exon(chain[0].start, 
+                                chain[-1].end))
+            # reset chain
+            chain = []
+        chain.append(v)
+    # add last chain
+    newpath.append(Exon(chain[0].start, 
+                        chain[-1].end))
+    return newpath
 
 def assemble_subgraph(G, strand, fraction_major_path, max_paths):
     global GLOBAL_TRANSCRIPT_ID
     # find start and end nodes in graph and add the tss_id attribute
     # to all start nodes
     start_nodes, end_nodes = find_start_and_end_nodes(G, strand)
-    # compute initial edge density and coverage flow in/out of nodes
-    calculate_edge_attrs(G, EDGE_DENSITY)
-    # redistribute node density in order to minimize error in graph
-    smoothen_graph_leastsq(G)
     # at an artificial node at the start and end so that all start
     # nodes are searched together for the best path
     add_dummy_start_end_nodes(G, start_nodes, end_nodes)
+    # compute initial edge density and coverage flow in/out of nodes
+    calculate_edge_fractions(G, NODE_DENSITY)
+    # redistribute node density in order to minimize error in graph
+    smoothen_graph_leastsq(G)
     # find up to 'max_paths' paths through graph
     path_info_list = []
     for path, density in find_suboptimal_paths(G, SOURCE_NODE, SINK_NODE, 
+                                               fraction_major_path,
                                                max_paths):
         # remove dummy nodes from path
-        path = path[1:-1]
+        path = list(path[1:-1])
         # get tss_id from path
         tss_id = G.node[path[0]][NODE_TSS_ID]
+        # cleanup and expand chained nodes within path
+        path = expand_path_chains(G, strand, path)
         path_info_list.append(PathInfo(density, tss_id, path))
     # remove dummy nodes from graph
     G.remove_node(SOURCE_NODE)
     G.remove_node(SINK_NODE)
     # sort by density
+    # TODO: might be able to skip this
     path_info_list = sorted(path_info_list, key=operator.attrgetter('density'), reverse=True)
     # return paths while density is greater than some fraction of the
     # highest density
@@ -150,12 +182,19 @@ def assemble_subgraph(G, strand, fraction_major_path, max_paths):
     assert i > 0
     return path_info_list[:i]
 
-def assemble_transcript_graph(G, strand, fraction_major_path, max_paths):
+def assemble_transcript_graph(H, strand, fraction_major_path, max_paths):
     """
     returns (gene_id, list of PathInfo objects) tuple
     """
     global GLOBAL_GENE_ID
-
+    # collapse chains of nodes in graph, which reformats the graph 
+    # attributes
+    directed = False if (strand == NO_STRAND) else True
+    G = collapse_strand_specific_graph(H, directed=directed)
+    # don't allow fraction_major_path to equal zero because that 
+    # will force each run to iterate to 'max_paths'.  also don't
+    # allow to equal one because potentially no paths will be 
+    # returned
     if fraction_major_path <= 0:
         fraction_major_path = 1e-8
     if fraction_major_path >= 1.0:
