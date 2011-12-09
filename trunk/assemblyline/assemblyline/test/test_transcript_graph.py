@@ -271,20 +271,15 @@ class TestRedistributeDensity(unittest.TestCase):
             a = G.node[e]['strand_density']
             self.assertTrue(a[POS_STRAND] == 0)
             self.assertTrue(a[NO_STRAND] > 0.0)
-        # group contiguous nodes into chains, recalculate attributes,
-        # add redistribute coverage
-        G = collapse_contiguous_nodes(G)
-        transcript_graph.recalc_graph_attributes(G)
-        # check strand density before
-        x = G.node[Exon(50,450)]['strand_density']
-        self.assertTrue(np.array_equal(x, np.array((100./400., 0.0, 400./400.))))
         # redistribute
         transcript_graph.redistribute_unstranded_density(G, transcripts)
-        # should only have one exon now
-        self.assertTrue(len(G) == 1)
+        GG = transcript_graph.create_strand_specific_graphs(G)
+        G = collapse_strand_specific_graph(GG[POS_STRAND], directed=True)
+        for n,d in G.nodes_iter(data=True):
+            print n,d['density']
         # density should be correct
-        x = G.node[Exon(50,450)]['strand_density']
-        self.assertTrue(np.array_equal(x, np.array((500./400., 0.0, 0.0))))
+        self.assertTrue(G.number_of_nodes() == 1)
+        self.assertTrue(G.node[Exon(50,450)]['density'], 500./400.)
 
 
 class TestCollapseChains(unittest.TestCase):
@@ -293,10 +288,6 @@ class TestCollapseChains(unittest.TestCase):
         for locus_transcripts in parse_gtf(open(get_gtf_path(gtf_file)), cufflinks_attr_defs):
             G = transcript_graph.add_transcripts_to_graph(locus_transcripts)
             break
-        # group contiguous nodes into chains
-        G = collapse_contiguous_nodes(G)
-        # recalculate node attributes after grouping into chains
-        transcript_graph.recalc_graph_attributes(G)
         # redistribute coverage
         transcript_graph.redistribute_unstranded_density(G, locus_transcripts)
         # partition into single-stranded graphs
@@ -308,9 +299,8 @@ class TestCollapseChains(unittest.TestCase):
         gtf_file = "redistribute2.gtf"
         GG = self.load_gtf(gtf_file)
         G = GG[NO_STRAND]
-        self.assertEqual(G.number_of_nodes(), 1)
+        self.assertEqual(G.number_of_nodes(), 3)
         H = collapse_strand_specific_graph(GG[NO_STRAND], directed=False)
-        transcript_graph.recalc_strand_specific_graph_attributes(H)
         self.assertEqual(H.number_of_nodes(), 1)
         self.assertAlmostEqual(H.node[Exon(0,1000)]['density'], 1.6)
         # test on single exon (+) strand transcript with several
@@ -319,11 +309,8 @@ class TestCollapseChains(unittest.TestCase):
         gtf_file = "collapse1.gtf"
         GG = self.load_gtf(gtf_file)
         Hfwd = collapse_strand_specific_graph(GG[POS_STRAND], directed=True)
-        transcript_graph.recalc_strand_specific_graph_attributes(Hfwd)
         Hrev = collapse_strand_specific_graph(GG[NEG_STRAND], directed=True)
-        transcript_graph.recalc_strand_specific_graph_attributes(Hrev)
         Hunknown = collapse_strand_specific_graph(GG[NO_STRAND], directed=False)
-        transcript_graph.recalc_strand_specific_graph_attributes(Hunknown)
         self.assertEqual(Hfwd.number_of_nodes(), 1)
         self.assertAlmostEqual(Hfwd.node[Exon(0,1000)]['density'], 1.5)
         self.assertEqual(Hrev.number_of_nodes(), 1)

@@ -17,7 +17,6 @@ from assemblyline.lib.gtf import GTFFeature
 GLOBAL_LOCUS_ID = 1
 
 def write_bed(chrom, name, strand, score, exons):
-    #print "EXONS TO PRINT", exons    
     assert all(exons[0].start < x.start for x in exons[1:])
     assert all(exons[-1].end > x.end for x in exons[:-1])
     tx_start = exons[0].start
@@ -42,47 +41,67 @@ def write_bed(chrom, name, strand, score, exons):
               ','.join(map(str,block_starts)) + ',']
     return fields
 
-def write_gtf(chrom, gene_id, tx_id, strand, score, exons):
-    # write transcript feature
-    f = GTFFeature()
-    f.seqid = chrom
-    f.source = "AssemblyLine"
-    f.feature_type = "transcript"
-    f.start = min(e[0] for e in exons)
-    f.end = max(e[1] for e in exons)
-    f.score = score
-    f.strand = strand
-    f.phase = "."
-    attrs = {}
-    attrs['gene_id'] = gene_id
-    attrs['tx_id'] = tx_id
-    f.attrs = attrs
-    return f
+#def write_gtf(chrom, gene_id, tx_id, strand, score, exons):
+#    # write transcript feature
+#    f = GTFFeature()
+#    f.seqid = chrom
+#    f.source = "AssemblyLine"
+#    f.feature_type = "transcript"
+#    f.start = min(e[0] for e in exons)
+#    f.end = max(e[1] for e in exons)
+#    f.score = score
+#    f.strand = strand
+#    f.phase = "."
+#    attrs = {}
+#    attrs['gene_id'] = gene_id
+#    attrs['tx_id'] = tx_id
+#    f.attrs = attrs
+#    return f
+#
+#def write_gtf():   
+#    # transcript feature
+#    f = GTFFeature()
+#    f.seqid = self.chrom
+#    f.source = 'assemblyline'
+#    f.feature_type = 'transcript'
+#    f.start = self.start
+#    f.end = self.end
+#    f.score = 1000.0
+#    f.strand = strand_int_to_str(self.strand)
+#    f.phase = '.'
+#    f.attrs = self.attrs
+#    features = [f]
+#    # exon features
+#    for i,e in enumerate(self.exons):
+#        f = GTFFeature()
+#        f.seqid = self.chrom
+#        f.source = 'assemblyline'
+#        f.feature_type = 'exon'
+#        f.start = e.start
+#        f.end = e.end
+#        f.score = 1000.0
+#        f.strand = strand_int_to_str(self.strand)
+#        f.phase = '.'
+#        f.attrs = {}
+#        f.attrs["gene_id"] = self.attrs["gene_id"]
+#        f.attrs["transcript_id"] = self.attrs["transcript_id"]
+#        f.attrs["exon_number"] = i
+#        features.append(f)
+#    return features
 
-def get_transcript_id_label_map(transcripts):
-    '''
-    returns a dictionary with transcript ID keys and
-    tuples of (transcript, exon_number) values
-    '''
-    id_map = {}
-    for t in transcripts:
-        # add scores to the score lookup table
-        id_map[t.id] = t.label
-    return id_map
-
-def collapse_contiguous_nodes(path, strand):
-    newpath = []    
-    n = Exon(path[0].start, path[0].end)
-    for i in xrange(1, len(path)):
-        if strand == NEG_STRAND and (n.start == path[i].end):
-            n.start = path[i].start
-        elif n.end == path[i].start:
-            n.end = path[i].end
-        else:
-            newpath.append(n)
-            n = Exon(path[i].start, path[i].end)
-    newpath.append(n)
-    return newpath
+#def collapse_contiguous_nodes(path, strand):
+#    newpath = []    
+#    n = Exon(path[0].start, path[0].end)
+#    for i in xrange(1, len(path)):
+#        if strand == NEG_STRAND and (n.start == path[i].end):
+#            n.start = path[i].start
+#        elif n.end == path[i].start:
+#            n.end = path[i].end
+#        else:
+#            newpath.append(n)
+#            n = Exon(path[i].start, path[i].end)
+#    newpath.append(n)
+#    return newpath
 
 def assemble_locus(transcripts, overhang_threshold, fraction_major_isoform, max_paths):
     # gather properties of locus
@@ -93,7 +112,7 @@ def assemble_locus(transcripts, overhang_threshold, fraction_major_isoform, max_
                   (locus_chrom, locus_start, locus_end, 
                    len(transcripts)))
     # build and refine transcript graph
-    GG = create_transcript_graph(transcripts, overhang_threshold)    
+    GG = create_transcript_graph(transcripts, overhang_threshold)
     # assemble transcripts on each strand
     for strand, G in enumerate(GG):
         for gene_id, path_info_list in assemble_transcript_graph(G, strand, fraction_major_isoform, max_paths):

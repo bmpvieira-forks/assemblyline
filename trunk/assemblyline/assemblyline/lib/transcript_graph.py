@@ -85,8 +85,6 @@ def trim_transcript(exons, intron_starts, intron_ends,
     trim_end = trim_right(exons[-1].start, exons[-1].end, 
                           intron_starts, intron_ends, 
                           overhang_threshold)
-    #logging.debug('strand=%d txstart=%d txend=%d trimstart=%d trimend=%d' % 
-    #              (t.strand, t.tx_start, t.tx_end, trim_start, trim_end))
     # if both start and end were trimmed it is
     # possible that they could be trimmed to 
     # match different introns and generate a 
@@ -96,8 +94,6 @@ def trim_transcript(exons, intron_starts, intron_ends,
     # the smaller of the two trimmed distances as
     # the more likely
     if trim_end <= trim_start:
-        #logging.warning('Trimming produced txstart=%d txend=%d trimstart=%d trimend=%d' % 
-        #                (exons[0].start, exons[-1].end, trim_start, trim_end))
         left_trim_dist = trim_start - exons[0].start
         right_trim_dist = exons[-1].end - trim_end
         assert left_trim_dist >= 0
@@ -106,7 +102,6 @@ def trim_transcript(exons, intron_starts, intron_ends,
             trim_start, trim_end = trim_start, exons[-1].end
         else:
             trim_start, trim_end = exons[0].start, trim_end
-        #logging.warning('\tresolved to trimstart=%d trimend=%d' % (trim_start, trim_end))
     assert trim_start < trim_end
     return trim_start, trim_end
 
@@ -182,9 +177,6 @@ def add_edge_to_graph(G, u, v):
     """
     if not G.has_edge(u, v):
         G.add_edge(u, v, attr_dict={})
-    # TODO: edge attributes?
-    #ed = G.edge[u][v]
-    #ed[TRANSCRIPT_IDS].add(id)
 
 def add_transcripts_to_graph(transcripts, overhang_threshold=0):
     '''
@@ -305,11 +297,11 @@ def create_strand_specific_graphs(G):
     
     NOTE: the unknown strand graph will not have any edges, just nodes
     
-    returns a tuple containing (DiGraph,DiGraph,Graph) objects corresponding
+    returns a 3-tuple containing DiGraph objects corresponding
     to the forward/reverse/unknown strand
     '''
     # make graphs
-    GG = (nx.DiGraph(), nx.DiGraph(), nx.Graph())
+    GG = (nx.DiGraph(), nx.DiGraph(), nx.DiGraph())
     # add nodes
     for n,d in G.nodes_iter(data=True):
         strand_density = d[STRAND_DENSITY]
@@ -328,18 +320,16 @@ def create_strand_specific_graphs(G):
         # get density of both nodes
         u_strand_density = G.node[u][STRAND_DENSITY]
         v_strand_density = G.node[v][STRAND_DENSITY]
-        # consider both the edge strand as well as unknown (non-stranded) data
-        # and since non-stranded data uses a non-directional graph can add edges
-        # in either direction and it is the same        
-        for s in (strand, NO_STRAND):
-            # get strand density at this edge
-            u_density = u_strand_density[s]
-            v_density = v_strand_density[s]            
-            # add edge if there is positive density on both nodes
-            # use a slightly non-zero value to overcome any numerical 
-            # precision issues
-            if (u_density > 1e-8) and (v_density > 1e-8):
-                GG[s].add_edge(u, v, attr_dict=d)
+        # check stranded density
+        if ((u_strand_density[strand] > 1e-8) and 
+            (v_strand_density[strand] > 1e-8)):
+            GG[strand].add_edge(u, v, attr_dict=d)
+        # ignore neg strand edges for graph on unknown strand
+        # by convention (prevents bidirectional edges)
+        if ((strand == POS_STRAND) and
+            (u_strand_density[NO_STRAND] > 1e-8) and 
+            (v_strand_density[NO_STRAND] > 1e-8)):
+            GG[NO_STRAND].add_edge(u, v, attr_dict=d)
     return GG
     
 def create_transcript_graph(transcripts, overhang_threshold=0):
