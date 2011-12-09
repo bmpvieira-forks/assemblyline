@@ -14,6 +14,7 @@ from StringIO import StringIO
 from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
 from assemblyline.lib.transcript_graph import trim_left, trim_right, trim_transcript
 from assemblyline.lib import transcript_graph
+from assemblyline.lib.collapse_chains import collapse_contiguous_nodes, collapse_strand_specific_graph
 from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
 
 from test_base import compare_dot, write_dot, convert_attrs_to_strings, read_gtf, make_transcript, get_gtf_path
@@ -29,25 +30,25 @@ class TestTranscriptGraph(unittest.TestCase):
         test_basename = "basic_graph1"
         gtf_file = test_basename + ".gtf"
         dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        #write_dot(txgraph, dot_file)
-        self.assertTrue(compare_dot(txgraph, dot_file))
+        G = read_gtf(gtf_file)
+        #write_dot(G, dot_file)
+        self.assertTrue(compare_dot(G, dot_file))
         # minus strand
         test_basename = "basic_graph2"
         gtf_file = test_basename + ".gtf"
         dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        #write_dot(txgraph, dot_file)
-        self.assertTrue(compare_dot(txgraph, dot_file))
+        G = read_gtf(gtf_file)
+        #write_dot(G, dot_file)
+        self.assertTrue(compare_dot(G, dot_file))
         # unstranded multi-exon
         test_basename = "basic_graph3"
         gtf_file = test_basename + ".gtf"
         dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        #write_dot(txgraph, dot_file)
-        self.assertTrue(compare_dot(txgraph, dot_file))
-        #nx.spring_layout(txgraph.G)
-        #nx.draw(txgraph.G)
+        G = read_gtf(gtf_file)
+        #write_dot(G, dot_file)
+        self.assertTrue(compare_dot(G, dot_file))
+        #nx.spring_layout(G)
+        #nx.draw(G)
         #plt.show()
 
     def test_basic_split(self):
@@ -56,25 +57,25 @@ class TestTranscriptGraph(unittest.TestCase):
         test_basename = "basic_split1"
         gtf_file = test_basename + ".gtf"
         dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        #write_dot(txgraph, dot_file)
-        self.assertTrue(compare_dot(txgraph, dot_file))
+        G = read_gtf(gtf_file)
+        #write_dot(G, dot_file)
+        self.assertTrue(compare_dot(G, dot_file))       
         # minus strand
         test_basename = "basic_split2"
         gtf_file = test_basename + ".gtf"
         dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        #write_dot(txgraph, dot_file)
-        self.assertTrue(compare_dot(txgraph, dot_file))
+        G = read_gtf(gtf_file)
+        #write_dot(G, dot_file)
+        self.assertTrue(compare_dot(G, dot_file))
         # unstranded
         test_basename = "basic_split3"
         gtf_file = test_basename + ".gtf"
         dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        #write_dot(txgraph, dot_file)
-        self.assertTrue(compare_dot(txgraph, dot_file))
-        #nx.spring_layout(txgraph.G)
-        #nx.draw(txgraph.G)
+        G = read_gtf(gtf_file)
+        #write_dot(G, dot_file)
+        self.assertTrue(compare_dot(G, dot_file))
+        #nx.spring_layout(G)
+        #nx.draw(G)
         #plt.show()
 
     def test_complex_split(self):
@@ -83,25 +84,25 @@ class TestTranscriptGraph(unittest.TestCase):
         test_basename = "complex_split1"
         gtf_file = test_basename + ".gtf"
         dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        #write_dot(txgraph, dot_file)
-        self.assertTrue(compare_dot(txgraph, dot_file))
+        G = read_gtf(gtf_file)
+        #write_dot(G, dot_file)
+        self.assertTrue(compare_dot(G, dot_file))
         # duplicate plus and minus strand overlapping
         test_basename = "complex_split2"
         gtf_file = test_basename + ".gtf"
         dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        #write_dot(txgraph, dot_file)
-        self.assertTrue(compare_dot(txgraph, dot_file))
+        G = read_gtf(gtf_file)
+        #write_dot(G, dot_file)
+        self.assertTrue(compare_dot(G, dot_file))
         # add in unstranded transcripts
         test_basename = "complex_split3"
         gtf_file = test_basename + ".gtf"
         dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        #write_dot(txgraph, dot_file)
-        self.assertTrue(compare_dot(txgraph, dot_file))
-        #nx.spring_layout(txgraph.G)
-        #nx.draw(txgraph.G)
+        G = read_gtf(gtf_file)
+        #write_dot(G, dot_file)
+        self.assertTrue(compare_dot(G, dot_file))
+        #nx.spring_layout(G)
+        #nx.draw(G)
         #plt.show()
 
     def test_antisense(self):
@@ -110,25 +111,25 @@ class TestTranscriptGraph(unittest.TestCase):
         test_basename = "antisense1"
         gtf_file = test_basename + ".gtf"
         dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        #write_dot(txgraph, dot_file)
-        self.assertTrue(compare_dot(txgraph, dot_file))        
+        G = read_gtf(gtf_file)
+        #write_dot(G, dot_file)
+        self.assertTrue(compare_dot(G, dot_file))
         # exons partially overlap
         test_basename = "antisense2"
         gtf_file = test_basename + ".gtf"
         dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        #write_dot(txgraph, dot_file)
-        self.assertTrue(compare_dot(txgraph, dot_file))
+        G = read_gtf(gtf_file)
+        #write_dot(G, dot_file)
+        self.assertTrue(compare_dot(G, dot_file))
         # one exon shared among strands
         test_basename = "antisense3"
         gtf_file = test_basename + ".gtf"
         dot_file = test_basename + ".dot"
-        txgraph = read_gtf(gtf_file)
-        #write_dot(txgraph, dot_file)
-        self.assertTrue(compare_dot(txgraph, dot_file))        
-        #nx.spring_layout(txgraph.G)
-        #nx.draw(txgraph.G)
+        G = read_gtf(gtf_file)
+        #write_dot(G, dot_file)
+        self.assertTrue(compare_dot(G, dot_file))
+        #nx.spring_layout(G)
+        #nx.draw(G)
         #plt.show()
        
 #    def test_example1(self):
@@ -201,6 +202,12 @@ class TestTrimming(unittest.TestCase):
 
 class TestRedistributeDensity(unittest.TestCase):
 
+    def load_gtf(self, gtf_file):
+        for locus_transcripts in parse_gtf(open(get_gtf_path(gtf_file)), cufflinks_attr_defs):
+            G = transcript_graph.add_transcripts_to_graph(locus_transcripts)
+            break
+        return G, locus_transcripts
+
     def test_redistribute(self):
         """
         ensure that coverage from unstranded transcripts is allocated
@@ -211,13 +218,8 @@ class TestRedistributeDensity(unittest.TestCase):
         # case where an unstranded transcript lies in UTR region and
         # overlaps both a + and - strand transcript
         #
-        test_basename = "redistribute1"
-        gtf_file = test_basename + ".gtf"
-        for locus_transcripts in parse_gtf(open(get_gtf_path(gtf_file)), cufflinks_attr_defs):
-            G, tgmap, unstranded = transcript_graph.add_transcripts_to_graph(locus_transcripts)
-            break
-        # sum strand densities
-        transcript_graph.sum_strand_densities(G)
+        gtf_file = "redistribute1.gtf"
+        G, transcripts = self.load_gtf(gtf_file)
         # check density arrays at key nodes before redistribution
         a = G.node[Exon(950,1000)]['strand_density']
         self.assertTrue(np.array_equal(a, np.array((1.0, 0.0, 1.0))))
@@ -226,7 +228,7 @@ class TestRedistributeDensity(unittest.TestCase):
         a = G.node[Exon(1100,1150)]['strand_density']
         self.assertTrue(np.array_equal(a, np.array((0.0, 1.0, 1.0))))
         # redistribute coverage
-        transcript_graph.redistribute_unstranded_density(G, unstranded, tgmap)
+        transcript_graph.redistribute_unstranded_density(G, transcripts)
         # check density after redistribution
         a = G.node[Exon(950,1000)]['strand_density']
         self.assertTrue(np.array_equal(a, np.array((1.5, 0.5, 0.0))))
@@ -238,37 +240,65 @@ class TestRedistributeDensity(unittest.TestCase):
         # case where several unstranded transcripts are alone and do not 
         # overlap stranded transcripts
         #
-        test_basename = "redistribute2"
-        gtf_file = test_basename + ".gtf"
-        for locus_transcripts in parse_gtf(open(get_gtf_path(gtf_file)), cufflinks_attr_defs):
-            G, tgmap, unstranded = transcript_graph.add_transcripts_to_graph(locus_transcripts)
-            break
-        # sum strand densities
-        transcript_graph.sum_strand_densities(G)
+        gtf_file = "redistribute2.gtf"
+        G, transcripts = self.load_gtf(gtf_file)
         # check density arrays before redistribution
         for n,d in G.nodes_iter(data=True):
             self.assertAlmostEqual(d['strand_density'][POS_STRAND], 0)
             self.assertAlmostEqual(d['strand_density'][NEG_STRAND], 0)
             self.assertTrue(d['strand_density'][NO_STRAND] > 0)
         # redistribute coverage
-        transcript_graph.redistribute_unstranded_density(G, unstranded, tgmap)
+        transcript_graph.redistribute_unstranded_density(G, transcripts)
         # check density arrays after redistribution
         for n,d in G.nodes_iter(data=True):
             self.assertAlmostEqual(d['strand_density'][POS_STRAND], 0)
             self.assertAlmostEqual(d['strand_density'][NEG_STRAND], 0)
             self.assertTrue(d['strand_density'][NO_STRAND] > 0)        
+        #
+        # case with a chain of unstranded transcripts and only one of
+        # them overlaps a stranded transcript 
+        #
+        gtf_file = "redistribute3.gtf"
+        G, transcripts = self.load_gtf(gtf_file)
+        # check density before redistribution
+        exons_overlapping_pos = [Exon(200,210),Exon(290,300)]
+        exons_not_overlapping = [Exon(50,110), Exon(110,150), Exon(150,200), 
+                                 Exon(300,350), Exon(350,390), Exon(390,450)]
+        for e in exons_overlapping_pos:        
+            a = G.node[e]['strand_density']
+            self.assertTrue(np.array_equal(a, np.array((1.0, 0.0, 1.0))))
+        for e in exons_not_overlapping: 
+            a = G.node[e]['strand_density']
+            self.assertTrue(a[POS_STRAND] == 0)
+            self.assertTrue(a[NO_STRAND] > 0.0)
+        # group contiguous nodes into chains, recalculate attributes,
+        # add redistribute coverage
+        G = collapse_contiguous_nodes(G)
+        transcript_graph.recalc_graph_attributes(G)
+        # check strand density before
+        x = G.node[Exon(50,450)]['strand_density']
+        self.assertTrue(np.array_equal(x, np.array((100./400., 0.0, 400./400.))))
+        # redistribute
+        transcript_graph.redistribute_unstranded_density(G, transcripts)
+        # should only have one exon now
+        self.assertTrue(len(G) == 1)
+        # density should be correct
+        x = G.node[Exon(50,450)]['strand_density']
+        self.assertTrue(np.array_equal(x, np.array((500./400., 0.0, 0.0))))
 
 
 class TestCollapseChains(unittest.TestCase):
     
     def load_gtf(self, gtf_file):
         for locus_transcripts in parse_gtf(open(get_gtf_path(gtf_file)), cufflinks_attr_defs):
-            G, tgmap, unstranded = transcript_graph.add_transcripts_to_graph(locus_transcripts)
+            G = transcript_graph.add_transcripts_to_graph(locus_transcripts)
             break
-        # sum strand densities
-        transcript_graph.sum_strand_densities(G)
+        # group contiguous nodes into chains
+        G = collapse_contiguous_nodes(G)
+        # recalculate node attributes after grouping into chains
+        transcript_graph.recalc_graph_attributes(G)
         # redistribute coverage
-        transcript_graph.redistribute_unstranded_density(G, unstranded, tgmap)
+        transcript_graph.redistribute_unstranded_density(G, locus_transcripts)
         # partition into single-stranded graphs
         GG = transcript_graph.create_strand_specific_graphs(G)
         return GG
@@ -278,8 +308,9 @@ class TestCollapseChains(unittest.TestCase):
         gtf_file = "redistribute2.gtf"
         GG = self.load_gtf(gtf_file)
         G = GG[NO_STRAND]
-        self.assertEqual(G.number_of_nodes(), 3)
-        H = transcript_graph.collapse_chains(GG[NO_STRAND], directed=False)
+        self.assertEqual(G.number_of_nodes(), 1)
+        H = collapse_strand_specific_graph(GG[NO_STRAND], directed=False)
+        transcript_graph.recalc_strand_specific_graph_attributes(H)
         self.assertEqual(H.number_of_nodes(), 1)
         self.assertAlmostEqual(H.node[Exon(0,1000)]['density'], 1.6)
         # test on single exon (+) strand transcript with several
@@ -287,9 +318,12 @@ class TestCollapseChains(unittest.TestCase):
         # transcript at end that should not interfere
         gtf_file = "collapse1.gtf"
         GG = self.load_gtf(gtf_file)
-        Hfwd = transcript_graph.collapse_chains(GG[POS_STRAND], directed=True)
-        Hrev = transcript_graph.collapse_chains(GG[NEG_STRAND], directed=True)
-        Hunknown = transcript_graph.collapse_chains(GG[NO_STRAND], directed=False)
+        Hfwd = collapse_strand_specific_graph(GG[POS_STRAND], directed=True)
+        transcript_graph.recalc_strand_specific_graph_attributes(Hfwd)
+        Hrev = collapse_strand_specific_graph(GG[NEG_STRAND], directed=True)
+        transcript_graph.recalc_strand_specific_graph_attributes(Hrev)
+        Hunknown = collapse_strand_specific_graph(GG[NO_STRAND], directed=False)
+        transcript_graph.recalc_strand_specific_graph_attributes(Hunknown)
         self.assertEqual(Hfwd.number_of_nodes(), 1)
         self.assertAlmostEqual(Hfwd.node[Exon(0,1000)]['density'], 1.5)
         self.assertEqual(Hrev.number_of_nodes(), 1)
