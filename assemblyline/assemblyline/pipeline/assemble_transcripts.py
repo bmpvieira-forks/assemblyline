@@ -6,7 +6,6 @@ Created on Dec 2, 2011
 import argparse
 import logging
 import sys
-import os
 
 from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
 from assemblyline.lib.transcript import Exon, strand_int_to_str, NEG_STRAND, POS_STRAND
@@ -118,7 +117,7 @@ def assemble_locus(transcripts, overhang_threshold, fraction_major_isoform, max_
                                                      frac=frac))                    
                 # write to BED format
                 name = "%s|%s(%.1f)" % (gene_id_str, tx_id_str, p.density)
-                fields = write_bed(locus_chrom, name, strand, frac, p.path)
+                fields = write_bed(locus_chrom, name, strand, int(round(1000.0*frac)), p.path)
                 print >>bed_fileh, '\t'.join(fields)
     # output GTF
     if gtf_fileh is not None:
