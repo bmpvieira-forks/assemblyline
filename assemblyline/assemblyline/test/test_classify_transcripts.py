@@ -19,15 +19,15 @@ def make_transcript(chrom='chr1', strand='.',
     t.start = start
     t.end = end
     t.strand = strand_str_to_int(strand)
-    t.id = id
-    t.library = id.split(".")[0]
-    t.sample = sample
-    t.cohort = cohort
-    t.fpkm = fpkm
-    t.cov = cov
-    t.frac = frac
-    t.exons = [Exon(e[0], e[1]) for e in exons]
     t.attrs = {}
+    t.attrs['id'] = id
+    t.attrs['library'] = id.split(".")[0]
+    t.attrs['sample'] = sample
+    t.attrs['cohort'] = cohort
+    t.attrs['FPKM'] = fpkm
+    t.attrs['cov'] = cov
+    t.attrs['frac'] = frac
+    t.exons = [Exon(e[0], e[1]) for e in exons]
     return t
 
 t1 = make_transcript(sample="A", strand="+", frac=1.0, fpkm=1.0, cov=1.0, exons=[(0,2), (5,7), (9,10)])

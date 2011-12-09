@@ -186,7 +186,7 @@ def assemble_transcript_graph(H, strand, fraction_major_path, max_paths):
     # collapse chains of nodes in graph, which reformats the graph 
     # attributes, and then get connected components of graph which
     # represent independent genes
-    G = collapse_strand_specific_graph(H, directed=True)
+    G = collapse_strand_specific_graph(H)
     Gsubs = nx.weakly_connected_component_subgraphs(G)
     # get connected components - unconnected components are considered
     # different genes
