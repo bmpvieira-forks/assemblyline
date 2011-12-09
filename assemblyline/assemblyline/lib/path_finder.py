@@ -176,7 +176,7 @@ def find_suboptimal_paths(G, source, sink, fraction_major_path,
         d[TMP_EDGE_IN_FRAC] = d[EDGE_IN_FRAC]
     # find the best path
     logging.debug("\tFinding overall best path")
-    path_results = {}
+    path_results = collections.OrderedDict()
     init_path_attributes(G)
     dynprog_search(G, source)    
     # get resulting path and its attributes
@@ -195,8 +195,8 @@ def find_suboptimal_paths(G, source, sink, fraction_major_path,
     # find suboptimal paths
     logging.debug("\tFinding suboptimal paths")
     density_lower_bound = fraction_major_path * density
-    iterations = 0
-    while (density >= density_lower_bound) and (iterations < max_paths):
+    iterations = 1
+    while (iterations < max_paths):
         # remove influence of the "best" path
         subtract_path(G, path, density)
         # recompute edge fractions
@@ -210,6 +210,8 @@ def find_suboptimal_paths(G, source, sink, fraction_major_path,
         weight = sink_attrs[PATH_WEIGHT]
         length = sink_attrs[PATH_LENGTH]
         density = sink_attrs[PATH_DENSITY]
+        if (density < density_lower_bound):
+            break 
         logging.debug("\t\tweight=%f length=%d density=%f" % 
                       (weight, length, density))
         if path not in path_results:

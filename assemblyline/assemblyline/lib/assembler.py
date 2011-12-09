@@ -3,9 +3,6 @@ Created on Feb 20, 2011
 
 @author: mkiyer
 '''
-import collections
-import logging
-import operator
 import networkx as nx
 import numpy as np
 
@@ -101,16 +98,16 @@ def add_dummy_start_end_nodes(G, start_nodes, end_nodes):
     #source_attr_dict = {EDGE_IN_FRAC: 1.0,
     #                    EDGE_OUT_FRAC: 1.0/len(start_nodes)}
     for start_node in start_nodes:        
-        logging.debug('adding dummy %s -> %s' % (SOURCE_NODE, start_node))
         G.add_edge(SOURCE_NODE, start_node)
+        #logging.debug('adding dummy %s -> %s' % (SOURCE_NODE, start_node))
         #G.add_edge(SOURCE_NODE, start_node, attr_dict=source_attr_dict)
     # add a single 'dummy' end node
     G.add_node(SINK_NODE, attr_dict={NODE_DENSITY: MIN_NODE_DENSITY, 'length': 0})
     #sink_attr_dict = {EDGE_IN_FRAC: 1.0/len(start_nodes),
     #                  EDGE_OUT_FRAC: 1.0}
     for end_node in end_nodes:
-        logging.debug('adding dummy %s -> %s' % (end_node, SINK_NODE))
         G.add_edge(end_node, SINK_NODE)
+        #logging.debug('adding dummy %s -> %s' % (end_node, SINK_NODE))
         #G.add_edge(end_node, SINK_NODE, attr_dict=sink_attr_dict)
 
 def expand_path_chains(G, strand, path):
@@ -162,35 +159,22 @@ def assemble_subgraph(G, strand, fraction_major_path, max_paths):
         tss_id = G.node[path[0]][NODE_TSS_ID]
         # cleanup and expand chained nodes within path
         path = expand_path_chains(G, strand, path)
-        path_info_list.append(PathInfo(density, tss_id, path))
+        # set transcript id
+        path_info = PathInfo(density, tss_id, path)
+        path_info.tx_id = GLOBAL_TRANSCRIPT_ID
+        GLOBAL_TRANSCRIPT_ID += 1
+        # add to path list
+        path_info_list.append(path_info)
     # remove dummy nodes from graph
     G.remove_node(SOURCE_NODE)
     G.remove_node(SINK_NODE)
-    # sort by density
-    # TODO: might be able to skip this
-    path_info_list = sorted(path_info_list, key=operator.attrgetter('density'), reverse=True)
-    # return paths while density is greater than some fraction of the
-    # highest density
-    density_lower_bound = fraction_major_path * path_info_list[0].density
-    i = 0
-    for path_info in path_info_list:        
-        if path_info.density < density_lower_bound:
-            break
-        i += 1
-        path_info.tx_id = GLOBAL_TRANSCRIPT_ID
-        GLOBAL_TRANSCRIPT_ID += 1
-    assert i > 0
-    return path_info_list[:i]
+    return path_info_list
 
 def assemble_transcript_graph(H, strand, fraction_major_path, max_paths):
     """
     returns (gene_id, list of PathInfo objects) tuple
     """
     global GLOBAL_GENE_ID
-    # collapse chains of nodes in graph, which reformats the graph 
-    # attributes
-    directed = False if (strand == NO_STRAND) else True
-    G = collapse_strand_specific_graph(H, directed=directed)
     # don't allow fraction_major_path to equal zero because that 
     # will force each run to iterate to 'max_paths'.  also don't
     # allow to equal one because potentially no paths will be 
@@ -199,9 +183,14 @@ def assemble_transcript_graph(H, strand, fraction_major_path, max_paths):
         fraction_major_path = 1e-8
     if fraction_major_path >= 1.0:
         fraction_major_path = 1.0 - 1e-8
+    # collapse chains of nodes in graph, which reformats the graph 
+    # attributes, and then get connected components of graph which
+    # represent independent genes
+    G = collapse_strand_specific_graph(H, directed=True)
+    Gsubs = nx.weakly_connected_component_subgraphs(G)
     # get connected components - unconnected components are considered
     # different genes
-    for Gsub in nx.weakly_connected_component_subgraphs(G):
+    for Gsub in Gsubs:
         # get assembled paths
         path_info_list = assemble_subgraph(Gsub, strand,
                                            fraction_major_path=fraction_major_path, 
