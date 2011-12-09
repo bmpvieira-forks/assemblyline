@@ -46,9 +46,15 @@ else:
     mydict = ucsc_to_ensembl_dict
 
 for line in open(args.filename):
-    fields = line.strip().split('\t')
-    if fields[0] not in mydict:
-        print >>sys.stderr, "skipped line %s" % line
+    if not line:
         continue
-    fields[0] = mydict[fields[0]]
-    print '\t'.join(fields)
+    line = line.strip()
+    if line.startswith("track") or line.startswith("#"):
+        print line
+    else: 
+        fields = line.strip().split('\t')    
+        if fields[0] not in mydict:
+            print >>sys.stderr, "skipped line %s" % line
+            continue
+        fields[0] = mydict[fields[0]]
+        print '\t'.join(fields)
