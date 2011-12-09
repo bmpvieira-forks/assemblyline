@@ -5,6 +5,7 @@ Created on Dec 2, 2011
 '''
 import argparse
 import logging
+import sys
 import os
 
 from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
@@ -41,69 +42,45 @@ def write_bed(chrom, name, strand, score, exons):
               ','.join(map(str,block_starts)) + ',']
     return fields
 
-#def write_gtf(chrom, gene_id, tx_id, strand, score, exons):
-#    # write transcript feature
-#    f = GTFFeature()
-#    f.seqid = chrom
-#    f.source = "AssemblyLine"
-#    f.feature_type = "transcript"
-#    f.start = min(e[0] for e in exons)
-#    f.end = max(e[1] for e in exons)
-#    f.score = score
-#    f.strand = strand
-#    f.phase = "."
-#    attrs = {}
-#    attrs['gene_id'] = gene_id
-#    attrs['tx_id'] = tx_id
-#    f.attrs = attrs
-#    return f
-#
-#def write_gtf():   
-#    # transcript feature
-#    f = GTFFeature()
-#    f.seqid = self.chrom
-#    f.source = 'assemblyline'
-#    f.feature_type = 'transcript'
-#    f.start = self.start
-#    f.end = self.end
-#    f.score = 1000.0
-#    f.strand = strand_int_to_str(self.strand)
-#    f.phase = '.'
-#    f.attrs = self.attrs
-#    features = [f]
-#    # exon features
-#    for i,e in enumerate(self.exons):
-#        f = GTFFeature()
-#        f.seqid = self.chrom
-#        f.source = 'assemblyline'
-#        f.feature_type = 'exon'
-#        f.start = e.start
-#        f.end = e.end
-#        f.score = 1000.0
-#        f.strand = strand_int_to_str(self.strand)
-#        f.phase = '.'
-#        f.attrs = {}
-#        f.attrs["gene_id"] = self.attrs["gene_id"]
-#        f.attrs["transcript_id"] = self.attrs["transcript_id"]
-#        f.attrs["exon_number"] = i
-#        features.append(f)
-#    return features
+def get_gtf_features(chrom, strand, exons, locus_id, gene_id, tss_id, 
+                     transcript_id, density, frac):
+    tx_start = exons[0].start
+    tx_end = exons[-1].end
+    strand_str = strand_int_to_str(strand)
+    attr_dict = {'locus_id': locus_id,
+                 'gene_id': gene_id,
+                 'tss_id': tss_id,
+                 'transcript_id': transcript_id}
+    f = GTFFeature()
+    f.seqid = chrom
+    f.source = 'assemblyline'
+    f.feature_type = 'transcript'
+    f.start = tx_start
+    f.end = tx_end
+    f.score = 1000.0
+    f.strand = strand_str
+    f.phase = '.'
+    f.attrs = {'density': '%.3f' % density,
+               'frac': '%.3f' % frac}
+    f.attrs.update(attr_dict)
+    features = [f]
+    for i,e in enumerate(exons):
+        f = GTFFeature()
+        f.seqid = chrom
+        f.source = 'assemblyline'
+        f.feature_type = 'exon'
+        f.start = e.start
+        f.end = e.end
+        f.score = 1000.0
+        f.strand = strand_str
+        f.phase = '.'
+        f.attrs = {'exon_number': i+1}
+        f.attrs.update(attr_dict)
+        features.append(f)
+    return features
 
-#def collapse_contiguous_nodes(path, strand):
-#    newpath = []    
-#    n = Exon(path[0].start, path[0].end)
-#    for i in xrange(1, len(path)):
-#        if strand == NEG_STRAND and (n.start == path[i].end):
-#            n.start = path[i].start
-#        elif n.end == path[i].start:
-#            n.end = path[i].end
-#        else:
-#            newpath.append(n)
-#            n = Exon(path[i].start, path[i].end)
-#    newpath.append(n)
-#    return newpath
-
-def assemble_locus(transcripts, overhang_threshold, fraction_major_isoform, max_paths):
+def assemble_locus(transcripts, overhang_threshold, fraction_major_isoform, max_paths,
+                   bed_fileh, gtf_fileh=None):
     # gather properties of locus
     locus_chrom = transcripts[0].chrom
     locus_start = transcripts[0].start
@@ -111,32 +88,75 @@ def assemble_locus(transcripts, overhang_threshold, fraction_major_isoform, max_
     logging.debug("[LOCUS] %s:%d-%d %d transcripts" % 
                   (locus_chrom, locus_start, locus_end, 
                    len(transcripts)))
+    locus_id_str = "L%d" % (GLOBAL_LOCUS_ID)
     # build and refine transcript graph
     GG = create_transcript_graph(transcripts, overhang_threshold)
     # assemble transcripts on each strand
+    features = []
     for strand, G in enumerate(GG):
         for gene_id, path_info_list in assemble_transcript_graph(G, strand, fraction_major_isoform, max_paths):
             logging.debug("[LOCUS][STRAND] %s assembled %d transcripts" % 
                           (strand_int_to_str(strand), len(path_info_list))) 
-            for p in path_info_list:                
-                # use locus/gene/tss/transcript id to make gene name
-                gene_name = "L%07d|G%07d|TSS%07d|TU%07d" % (GLOBAL_LOCUS_ID, gene_id, p.tss_id, p.tx_id)
-                fields = write_bed(locus_chrom, gene_name, strand, p.density, p.path)
-                print '\t'.join(fields)
-                # collapse contiguous nodes
-                # path = collapse_contiguous_nodes(p.path, strand) 
-                # fix path
-                #if strand == NEG_STRAND:
-                #    path.reverse()           
-                #fields = write_bed(locus_chrom, gene_name, strand, p.density, path)
-                #print '\t'.join(fields)
+            gene_id_str = "G%d" % (gene_id)
+            # compute total density in path and relative density of each transcript
+            total_density = sum(p.density for p in path_info_list)
+            if total_density == 0.0:
+                total_density = 1e-8
+            # create GTF features for each transcript path
+            for p in path_info_list:
+                tss_id_str = "TSS%d" % p.tss_id
+                tx_id_str = "TU%d" % p.tx_id
+                frac = p.density / total_density
+                # write to GTF
+                if gtf_fileh is not None:
+                    features.extend(get_gtf_features(locus_chrom, strand, p.path,
+                                                     locus_id=locus_id_str, 
+                                                     gene_id=gene_id_str, 
+                                                     tss_id=tss_id_str, 
+                                                     transcript_id=tx_id_str,
+                                                     density=p.density, 
+                                                     frac=frac))                    
+                # write to BED format
+                name = "%s|%s(%.1f)" % (gene_id_str, tx_id_str, p.density)
+                fields = write_bed(locus_chrom, name, strand, frac, p.path)
+                print >>bed_fileh, '\t'.join(fields)
+    # output GTF
+    if gtf_fileh is not None:
+        # in-place sort so that 'transcript' features appear before 'exon'
+        features.sort(key=lambda f: f.feature_type, reverse=True)
+        features.sort(key=lambda f: f.start)
+        # output transcripts to gtf
+        for f in features:
+            print >>gtf_fileh, str(f) 
 
-def run(gtf_file, overhang_threshold, fraction_major_isoform, max_paths):    
+def run(gtf_file, overhang_threshold, fraction_major_isoform, max_paths,
+        bed_output_file=None, gtf_output_file=None):
     global GLOBAL_LOCUS_ID
+    # setup output files
+    if bed_output_file is not None:
+        bed_fileh = open(bed_output_file, "w")
+    else:
+        bed_fileh = sys.stdout
+    if gtf_output_file is not None:
+        gtf_fileh = open(gtf_output_file, "w")
+    else:
+        gtf_fileh = None
+    # write BED file track description line
+    track_line = ('track name="AssemblyLine" '
+                  'description="AssemblyLine Transcripts" '
+                  'visibility=pack useScore=1')
+    print >>bed_fileh, track_line
+    # run assembler on each locus
     for locus_transcripts in parse_gtf(open(gtf_file), cufflinks_attr_defs):
         assemble_locus(locus_transcripts, overhang_threshold, 
-                       fraction_major_isoform, max_paths)
+                       fraction_major_isoform, max_paths,
+                       bed_fileh, gtf_fileh)
         GLOBAL_LOCUS_ID += 1
+    # cleanup output files
+    if bed_output_file is not None:
+        bed_fileh.close()
+    if gtf_output_file is not None:
+        gtf_fileh.close()
 
 def main():
     # parse command line
@@ -157,7 +177,13 @@ def main():
                         default=1000, metavar="N",
                         help="Maximum path finding iterations to perform "
                         "for each gene [default=%(default)s]")
-    parser.add_argument("filename")
+    parser.add_argument("--bed", dest="bed", default=None,
+                        help="Produce BED output file [default behavior "
+                        "is to write to standard output]")
+    parser.add_argument("--gtf", dest="gtf", default=None,
+                        help="Produce GTF output file [no file created "
+                        "by default]")
+    parser.add_argument("gtf_input_file")
     args = parser.parse_args()
     # set logging level
     if args.verbose:
@@ -167,9 +193,11 @@ def main():
     logging.basicConfig(level=level,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")    
     # start algorithm
-    run(args.filename, 
+    run(args.gtf_input_file, 
         args.overhang_threshold,
         args.fraction_major_isoform,
-        args.max_paths)
+        args.max_paths,
+        args.bed,
+        args.gtf)
 
 if __name__ == '__main__': main()

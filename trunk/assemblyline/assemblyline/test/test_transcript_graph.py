@@ -274,9 +274,7 @@ class TestRedistributeDensity(unittest.TestCase):
         # redistribute
         transcript_graph.redistribute_unstranded_density(G, transcripts)
         GG = transcript_graph.create_strand_specific_graphs(G)
-        G = collapse_strand_specific_graph(GG[POS_STRAND], directed=True)
-        for n,d in G.nodes_iter(data=True):
-            print n,d['density']
+        G = collapse_strand_specific_graph(GG[POS_STRAND])
         # density should be correct
         self.assertTrue(G.number_of_nodes() == 1)
         self.assertTrue(G.node[Exon(50,450)]['density'], 500./400.)
@@ -300,7 +298,7 @@ class TestCollapseChains(unittest.TestCase):
         GG = self.load_gtf(gtf_file)
         G = GG[NO_STRAND]
         self.assertEqual(G.number_of_nodes(), 3)
-        H = collapse_strand_specific_graph(GG[NO_STRAND], directed=False)
+        H = collapse_strand_specific_graph(GG[NO_STRAND])
         self.assertEqual(H.number_of_nodes(), 1)
         self.assertAlmostEqual(H.node[Exon(0,1000)]['density'], 1.6)
         # test on single exon (+) strand transcript with several
@@ -308,9 +306,9 @@ class TestCollapseChains(unittest.TestCase):
         # transcript at end that should not interfere
         gtf_file = "collapse1.gtf"
         GG = self.load_gtf(gtf_file)
-        Hfwd = collapse_strand_specific_graph(GG[POS_STRAND], directed=True)
-        Hrev = collapse_strand_specific_graph(GG[NEG_STRAND], directed=True)
-        Hunknown = collapse_strand_specific_graph(GG[NO_STRAND], directed=False)
+        Hfwd = collapse_strand_specific_graph(GG[POS_STRAND])
+        Hrev = collapse_strand_specific_graph(GG[NEG_STRAND])
+        Hunknown = collapse_strand_specific_graph(GG[NO_STRAND])
         self.assertEqual(Hfwd.number_of_nodes(), 1)
         self.assertAlmostEqual(Hfwd.node[Exon(0,1000)]['density'], 1.5)
         self.assertEqual(Hrev.number_of_nodes(), 1)
