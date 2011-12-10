@@ -13,3 +13,6 @@ def up_to_date(outfile, infile, nzsize=True):
     if nzsize and (os.path.getsize(outfile) == 0):
         return False
     return os.path.getmtime(outfile) >= os.path.getmtime(infile)
+
+imax2 = lambda x,y: x if x>=y else y
+imin2 = lambda x,y: x if x<=y else y
