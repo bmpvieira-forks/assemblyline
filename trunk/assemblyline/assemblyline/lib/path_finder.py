@@ -8,6 +8,7 @@ import collections
 import operator
 from assembler_base import NODE_DENSITY, NODE_LENGTH, EDGE_OUT_FRAC, EDGE_IN_FRAC, \
     MIN_NODE_DENSITY
+from base import imax2
 
 # for dynamic programming algorithm
 TMP_NODE_DENSITY = 'tmpnw'
@@ -168,27 +169,31 @@ def calculate_edge_fractions(G, node_density_attr=NODE_DENSITY):
     # reverse the edges back to normal
     G.reverse(copy=False)
 
-def subtract_path(G, path, density):
-    """
-    subtract the coverage density incurred by traversing the given path
-    """
-    imax2 = lambda x,y: x if x>=y else y
-    for u in path:
-        # subtract density but do not allow to become zero because that
-        # will break some arithmetic steps
-        d = G.node[u]
-        d[TMP_NODE_DENSITY] = imax2(MIN_NODE_DENSITY, 
-                                    d[TMP_NODE_DENSITY] - density) 
+#def subtract_path(G, path, density):
+#    """
+#    subtract the coverage density incurred by traversing the given path
+#    """
+#    for u in path:
+#        # subtract density but do not allow to become zero because that
+#        # will break some arithmetic steps
+#        d = G.node[u]
+#        d[TMP_NODE_DENSITY] = imax2(MIN_NODE_DENSITY, 
+#                                    d[TMP_NODE_DENSITY] - density) 
 
-#def subtract_path2(G, path, weight):
-#    total_weight = 1.e-8
-#    for n in path:
-#        d = G.node[n]
-#        total_weight += d[NODE_LENGTH] * d[TMP_NODE_DENSITY]
-#    frac = max(1.0, weight / total_weight)
-#    for n in path:
-#        d = G.node[n]
-#        d[TMP_NODE_DENSITY] *= frac
+def subtract_path(G, path):
+    """
+    subtract density from each node implied by the path
+    """
+    for i in xrange(1, len(path)-1):        
+        u = path[i-1]
+        v = path[i]
+        w = path[i+1]        
+        d = G.node[v]
+        density_used = (G[u][v][EDGE_IN_FRAC] * 
+                        G[v][w][EDGE_OUT_FRAC] * 
+                        d[TMP_NODE_DENSITY])
+        d[TMP_NODE_DENSITY] = imax2(MIN_NODE_DENSITY,
+                                    d[TMP_NODE_DENSITY] - density_used)
 
 def find_path(G, start_node, source, sink):
     """
@@ -272,7 +277,7 @@ def find_suboptimal_paths(G, source, sink, fraction_major_path,
         if density > highest_density:
             highest_density = density
         # remove the density of the path from the graph
-        subtract_path(G, path, density)
+        subtract_path(G, path)
         # recompute edge fractions
         calculate_edge_fractions(G, TMP_NODE_DENSITY)
         iterations +=1
