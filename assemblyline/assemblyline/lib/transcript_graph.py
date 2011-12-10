@@ -247,7 +247,8 @@ def redistribute_iteration(G, transcripts):
             total_node_length += d[NODE_LENGTH]
         # calculate effective transcript density across new node length
         # might not match transcript length due to chaining of nodes
-        t_adj_density = t.density * t.length / float(total_node_length)
+        assert t.length == total_node_length        
+        #t_adj_density = t.density * t.length / float(total_node_length)
         # calculate total mass across transcript
         total_strand_mass = mass_arr[POS_STRAND] + mass_arr[NEG_STRAND]
         # if there is "stranded" mass on any of the nodes comprising
@@ -257,7 +258,7 @@ def redistribute_iteration(G, transcripts):
             # proportionally assign unstranded mass based on amount of
             # plus and minus strand mass
             pos_frac = mass_arr[POS_STRAND] / float(total_strand_mass)
-            density_delta_arr = t_adj_density * np.array((pos_frac, 1.0-pos_frac, -1.0))
+            density_delta_arr = t.density * np.array((pos_frac, 1.0-pos_frac, -1.0))
             for n in nodes:
                 # save all density adjustments in a dictionary and wait to apply
                 # until strand fractions are computed for all transcripts

@@ -1,12 +1,11 @@
 '''
-Created on Dec 9, 2011
+Created on Dec 4, 2010
 
 @author: mkiyer
 '''
 import logging
 import collections
-import operator
-from assembler_base import NODE_DENSITY, NODE_LENGTH, EDGE_OUT_FRAC, EDGE_IN_FRAC, \
+from assembler_base import NODE_DENSITY, EDGE_OUT_FRAC, EDGE_IN_FRAC, \
     MIN_NODE_DENSITY
 
 # for dynamic programming algorithm
@@ -45,7 +44,7 @@ def clear_path_attributes(G):
         del d[PATH_DENSITY]
         del d[PATH_NODES]
 
-def visit_node(G, src, dst, reverse=False):
+def visit_node(G, src, dst):
     # get path attributes of src node
     src_attrs = G.node[src]
     src_length = src_attrs[PATH_LENGTH]
@@ -53,41 +52,27 @@ def visit_node(G, src, dst, reverse=False):
     # get dest node attributes
     dst_attrs = G.node[dst]
     dst_density = dst_attrs[TMP_NODE_DENSITY]
-    dst_length = dst_attrs[NODE_LENGTH]
+    dst_length = dst_attrs['length']
     dst_weight = dst_density * dst_length
+    #assert dst_length == (dst.end - dst.start)
     # compute new path attributes when extending by this node
     length = src_length + dst_length
     # to compute the coverage going from the parent to the child, take
     # the existing path coverage at the parent node and multiply it by
     # the outgoing fraction, then add the child coverage multiplied by
     # its incoming fraction.
-    edata = G[src][dst]
-    if reverse:
-        in_frac, out_frac = edata[TMP_EDGE_OUT_FRAC], edata[TMP_EDGE_IN_FRAC]
-    else:
-        in_frac, out_frac = edata[TMP_EDGE_IN_FRAC], edata[TMP_EDGE_OUT_FRAC]
-    weight = (src_weight * out_frac +
-              dst_weight * in_frac)
+    edata = G.edge[src][dst]
+    weight = (src_weight * edata[TMP_EDGE_OUT_FRAC] + 
+              dst_weight * edata[TMP_EDGE_IN_FRAC])
     return weight, length
 
-def dynprog_search(G, source, reverse=False):
+def dynprog_search(G, source):
     """
     Find the highest scoring path by dynamic programming    
     # Taken from NetworkX source code http://networkx.lanl.gov    
     """
-    # initialize node attributes
-    init_path_attributes(G)
-    # add source attributes
     stack = collections.deque([source])
-    src_attrs = G.node[source]
-    src_attrs[PATH_LENGTH] = src_attrs[NODE_LENGTH]
-    src_attrs[PATH_WEIGHT] = src_attrs[NODE_LENGTH] * src_attrs[NODE_DENSITY]
-    src_attrs[PATH_DENSITY] = src_attrs[NODE_DENSITY]
-    src_attrs[PATH_NODES] = (source,)
-    if reverse:
-        # reverse all graph edges so that search goes in
-        # opposite direction
-        G.reverse(copy=False)    
+    G.node[source][PATH_NODES] = (source,)
     while stack:
         current = stack[0]
         current_attrs = G.node[current]
@@ -98,16 +83,12 @@ def dynprog_search(G, source, reverse=False):
             weight, length = visit_node(G, current, dst)
             density = weight / float(length)
             dst_attrs = G.node[dst]
-            #logging.debug('\tweight=%f length=%d density=%f' %
-            #              (weight, length, density))
-            # update this node if it has not been visited
-            # or if the density is greater than previously seen.
-            # break density ties by taking path with greater total
-            # coverage  
-            if ((dst_attrs[PATH_DENSITY] is None) or 
-                (density > dst_attrs[PATH_DENSITY]) or
-                ((density == dst_attrs[PATH_DENSITY]) and
-                 (weight > dst_attrs[PATH_WEIGHT]))):
+            #logging.debug('\tweight=%f length=%d density=%f dst_density=%f' %
+            #              (weight, length, density, dst_attrs[PATH_DENSITY]))
+            # only update this node if it has not been visited
+            # or if the new score is higher than the old score
+            if ((dst_attrs[PATH_DENSITY] is None) or
+                (density > dst_attrs[PATH_DENSITY])):
                 # keep pointer to current node that produced this 
                 # high scoring path
                 dst_attrs[PATH_LENGTH] = length
@@ -119,9 +100,6 @@ def dynprog_search(G, source, reverse=False):
                 # continue iterating through the dst path
                 stack.append(dst)
         stack.popleft()
-    # restore edges
-    if reverse:
-        G.reverse(copy=False)
 
 #def traceback(G, source, sink):
 #    """
@@ -180,56 +158,14 @@ def subtract_path(G, path, density):
         d[TMP_NODE_DENSITY] = imax2(MIN_NODE_DENSITY, 
                                     d[TMP_NODE_DENSITY] - density) 
 
-#def subtract_path2(G, path, weight):
-#    total_weight = 1.e-8
-#    for n in path:
-#        d = G.node[n]
-#        total_weight += d[NODE_LENGTH] * d[TMP_NODE_DENSITY]
-#    frac = max(1.0, weight / total_weight)
-#    for n in path:
-#        d = G.node[n]
-#        d[TMP_NODE_DENSITY] *= frac
-
-def find_path(G, start_node, source, sink):
-    """
-    find best path from source -> node -> sink
-    """
-    # get best path from node to sink
-    #logging.debug("\tsearching forward")
-    dynprog_search(G, start_node)
-    # get resulting path and its attributes
-    sink_attrs = G.node[sink]
-    fwd_path = sink_attrs[PATH_NODES]
-    fwd_weight = sink_attrs[PATH_WEIGHT]
-    fwd_length = sink_attrs[PATH_LENGTH]
-    # get best path from source to node
-    #logging.debug("\tsearching reverse")
-    dynprog_search(G, start_node, reverse=True)
-    source_attrs = G.node[source]
-    rev_path = source_attrs[PATH_NODES]
-    rev_weight = source_attrs[PATH_WEIGHT]
-    rev_length = source_attrs[PATH_LENGTH]
-    # merge paths
-    assert rev_path[0] == fwd_path[0]
-    path = rev_path[::-1] + fwd_path[1:]
-    start_node_data = G.node[start_node]
-    start_node_length = start_node_data[NODE_LENGTH]
-    start_node_weight = start_node_length * start_node_data[TMP_NODE_DENSITY]
-    length = fwd_length + rev_length - start_node_length
-    weight = fwd_weight + rev_weight - start_node_weight
-    return path, length, weight
-
-def find_suboptimal_paths(G, source, sink, fraction_major_path,
-                          max_paths=100):
+def find_suboptimal_paths(G, source, sink, fraction_major_path, 
+                          max_paths=1000):
     """
     finds suboptimal paths through graph G using greedy algorithm
-    that chooses the highest density node, extends a full path
-    that includes that node and the source/sink, returns the path,
-    subtracts the path density from the graph, and repeats
-    
-    algorithm stops when path density falls below a fraction of the
-    highest density path found in the graph, or when 'max_paths'
-    iterations have completed
+    that finds the highest density path using dynamic programming,
+    removes that path, and then recomputes the best path. algorithm 
+    stops after no more paths with positive density can be found,
+    or when 'max_paths' paths have been generated
     """
     # copy the node weights to a temporary variable so that we can
     # manipulation them in the algorithm
@@ -238,44 +174,50 @@ def find_suboptimal_paths(G, source, sink, fraction_major_path,
     for u,v,d in G.edges_iter(data=True):
         d[TMP_EDGE_OUT_FRAC] = d[EDGE_OUT_FRAC]
         d[TMP_EDGE_IN_FRAC] = d[EDGE_IN_FRAC]
-    # store paths in a dictionary in order to avoid redundant paths
-    # that arise due to issues in the data
+    # find the best path
+    logging.debug("\tFinding overall best path")
     path_results = collections.OrderedDict()
-    # get starting list of nodes and remove source/sink
-    node_data_list = G.nodes()
-    node_data_list.remove(source)
-    node_data_list.remove(sink)
-    node_data_list = [(n,G.node[n]) for n in node_data_list]
-    logging.debug("\tFinding suboptimal paths in graph with %d nodes" % 
-                  (len(node_data_list)))
-    iterations = 0
-    highest_density = 0.0
-    while (len(node_data_list) > 0) and (iterations < max_paths):
-        # maintain list of node-data tuples in sorted order
-        # such that last item in list is highest density node
-        node_data_list.sort(key=lambda nd: nd[1][TMP_NODE_DENSITY])
-        # pop the "best" node from list and use it as a seed for path
-        best_node, best_node_data = node_data_list.pop()
-        if best_node_data[TMP_NODE_DENSITY] < (highest_density * fraction_major_path):
-            break
-        logging.debug("\t\thighest density node %s density=%f" % 
-                      (best_node, best_node_data[TMP_NODE_DENSITY]))
-        # dynamic programming search for best path that includes this node
-        path, length, weight = find_path(G, best_node, source, sink)
-        density = weight / float(length)
-        logging.debug("\t\tweight=%f length=%d density=%f" % 
-                      (weight, length, density))
-        # store path
-        if path not in path_results:
-            path_results[path] = density
-        # update highest density
-        if density > highest_density:
-            highest_density = density
-        # remove the density of the path from the graph
+    init_path_attributes(G)
+    dynprog_search(G, source)    
+    # get resulting path and its attributes
+    sink_attrs = G.node[sink]
+    path = sink_attrs[PATH_NODES]
+    weight = sink_attrs[PATH_WEIGHT]
+    length = sink_attrs[PATH_LENGTH]
+    density = sink_attrs[PATH_DENSITY]
+    # unfortunately due to numerical issues the algorithm can 
+    # rarely generate redundant paths.  to avoid this, we 
+    # check each path against previous paths and ignore 
+    # redundancies
+    path_results[path] = density
+    logging.debug("\t\tweight=%f length=%d density=%f" % 
+                  (weight, length, density))
+    # find suboptimal paths
+    logging.debug("\tFinding suboptimal paths")
+    density_lower_bound = fraction_major_path * density
+    iterations = 1
+    while (iterations < max_paths):
+        # remove influence of the "best" path
         subtract_path(G, path, density)
         # recompute edge fractions
         calculate_edge_fractions(G, TMP_NODE_DENSITY)
-        iterations +=1
+        # rerun dynamic programming to find next best path
+        init_path_attributes(G)
+        dynprog_search(G, source)
+        # get path and store it
+        sink_attrs = G.node[sink]
+        path = sink_attrs[PATH_NODES]
+        weight = sink_attrs[PATH_WEIGHT]
+        length = sink_attrs[PATH_LENGTH]
+        density = sink_attrs[PATH_DENSITY]
+        if (density < density_lower_bound):
+            break 
+        logging.debug("\t\tweight=%f length=%d density=%f" % 
+                      (weight, length, density))
+        if path not in path_results:
+            path_results[path] = density
+        # count loops
+        iterations += 1
     logging.debug("\t\tpath finding iterations=%d" % iterations)
     # cleanup graph attributes
     clear_path_attributes(G) 
@@ -284,9 +226,5 @@ def find_suboptimal_paths(G, source, sink, fraction_major_path,
     for u,v,d in G.edges_iter(data=True):
         del d[TMP_EDGE_OUT_FRAC]
         del d[TMP_EDGE_IN_FRAC]
-    # return (path,density) tuples sorted from high -> low density
-    lowest_density = highest_density * fraction_major_path
-    path_results = [(p,d) for (p,d) in path_results.items() if 
-                    d >= lowest_density]
-    path_results.sort(key=operator.itemgetter(1), reverse=True)
-    return path_results
+    # return (path,density) tuples
+    return path_results.items()
