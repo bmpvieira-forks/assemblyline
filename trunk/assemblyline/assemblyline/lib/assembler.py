@@ -8,9 +8,9 @@ import numpy as np
 
 from transcript import Exon, NEG_STRAND, NO_STRAND
 from collapse_chains import collapse_strand_specific_graph
-from assembler_base import NODE_DENSITY, EDGE_OUT_FRAC, EDGE_IN_FRAC, \
-    SOURCE_NODE, SINK_NODE, MIN_NODE_DENSITY, GLOBAL_GENE_ID, \
-    GLOBAL_TSS_ID, GLOBAL_TRANSCRIPT_ID
+from assembler_base import NODE_DENSITY, NODE_LENGTH, EDGE_OUT_FRAC, \
+    EDGE_IN_FRAC, SOURCE_NODE, SINK_NODE, MIN_NODE_DENSITY, \
+    GLOBAL_GENE_ID, GLOBAL_TSS_ID, GLOBAL_TRANSCRIPT_ID
 from path_finder import find_suboptimal_paths, calculate_edge_fractions
 
 class PathInfo(object):
@@ -94,7 +94,8 @@ def smoothen_graph_leastsq(G):
 
 def add_dummy_start_end_nodes(G, start_nodes, end_nodes):
     # add 'dummy' tss nodes if necessary
-    G.add_node(SOURCE_NODE, attr_dict={NODE_DENSITY: MIN_NODE_DENSITY, 'length': 0})
+    G.add_node(SOURCE_NODE, attr_dict={NODE_DENSITY: MIN_NODE_DENSITY, 
+                                       NODE_LENGTH: 0})
     #source_attr_dict = {EDGE_IN_FRAC: 1.0,
     #                    EDGE_OUT_FRAC: 1.0/len(start_nodes)}
     for start_node in start_nodes:        
@@ -102,7 +103,8 @@ def add_dummy_start_end_nodes(G, start_nodes, end_nodes):
         #logging.debug('adding dummy %s -> %s' % (SOURCE_NODE, start_node))
         #G.add_edge(SOURCE_NODE, start_node, attr_dict=source_attr_dict)
     # add a single 'dummy' end node
-    G.add_node(SINK_NODE, attr_dict={NODE_DENSITY: MIN_NODE_DENSITY, 'length': 0})
+    G.add_node(SINK_NODE, attr_dict={NODE_DENSITY: MIN_NODE_DENSITY,
+                                     NODE_LENGTH: 0})
     #sink_attr_dict = {EDGE_IN_FRAC: 1.0/len(start_nodes),
     #                  EDGE_OUT_FRAC: 1.0}
     for end_node in end_nodes:
