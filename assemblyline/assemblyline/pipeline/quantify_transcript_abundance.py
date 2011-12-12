@@ -43,7 +43,9 @@ def run_cufflinks(bam_file,
     log_file = "cufflinks.log"
     log_fh = open(log_file, "w")
     retcode = subprocess.call(map(str, args), stdout=log_fh, stderr=log_fh)
-    log_fh.close()    
+    log_fh.close()
+    if retcode == 0:
+        open("job.done", "w").close()
     os.chdir(curdir)
     return retcode, output_label
 
@@ -82,9 +84,9 @@ def main():
             logging.debug("Creating directory %s" % (lib_dir))
             os.makedirs(lib_dir)
         # check for output
-        transcripts_gtf_file = os.path.join(lib_dir, "transcripts.gtf")
+        job_done_file = os.path.join(lib_dir, "job.done")
         msg = "Adding task for sample=%s library=%s" % (libinfo.sample, libinfo.library)
-        if os.path.exists(transcripts_gtf_file):
+        if os.path.exists(job_done_file):
             logging.info("[SKIPPED] %s" % msg)
         else:
             logging.info(msg)        
