@@ -30,7 +30,7 @@ def main():
     logging.info("Parsing library table")
     for libinfo in LibInfo.from_file(args.lib_table):
         # exclude invalid libraries
-        if (not libinfo.is_valid()) or (not libinfo.use_transcripts):
+        if (not libinfo.is_valid()) or (not libinfo.for_assembly):
             logging.warning("\tskipping cohort=%s patient=%s sample=%s lib=%s lanes=%s" % 
                             (libinfo.cohort, libinfo.patient, libinfo.sample, 
                              libinfo.library, libinfo.lanes))
