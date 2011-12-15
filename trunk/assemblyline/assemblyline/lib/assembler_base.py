@@ -20,7 +20,7 @@ SOURCE_NODE = Exon(-1,-1)
 SINK_NODE = Exon(-2,-2)
 
 # constant minimum node density
-MIN_NODE_DENSITY = 1.0e-3
+MIN_NODE_DENSITY = 1.0e-8
 
 # global variables for current locus, gene, tss, transcript id
 GLOBAL_LOCUS_ID = 1

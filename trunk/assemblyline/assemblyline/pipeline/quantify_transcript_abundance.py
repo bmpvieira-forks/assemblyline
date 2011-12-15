@@ -28,7 +28,7 @@ def run_cufflinks(bam_file,
     # setup command line args
     args = [cufflinks_bin,
             "--no-update-check",
-            "-v",
+            "-q",
             "-p", num_processors,
             "-G", gtf_file,
             "-b", genome_fasta_file,

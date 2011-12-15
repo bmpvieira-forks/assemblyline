@@ -14,7 +14,7 @@ from StringIO import StringIO
 from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
 from assemblyline.lib.transcript_graph import trim_left, trim_right, trim_transcript
 from assemblyline.lib import transcript_graph
-from assemblyline.lib.collapse_chains import collapse_contiguous_nodes, collapse_strand_specific_graph
+from assemblyline.lib.collapse_chains import collapse_strand_specific_graph
 from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
 
 from test_base import compare_dot, write_dot, convert_attrs_to_strings, read_gtf, make_transcript, get_gtf_path
