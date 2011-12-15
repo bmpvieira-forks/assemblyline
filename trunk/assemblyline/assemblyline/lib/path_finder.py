@@ -17,7 +17,6 @@ from base import imax2, imin2
 TMP_NODE_DENSITY = 'tmpnw'
 TMP_EDGE_OUT_FRAC = 'tmpoutfrac'
 TMP_EDGE_IN_FRAC = 'tmpinfrac'
-
 PATH_DENSITY_MINMAX = 'pmd'
 PATH_PREV = 'pprev'
 
@@ -151,6 +150,20 @@ def subtract_path(G, path, density):
         d[TMP_NODE_DENSITY] = imax2(MIN_NODE_DENSITY, 
                                    d[TMP_NODE_DENSITY] - density)
 
+def get_adj_matrix_info(G):
+    # this works but is numerically unstable
+    #A = (np.identity(len(G)) - nx.adj_matrix(G)).I
+    A = nx.adj_matrix(G) + np.identity(len(G))
+    Y = nx.adj_matrix(G) + np.identity(len(G))
+    Y = Y*Y
+    while np.sum(Y) > 0:
+        A += Y
+        A[A > 0] = 1
+        Y = Y*Y
+    nodes = G.nodes()
+    node_indexes = dict((n,i) for i,n in enumerate(nodes))
+    return A, nodes, node_indexes
+
 def get_seed_subgraph(H, A, nodes, node_indexes, seed):
     seed_index = node_indexes[seed]
     subgraph_indexes = (A[:,seed_index].getA1() + 
@@ -174,9 +187,7 @@ def find_suboptimal_paths(G, source, sink,
     # setup temporary graph attributes
     init_tmp_attributes(G)
     # get adjacency matrix and ordered node list
-    A = (np.identity(len(G)) - nx.adj_matrix(G)).I
-    nodes = G.nodes()
-    node_indexes = dict((n,i) for i,n in enumerate(nodes))
+    A, nodes, node_index_dict = get_adj_matrix_info(G)
     # store paths in a dictionary in order to avoid redundant paths
     # that arise due to issues in the data
     path_results = collections.OrderedDict()
@@ -186,7 +197,7 @@ def find_suboptimal_paths(G, source, sink,
     seed_nodes.remove(sink)
     seed_nodes.sort(key=lambda n: G.node[n][TMP_NODE_DENSITY])
     # get subgraph implied by highest density seed node
-    Gsub = get_seed_subgraph(G, A, nodes, node_indexes, seed_nodes[-1])
+    Gsub = get_seed_subgraph(G, A, nodes, node_index_dict, seed_nodes[-1])
     # find best path and calculate density lower bound
     logging.debug("\tFinding best path in graph with %d nodes" % len(G)) 
     path, density = find_path(Gsub, source, sink)
@@ -203,7 +214,7 @@ def find_suboptimal_paths(G, source, sink,
     iterations = 1
     while (iterations < max_paths):
         # get subgraph implied by highest density seed node
-        Gsub = get_seed_subgraph(G, A, nodes, node_indexes, seed_nodes[-1])
+        Gsub = get_seed_subgraph(G, A, nodes, node_index_dict, seed_nodes[-1])
         # find best path and subtract
         path, density = find_path(Gsub, source, sink)
         if density <= lowest_density:

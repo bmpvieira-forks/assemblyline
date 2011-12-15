@@ -12,7 +12,7 @@ from assemblyline.lib.transcript import Exon
 from assemblyline.lib.assembler_base import NODE_DENSITY, NODE_LENGTH, EDGE_OUT_FRAC, EDGE_IN_FRAC, \
     MIN_NODE_DENSITY
 from assemblyline.lib.path_finder import calculate_edge_fractions, \
-    dynprog_search, traceback, find_path, init_tmp_attrs, get_seed_subgraph
+    dynprog_search, traceback, find_path, get_adj_matrix_info, init_tmp_attributes, get_seed_subgraph
     
 def example1():
     G = nx.DiGraph()
@@ -36,6 +36,11 @@ def example1():
     return G
 
 def example2():
+    """
+    SOURCE -> A -> B -> C -> E -----> F -> SINK
+                     -> D -> 
+                ---------------> G ->
+    """
     G = nx.DiGraph()
     # add nodes
     G.add_node('SOURCE', attr_dict={NODE_DENSITY: MIN_NODE_DENSITY,
@@ -93,10 +98,8 @@ class TestPathFinder(unittest.TestCase):
     def test_get_seed_subgraph(self):
         G = example2()
         calculate_edge_fractions(G)
-        init_tmp_attrs(G)
-        A = (np.identity(len(G)) - nx.adj_matrix(G)).I
-        nodes = G.nodes()
-        node_indexes = dict((n,i) for i,n in enumerate(nodes))        
+        init_tmp_attributes(G)
+        A, nodes, node_indexes = get_adj_matrix_info(G)
         H = get_seed_subgraph(G, A, nodes, node_indexes, 'C')
         # check subgraph
         for n in ('SOURCE', 'A', 'B', 'C', 'E', 'F', 'SINK'):            
@@ -106,7 +109,7 @@ class TestPathFinder(unittest.TestCase):
     
     def test_find_path(self):
         G = example3()
-        init_tmp_attrs(G)
+        init_tmp_attributes(G)
         dynprog_search(G, 'SOURCE', 'SINK')
         path, density = traceback(G, 'SINK')
         self.assertEqual(path, ('SOURCE', 'A', 'C', 'H', 'G', 'SINK'))
