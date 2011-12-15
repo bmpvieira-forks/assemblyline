@@ -71,8 +71,7 @@ class TestAnnotateRecurrenceDensity(unittest.TestCase):
         self.assertAlmostEqual(t5.attrs[RECUR], 1.75)
         self.assertAlmostEqual(t6.attrs[RECUR], 1.0 + 4.0/7.0)
         
-    def test_unstranded_transcripts(self):
-        pass
+
 
 
 if __name__ == "__main__":

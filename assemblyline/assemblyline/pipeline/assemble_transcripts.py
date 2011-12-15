@@ -168,7 +168,7 @@ def main():
                         "[default=%(default)s]")          
     parser.add_argument("--fraction-major-isoform", 
                         dest="fraction_major_isoform", type=float, 
-                        default=0.05, metavar="FRAC",
+                        default=0.001, metavar="FRAC",
                         help="Report transcript isoforms with expression "
                         "fraction >=FRAC (0.0-1.0) relative to the major "
                         "isoform [default=%(default)s]")
