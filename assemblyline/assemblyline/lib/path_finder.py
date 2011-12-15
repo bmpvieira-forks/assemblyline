@@ -44,17 +44,29 @@ def calculate_edge_fractions(G, density_attr=NODE_DENSITY,
     # reverse the edges back to normal
     G.reverse(copy=False)
 
-def init_tmp_attrs(G):
+def init_tmp_attributes(G):
+    '''
+    set dynamic programming node attributes that are 
+    added to the graph temporarily
+    '''
     # copy the node weights to a temporary variable so that we can
     # manipulation them in the algorithm
     for n,d in G.nodes_iter(data=True):
         d[TMP_NODE_DENSITY] = d[NODE_DENSITY]
+        d[PATH_DENSITY_MINMAX] = (None,None)
+        d[PATH_PREV] = None
 
-def clear_tmp_attrs(G):
+def clear_tmp_attributes(G):
+    '''
+    remove dynamic programming node attributes that are 
+    added to the graph temporarily
+    '''
     for n,d in G.nodes_iter(data=True):
         del d[TMP_NODE_DENSITY]
+        del d[PATH_DENSITY_MINMAX]
+        del d[PATH_PREV]
 
-def init_path_attributes(G):
+def reset_path_attributes(G):
     """
     must call this before calling the dynamic programming
     algorithm
@@ -63,19 +75,6 @@ def init_path_attributes(G):
     for n,d in G.nodes_iter(data=True):
         d[PATH_DENSITY_MINMAX] = (None,None)
         d[PATH_PREV] = None
-
-def clear_path_attributes(G):
-    '''
-    remove dynamic programming node attributes that are 
-    added to the graph temporarily
-    
-    must call this before calling the dynamic programming
-    algorithm again on the same graph    
-    '''
-    # clear path attributes
-    for n,d in G.nodes_iter(data=True):
-        del d[PATH_DENSITY_MINMAX]
-        del d[PATH_PREV]
 
 def dynprog_search(G, source, sink):
     """
@@ -95,7 +94,7 @@ def dynprog_search(G, source, sink):
             return x
         return x if x >= y else y
     # setup initial path attributes
-    init_path_attributes(G)
+    reset_path_attributes(G)
     # topological sort allows each node to be visited exactly once
     queue = collections.deque(nx.topological_sort(G))
     while queue:
@@ -173,7 +172,7 @@ def find_suboptimal_paths(G, source, sink,
     iterations have completed
     """
     # setup temporary graph attributes
-    init_tmp_attrs(G)
+    init_tmp_attributes(G)
     # get adjacency matrix and ordered node list
     A = (np.identity(len(G)) - nx.adj_matrix(G)).I
     nodes = G.nodes()
@@ -183,6 +182,8 @@ def find_suboptimal_paths(G, source, sink,
     path_results = collections.OrderedDict()
     # maintain list of nodes sorted by density 
     seed_nodes = G.nodes()
+    seed_nodes.remove(source)
+    seed_nodes.remove(sink)
     seed_nodes.sort(key=lambda n: G.node[n][TMP_NODE_DENSITY])
     # get subgraph implied by highest density seed node
     Gsub = get_seed_subgraph(G, A, nodes, node_indexes, seed_nodes[-1])
@@ -217,7 +218,6 @@ def find_suboptimal_paths(G, source, sink,
         iterations +=1
     logging.debug("\t\tpath finding iterations=%d" % iterations)
     # cleanup graph attributes
-    clear_path_attributes(G) 
-    clear_tmp_attrs(G)
+    clear_tmp_attributes(G) 
     # return (path,density) tuples sorted from high -> low density
     return sorted(path_results.items(), key=operator.itemgetter(1), reverse=True)
