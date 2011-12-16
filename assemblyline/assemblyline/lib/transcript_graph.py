@@ -11,8 +11,8 @@ import bisect
 import numpy as np
 
 from transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, cmp_strand
-from assembler_base import NODE_DENSITY, NODE_LENGTH, STRAND_DENSITY, \
-    TRANSCRIPT_IDS
+from assembler_base import NODE_DENSITY, NODE_LENGTH, EDGE_DENSITY, \
+    STRAND_DENSITY, TRANSCRIPT_IDS
 
 def find_intron_starts_and_ends(transcripts):
     '''
@@ -171,12 +171,16 @@ def add_node_to_graph(G, n, id, strand, density):
     nd[TRANSCRIPT_IDS].add(id)
     nd[STRAND_DENSITY][strand] += density
 
-def add_edge_to_graph(G, u, v):
+def add_edge_to_graph(G, u, v, id, strand, density):
     """
     add edge to graph
     """
     if not G.has_edge(u, v):
-        G.add_edge(u, v, attr_dict={})
+        G.add_edge(u, v, attr_dict={TRANSCRIPT_IDS: set(),
+                                    STRAND_DENSITY: np.zeros(3,float)})
+    ed = G.edge[u][v]
+    ed[TRANSCRIPT_IDS].add(id)
+    ed[STRAND_DENSITY][strand] += density
 
 def add_transcripts_to_graph(transcripts, overhang_threshold=0):
     '''
@@ -189,8 +193,8 @@ def add_transcripts_to_graph(transcripts, overhang_threshold=0):
     trim_transcripts(transcripts, overhang_threshold)
     # find the intron domains of the transcripts
     boundaries = find_exon_boundaries(transcripts)
-    # initialize transcript graph
-    G = nx.DiGraph()
+    # initialize transcript graph as undirected at first
+    G = nx.Graph()
     # add transcripts
     for t in transcripts:
         if t.strand == NO_STRAND:
@@ -207,11 +211,8 @@ def add_transcripts_to_graph(transcripts, overhang_threshold=0):
         add_node_to_graph(G, u, t.id, t.strand, t.fpkm)
         for v in nodes[1:]:
             add_node_to_graph(G, v, t.id, t.strand, t.fpkm)
-            # add edges if transcript is compatible
-            if cmp_strand(t.strand, POS_STRAND):
-                add_edge_to_graph(G, u, v)
-            if cmp_strand(t.strand, NEG_STRAND):
-                add_edge_to_graph(G, v, u)
+            # add edges in genomic left -> right order
+            add_edge_to_graph(G, u, v, t.id, t.strand, t.fpkm)
             u = v
     return G
 
@@ -231,6 +232,7 @@ def redistribute_iteration(G, transcripts):
     transcript_node_map = get_transcript_node_map(G)
     # iterate through transcripts and redistribute density
     node_density_delta_dict = collections.defaultdict(lambda: np.zeros(3,float))
+    edge_density_delta_dict = collections.defaultdict(lambda: np.zeros(3,float))
     unresolved = []
     num_resolved = 0
     for t in transcripts:
@@ -240,15 +242,9 @@ def redistribute_iteration(G, transcripts):
         nodes = transcript_node_map[t.id]
         # sum the coverage mass across the transcript
         mass_arr = np.zeros(3,float)
-        total_node_length = 0        
         for n in nodes:
             d = G.node[n]
             mass_arr += d[NODE_LENGTH] * d[STRAND_DENSITY]
-            total_node_length += d[NODE_LENGTH]
-        # calculate effective transcript density across new node length
-        # might not match transcript length due to chaining of nodes
-        assert t.length == total_node_length        
-        #t_adj_density = t.density * t.length / float(total_node_length)
         # calculate total mass across transcript
         total_strand_mass = mass_arr[POS_STRAND] + mass_arr[NEG_STRAND]
         # if there is "stranded" mass on any of the nodes comprising
@@ -259,17 +255,21 @@ def redistribute_iteration(G, transcripts):
             # plus and minus strand mass
             pos_frac = mass_arr[POS_STRAND] / float(total_strand_mass)
             density_delta_arr = t.density * np.array((pos_frac, 1.0-pos_frac, -1.0))
-            for n in nodes:
+            for i,n in enumerate(nodes):
                 # save all density adjustments in a dictionary and wait to apply
                 # until strand fractions are computed for all transcripts
                 node_density_delta_dict[n] += density_delta_arr
+                if i >= 1:
+                    edge_density_delta_dict[(nodes[i-1],n)] += density_delta_arr                    
             num_resolved += 1
         else:
             unresolved.append(t)
-    # enact all the adjustments at once
+    # subtract density from unstranded and add to stranded
     for n, density_delta_arr in node_density_delta_dict.iteritems():
-        # subtract density from unstranded and add to stranded
         G.node[n][STRAND_DENSITY] += density_delta_arr
+    for e, density_delta_arr in edge_density_delta_dict.iteritems():
+        u,v = e
+        G[u][v][STRAND_DENSITY] += density_delta_arr
     return num_resolved, unresolved
 
 def redistribute_unstranded_density(G, transcripts):
@@ -314,23 +314,33 @@ def create_strand_specific_graphs(G):
                 GG[strand].add_node(n, attr_dict={NODE_DENSITY: density,
                                                   TRANSCRIPT_IDS: transcript_ids})
     # add edges
-    for u,v,d in G.edges_iter(data=True):            
-        # since the edge is directional from u -> v, we can 
-        # now determine strand based on coordinates of nodes
-        strand = int(u.start >= v.end)
-        # get density of both nodes
+    for u,v,d in G.edges_iter(data=True):
+        # order nodes by genomic position
+        u,v = (v,u) if (v < u) else (u,v)
+        # get density of both nodes and of the edge
         u_strand_density = G.node[u][STRAND_DENSITY]
         v_strand_density = G.node[v][STRAND_DENSITY]
-        # check stranded density
-        if ((u_strand_density[strand] > 1e-8) and 
-            (v_strand_density[strand] > 1e-8)):
-            GG[strand].add_edge(u, v, attr_dict=d)
-        # ignore neg strand edges for graph on unknown strand
-        # by convention (prevents bidirectional edges)
-        if ((strand == POS_STRAND) and
+        edge_strand_density = d[STRAND_DENSITY]
+        added_stranded_edge = False
+        # consider both strands
+        for strand in (POS_STRAND, NEG_STRAND):
+            density = edge_strand_density[strand]
+            # determine direction
+            src,dst = (v,u) if (strand == NEG_STRAND) else (u,v)
+            # check stranded density
+            if ((u_strand_density[strand] > 1e-8) and 
+                (v_strand_density[strand] > 1e-8) and
+                (density > 1e-8)):
+                GG[strand].add_edge(src, dst, attr_dict={EDGE_DENSITY: density})
+                added_stranded_edge = True
+        # add unstranded edge (positive by convention) if no stranded
+        # edges were added
+        density = edge_strand_density[NO_STRAND]
+        if ((not added_stranded_edge) and 
             (u_strand_density[NO_STRAND] > 1e-8) and 
-            (v_strand_density[NO_STRAND] > 1e-8)):
-            GG[NO_STRAND].add_edge(u, v, attr_dict=d)
+            (v_strand_density[NO_STRAND] > 1e-8) and
+            (density > 1e-8)):
+            GG[NO_STRAND].add_edge(u, v, attr_dict={EDGE_DENSITY: density})
     return GG
     
 def create_transcript_graph(transcripts, overhang_threshold=0):

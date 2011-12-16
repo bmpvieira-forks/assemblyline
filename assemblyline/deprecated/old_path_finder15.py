@@ -225,10 +225,26 @@ def find_suboptimal_paths(G, source, sink,
     seed_nodes.remove(source)
     seed_nodes.remove(sink)
     seed_nodes.sort(key=lambda n: G.node[n][TMP_NODE_DENSITY])
+    # get subgraph implied by highest density seed node and re-sort
+    seed = seed_nodes.pop()
+    Gsub = get_seed_subgraph(G, A, nodes, node_index_dict, seed)
+    seed_nodes.sort(key=lambda n: G.node[n][TMP_NODE_DENSITY])
+    # find best path and calculate density lower bound
+    logging.debug("\tFinding best path in graph with %d nodes" % len(G)) 
+    path, density = find_path(Gsub, source, sink)
+    # store path
+    if path not in path_results:
+        path_results[path] = density
+    lowest_density = imax2(MIN_NODE_DENSITY, density * fraction_major_path)
+    logging.debug("\t\tdensity=%f lower_bound=%f" % (density, lowest_density))
+    # subtract path and recalculate edge fractions
+    subtract_path(G, path, density)
+    calculate_edge_fractions(G, density_attr=TMP_NODE_DENSITY,
+                             in_frac_attr=TMP_EDGE_IN_FRAC,
+                             out_frac_attr=TMP_EDGE_OUT_FRAC)
     # iterate to find suboptimal paths
     logging.debug("\tFinding suboptimal paths")
     iterations = 1
-    highest_density = 0.0
     while (len(seed_nodes) > 0) and (iterations < max_paths):
         # get subgraph implied by highest density seed node and re-sort
         seed = seed_nodes.pop()
@@ -236,7 +252,8 @@ def find_suboptimal_paths(G, source, sink,
         seed_nodes.sort(key=lambda n: G.node[n][TMP_NODE_DENSITY])
         # find best path and subtract
         path, density = find_path(Gsub, source, sink)
-        highest_density = imax2(highest_density, density)
+        if density <= lowest_density:
+            break
         logging.debug("\t\tdensity=%f" % (density))
         # store path
         if path not in path_results:
@@ -251,9 +268,4 @@ def find_suboptimal_paths(G, source, sink,
     # cleanup graph attributes
     clear_tmp_attributes(G) 
     # return (path,density) tuples sorted from high -> low density
-    lowest_density = highest_density * fraction_major_path
-    path_list = [(p,d) for (p,d) in path_results.iteritems() if d >= lowest_density]
-    path_list.sort(key=operator.itemgetter(1), reverse=True)
-    return path_list  
-    #return sorted(path_results.items(), key=operator.itemgetter(1), reverse=True)
-
+    return sorted(path_results.items(), key=operator.itemgetter(1), reverse=True)
