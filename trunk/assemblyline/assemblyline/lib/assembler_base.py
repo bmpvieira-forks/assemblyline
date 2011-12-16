@@ -12,6 +12,7 @@ TRANSCRIPT_IDS = 'ids'
 # assembler graph attributes
 NODE_DENSITY = 'density'
 NODE_LENGTH = 'length'
+EDGE_DENSITY = 'density'
 EDGE_OUT_FRAC = 'outfrac'
 EDGE_IN_FRAC = 'infrac'
 
@@ -21,6 +22,7 @@ SINK_NODE = Exon(-2,-2)
 
 # constant minimum node density
 MIN_NODE_DENSITY = 1.0e-8
+MIN_EDGE_DENSITY = 1.0e-8
 
 # global variables for current locus, gene, tss, transcript id
 GLOBAL_LOCUS_ID = 1

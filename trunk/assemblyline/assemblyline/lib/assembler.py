@@ -8,10 +8,11 @@ import numpy as np
 
 from transcript import Exon, NEG_STRAND, NO_STRAND
 from collapse_chains import collapse_strand_specific_graph
-from assembler_base import NODE_DENSITY, NODE_LENGTH, EDGE_OUT_FRAC, \
-    EDGE_IN_FRAC, SOURCE_NODE, SINK_NODE, MIN_NODE_DENSITY, \
+from assembler_base import NODE_DENSITY, NODE_LENGTH, EDGE_DENSITY, EDGE_OUT_FRAC, \
+    EDGE_IN_FRAC, SOURCE_NODE, SINK_NODE, MIN_NODE_DENSITY, MIN_EDGE_DENSITY, \
     GLOBAL_GENE_ID, GLOBAL_TSS_ID, GLOBAL_TRANSCRIPT_ID
 from path_finder import find_suboptimal_paths, calculate_edge_fractions
+from smoothen import smoothen_graph_leastsq
 
 class PathInfo(object):
     """object to store path finder results"""
@@ -55,21 +56,17 @@ def add_dummy_start_end_nodes(G, start_nodes, end_nodes):
     # add 'dummy' tss nodes if necessary
     G.add_node(SOURCE_NODE, attr_dict={NODE_DENSITY: MIN_NODE_DENSITY, 
                                        NODE_LENGTH: 0})
-    #source_attr_dict = {EDGE_IN_FRAC: 1.0,
-    #                    EDGE_OUT_FRAC: 1.0/len(start_nodes)}
     for start_node in start_nodes:        
-        G.add_edge(SOURCE_NODE, start_node)
         #logging.debug('adding dummy %s -> %s' % (SOURCE_NODE, start_node))
-        #G.add_edge(SOURCE_NODE, start_node, attr_dict=source_attr_dict)
+        G.add_edge(SOURCE_NODE, start_node, 
+                   attr_dict={EDGE_DENSITY: MIN_EDGE_DENSITY})
     # add a single 'dummy' end node
     G.add_node(SINK_NODE, attr_dict={NODE_DENSITY: MIN_NODE_DENSITY,
                                      NODE_LENGTH: 0})
-    #sink_attr_dict = {EDGE_IN_FRAC: 1.0/len(start_nodes),
-    #                  EDGE_OUT_FRAC: 1.0}
     for end_node in end_nodes:
-        G.add_edge(end_node, SINK_NODE)
         #logging.debug('adding dummy %s -> %s' % (end_node, SINK_NODE))
-        #G.add_edge(end_node, SINK_NODE, attr_dict=sink_attr_dict)
+        G.add_edge(end_node, SINK_NODE, 
+                   attr_dict={EDGE_DENSITY: MIN_EDGE_DENSITY})
 
 def expand_path_chains(G, strand, path):
     # reverse negative stranded data so that all paths go from 
@@ -106,9 +103,11 @@ def assemble_subgraph(G, strand, fraction_major_path, max_paths):
     # nodes are searched together for the best path
     add_dummy_start_end_nodes(G, start_nodes, end_nodes)
     # compute initial edge density and coverage flow in/out of nodes
-    # calculate_edge_fractions(G, NODE_DENSITY)
+    calculate_edge_fractions(G, density_attr=NODE_DENSITY,
+                             in_frac_attr=EDGE_IN_FRAC,
+                             out_frac_attr=EDGE_OUT_FRAC)
     # TODO: redistribute node density in order to minimize error in graph
-    # smoothen_graph_leastsq(G)
+    smoothen_graph_leastsq(G)
     # find up to 'max_paths' paths through graph
     path_info_list = []
     for path, density in find_suboptimal_paths(G, SOURCE_NODE, SINK_NODE, 
