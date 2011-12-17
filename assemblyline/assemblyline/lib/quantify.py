@@ -128,7 +128,7 @@ def quantify_locus(locus_chrom, locus_start, locus_end, reads, transcripts):
 def quantify_gene_abundance(gtf_file, bam_file, output_file):
     outfh = open(output_file, "w")
     bamfh = pysam.Samfile(bam_file, "rb")
-    header = ["gene_id", "strand", "chrom", "start", "end", "num_exons", "length", "frags"]
+    header = ["#gene_id", "strand", "chrom", "start", "end", "num_exons", "length", "frags"]
     print >>outfh, '\t'.join(header)
     total_frags = 0
     for transcripts in parse_gtf(open(gtf_file)):
