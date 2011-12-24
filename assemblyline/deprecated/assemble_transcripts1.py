@@ -9,13 +9,12 @@ import sys
 
 from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
 from assemblyline.lib.transcript import Exon, strand_int_to_str, NEG_STRAND, POS_STRAND, NO_STRAND
+from assemblyline.lib.transcript_graph import create_transcript_graph
+from assemblyline.lib.assembler_base import GLOBAL_LOCUS_ID
+from assemblyline.lib.assembler import assemble_transcript_graph
 from assemblyline.lib.gtf import GTFFeature
 
-from assemblyline.lib.assemble.transcript_graph import create_transcript_graph
-from assemblyline.lib.assemble.base import GLOBAL_LOCUS_ID, GLOBAL_GENE_ID
-from assemblyline.lib.assemble.assembler import assemble_transcript_graph
-
-global GLOBAL_LOCUS_ID
+GLOBAL_LOCUS_ID = 1
 
 def write_bed(chrom, name, strand, score, exons):
     assert all(exons[0].start < x.start for x in exons[1:])
@@ -79,11 +78,8 @@ def get_gtf_features(chrom, strand, exons, locus_id, gene_id, tss_id,
         features.append(f)
     return features
 
-def assemble_locus(transcripts, overhang_threshold, kmax, 
-                   fraction_major_isoform, max_paths,
+def assemble_locus(transcripts, overhang_threshold, fraction_major_isoform, max_paths,
                    bed_fileh, gtf_fileh=None):
-    global GLOBAL_GENE_ID
-
     # gather properties of locus
     locus_chrom = transcripts[0].chrom
     locus_start = transcripts[0].start
@@ -93,18 +89,16 @@ def assemble_locus(transcripts, overhang_threshold, kmax,
                    len(transcripts)))
     locus_id_str = "L%d" % (GLOBAL_LOCUS_ID)
     # build transcript graph
-    transcript_graphs = create_transcript_graph(transcripts, overhang_threshold)
+    GG, partial_path_lists = create_transcript_graph(transcripts, overhang_threshold)
     # assemble transcripts on each strand
     features = []
-    
-    for G, partial_paths, strand in transcript_graphs:
-        logging.debug("[LOCUS][STRAND] (%s) graph has %d nodes and %d partial paths" % 
-                      (strand_int_to_str(strand), len(G), len(partial_paths)))
-        for path_info_list in assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_isoform, max_paths):
-            gene_id = GLOBAL_GENE_ID
+    for strand in (POS_STRAND, NEG_STRAND, NO_STRAND):
+        G = GG[strand]
+        partial_paths = partial_path_lists[strand]
+        for gene_id, path_info_list in assemble_transcript_graph(G, strand, partial_paths, fraction_major_isoform, max_paths):
+            logging.debug("[LOCUS][STRAND] %s assembled %d transcripts" % 
+                          (strand_int_to_str(strand), len(path_info_list))) 
             gene_id_str = "G%d" % (gene_id)
-            GLOBAL_GENE_ID += 1
-
             # compute total density in path and relative density of each transcript
             total_density = sum(p.density for p in path_info_list)
             if total_density == 0.0:
@@ -136,7 +130,7 @@ def assemble_locus(transcripts, overhang_threshold, kmax,
         for f in features:
             print >>gtf_fileh, str(f) 
 
-def run(gtf_file, overhang_threshold, kmax, fraction_major_isoform, max_paths,
+def run(gtf_file, overhang_threshold, fraction_major_isoform, max_paths,
         bed_output_file=None, gtf_output_file=None):
     global GLOBAL_LOCUS_ID
     # setup output files
@@ -156,7 +150,7 @@ def run(gtf_file, overhang_threshold, kmax, fraction_major_isoform, max_paths,
     # run assembler on each locus
     for locus_transcripts in parse_gtf(open(gtf_file), cufflinks_attr_defs):
         assemble_locus(locus_transcripts, overhang_threshold, 
-                       kmax, fraction_major_isoform, max_paths,
+                       fraction_major_isoform, max_paths,
                        bed_fileh, gtf_fileh)
         GLOBAL_LOCUS_ID += 1
     # cleanup output files
@@ -174,10 +168,6 @@ def main():
                         help="Trim ends of transcripts that extend into "
                         "introns by less than or equal to N bases "
                         "[default=%(default)s]")          
-    parser.add_argument("--kmax", dest="kmax", type=int, 
-                        default=3, metavar="N",
-                        help="Max length of partial paths stored during assembly "
-                        "and path finding steps [default=%(default)s]")
     parser.add_argument("--fraction-major-isoform", 
                         dest="fraction_major_isoform", type=float, 
                         default=0.001, metavar="FRAC",
@@ -206,7 +196,6 @@ def main():
     # start algorithm
     run(args.gtf_input_file, 
         args.overhang_threshold,
-        args.kmax,
         args.fraction_major_isoform,
         args.max_paths,
         args.bed,
