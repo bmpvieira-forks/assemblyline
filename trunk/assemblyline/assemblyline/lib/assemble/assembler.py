@@ -27,6 +27,9 @@ class PathInfo(object):
         self.path = path
         self.tx_id = -1
 
+def get_path_from_kmers(kmers):
+    path = list(kmers[0])
+
 def expand_path_chains(G, strand, path):
     # reverse negative stranded data so that all paths go from 
     # small -> large genomic coords
@@ -78,7 +81,7 @@ def add_dummy_start_end_nodes(G, k):
         if G.out_degree(n) == 0:
             add_dummy_nodes(G, n, k, FWD)
 
-def enumerate_paths_reverse(G, seed, length, k):
+def enumerate_paths_reverse(G, seed, length):
     paths = []
     stack = [(seed,)]
     while len(stack) > 0:
@@ -90,7 +93,7 @@ def enumerate_paths_reverse(G, seed, length, k):
                 stack.append((pred,) + path)
     return paths
 
-def enumerate_paths_forward(G, seed, length, k):
+def enumerate_paths_forward(G, seed, length):
     paths = []
     stack = [(seed,)]
     while len(stack) > 0:
@@ -106,11 +109,8 @@ def get_partial_path_kmers(G, seed_path, k):
     assert len(seed_path) < k
     # extend path in both directions
     L = (k - len(seed_path))
-    print 'SEED', seed_path
     rev_paths = enumerate_paths_reverse(G, seed_path[0], L, k)
-    print 'REV PATHS', rev_paths
     fwd_paths = enumerate_paths_forward(G, seed_path[-1], L, k)
-    print 'FWD PATHS', fwd_paths
     # enumerate kmers
     kmers = {}
     for rp in rev_paths:
@@ -125,7 +125,6 @@ def get_partial_path_kmers(G, seed_path, k):
                     kmers[kmer] = SMOOTH_FWD
                 else:
                     kmers[kmer] = None
-    print 'KMERS', kmers
     return kmers
 
 def smooth_iteration(K, density_attr, smooth_attr):
@@ -212,9 +211,9 @@ def create_kmer_graph(G, partial_paths, k):
                     continue
                 nd = K.node[kmer]
                 frac = nd[NODE_DENSITY] / float(total_density)
-                nd[NODE_DENSITY] += frac * density
+                nd[NODE_DENSITY] += (frac * density)
                 if smooth_dir is not None:
-                    nd[smooth_dir] += avg_density
+                    nd[smooth_dir] += (frac * density)
     # perform "smoothing" of kmer graph
     smooth_kmer_graph(K)
     return K
@@ -238,15 +237,21 @@ def assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_pat
     sorted_partial_paths = sorted(partial_paths, key=lambda x: len(x[0])) 
     # choose 'k' no larger than largest partial path
     k = min(kmax, len(sorted_partial_paths[-1][0]))
+    print "K = ", k
     # append/prepend dummy nodes to start/end nodes
     add_dummy_start_end_nodes(G, k)
     # build a k-mer graph using partial paths
     K = create_kmer_graph(G, sorted_partial_paths, k)
     # find up to 'max_paths' paths through graph
     path_info_list = []
-    for path, density in find_suboptimal_paths(G, kmer_dicts, k,
-                                               fraction_major_path,
-                                               max_paths):
+    for kmer_path, density in find_suboptimal_paths(K, fraction_major_path,
+                                                    max_paths):
+        # get nodes from kmer path
+        print kmer_path
+        #path = list(kmer_path[0])
+        #path.extend(kmer[-1] for kmer in kmer_path[1:])
+        #print "PATH", path
+        continue
         # get tss_id from path
         path = list(path)
         tss_id = G.node[path[0]][NODE_TSS_ID]
