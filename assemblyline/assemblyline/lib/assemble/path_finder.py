@@ -34,58 +34,34 @@ def clear_tmp_attributes(G):
     for n,d in G.nodes_iter(data=True):
         del d[TMP_NODE_DENSITY]
 
-def get_path_density(G, path, density_attr):
-    return min(G.node[n][density_attr] for n in path)
-
-def get_highest_density_kmer(G, kmer_set, density_attr):
-    best_density = -1e6
-    best_kmer = None
-    for kmer in kmer_set:
-        density = get_path_density(G, kmer, TMP_NODE_DENSITY)
-        if density > best_density:
-            best_kmer = kmer
-            best_density = density
-    return best_kmer, best_density
-    
-def extend_seed(G, seed_kmers, kmax):
-    """
-    G - graph
-    kmer_dict - path information
-    kmax - max length extension to consider
-    seed - starting node
-    """
-    best_kmer = None
-    best_density = -1e6
-    # TODO: don't use kmax if bordering against a START node
-    for k in xrange(kmax,1,-1):        
-        kmer, density = get_highest_density_kmer(G, seed_kmers[k], TMP_NODE_DENSITY)        
-        if kmer is not None:
-            best_kmer = kmer
-            best_density = density
-            break
-    return best_kmer, best_density
-
-def find_path(G, kmer_dict, kmax, seed):
-    path = (seed,)
+def find_path(G, seed):
+    path = collections.deque([seed])
     density = G.node[seed][TMP_NODE_DENSITY]
-    print "SEED", seed, density
-    print "FORWARD"
-    fwd_kmer, fwd_density = extend_seed(G, kmer_dict[FWD][path[-1]], kmax)
-    while fwd_kmer is not None:
-        path = path + fwd_kmer
-        density = imin2(fwd_density, density)
-        fwd_kmer, fwd_density = extend_seed(G, kmer_dict[FWD][path[-1]], kmax)
-        print "NEW PATH", path
-    print "REVERSE"
-    print "KMERS", kmer_dict[REV][path[0]]
-    rev_kmer, rev_density = extend_seed(G, kmer_dict[REV][path[0]], kmax)
-    while rev_kmer is not None:
-        path = rev_kmer + path
-        density = imin2(rev_density, density)
-        rev_kmer, rev_density = extend_seed(G, kmer_dict[REV][path[0]], kmax)
-        print "NEW PATH", path
-    print "FINAL PATH", path
-    return path, density
+    while True:
+        best_node = None
+        best_density = None
+        for n in G.successors_iter(path[-1]):
+            n_density = G.node[n][TMP_NODE_DENSITY]
+            if (best_density is None) or (n_density > best_density):
+                best_node = n
+                best_density = n_density
+        if best_node is None:
+            break
+        path.append(best_node)
+        density = imin2(density, best_density)
+    while True:
+        best_node = None
+        best_density = None
+        for n in G.predecessors_iter(path[0]):
+            n_density = G.node[n][TMP_NODE_DENSITY]
+            if (best_density is None) or (n_density > best_density):
+                best_node = n
+                best_density = n_density
+        if best_node is None:
+            break
+        path.appendleft(best_node)
+        density = imin2(density, best_density)
+    return tuple(path), density
 
 def subtract_path(G, path, density):
     """
@@ -98,10 +74,7 @@ def subtract_path(G, path, density):
         d = G.node[u]
         d[TMP_NODE_DENSITY] = imax2(MIN_DENSITY, d[TMP_NODE_DENSITY] - density)
 
-def find_suboptimal_paths(G, kmer_dicts, 
-                          kmax=3,
-                          fraction_major_path=1e-3,
-                          max_paths=100):
+def find_suboptimal_paths(G, fraction_major_path=1e-3, max_paths=100):
     """
     finds suboptimal paths through graph G using greedy algorithm
     that finds the highest density path, subtracts the path density 
@@ -128,7 +101,7 @@ def find_suboptimal_paths(G, kmer_dicts,
         seed = seed_nodes.pop()
         seed_nodes.sort(key=lambda n: G.node[n][TMP_NODE_DENSITY])
         # find path and subtract
-        path, density = find_path(G, kmer_dicts, kmax, seed)
+        path, density = find_path(G, seed)
         logging.debug("TSS? %s" % ("tss_id" in G.node[path[0]].keys()))
         logging.debug("PATH %s" % (map(str,path)))
         subtract_path(G, path, density)
