@@ -100,33 +100,36 @@ def assemble_locus(transcripts, overhang_threshold, kmax,
     for G, partial_paths, strand in transcript_graphs:
         logging.debug("[LOCUS][STRAND] (%s) graph has %d nodes and %d partial paths" % 
                       (strand_int_to_str(strand), len(G), len(partial_paths)))
-        for path_info_list in assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_isoform, max_paths):
-            gene_id = GLOBAL_GENE_ID
-            gene_id_str = "G%d" % (gene_id)
-            GLOBAL_GENE_ID += 1
-
-            # compute total density in path and relative density of each transcript
-            total_density = sum(p.density for p in path_info_list)
-            if total_density == 0.0:
-                total_density = 1e-8
-            # create GTF features for each transcript path
-            for p in path_info_list:
-                tss_id_str = "TSS%d" % p.tss_id
-                tx_id_str = "TU%d" % p.tx_id
-                frac = p.density / total_density
-                # write to GTF
-                if gtf_fileh is not None:
-                    features.extend(get_gtf_features(locus_chrom, strand, p.path,
-                                                     locus_id=locus_id_str, 
-                                                     gene_id=gene_id_str, 
-                                                     tss_id=tss_id_str, 
-                                                     transcript_id=tx_id_str,
-                                                     density=p.density, 
-                                                     frac=frac))                    
-                # write to BED format
-                name = "%s|%s(%.1f)" % (gene_id_str, tx_id_str, p.density)
-                fields = write_bed(locus_chrom, name, strand, int(round(1000.0*frac)), p.path)
-                print >>bed_fileh, '\t'.join(fields)
+        path_info_list = assemble_transcript_graph(G, strand, partial_paths, 
+                                                   kmax, fraction_major_isoform, 
+                                                   max_paths)
+        logging.debug("\tAssembled %d transcript(s)" % (len(path_info_list)))
+        # assign gene id to this set of paths
+        gene_id = GLOBAL_GENE_ID
+        gene_id_str = "G%d" % (gene_id)
+        GLOBAL_GENE_ID += 1
+        # compute total density across all paths
+        total_density = float(sum(p.density for p in path_info_list))
+        if total_density == 0.0:
+            total_density = 1e-8
+        # create GTF features for each transcript path
+        for p in path_info_list:
+            tss_id_str = "TSS%d" % p.tss_id
+            tx_id_str = "TU%d" % p.tx_id
+            frac = p.density / total_density
+            # write to GTF
+            if gtf_fileh is not None:
+                features.extend(get_gtf_features(locus_chrom, strand, p.path,
+                                                 locus_id=locus_id_str, 
+                                                 gene_id=gene_id_str, 
+                                                 tss_id=tss_id_str, 
+                                                 transcript_id=tx_id_str,
+                                                 density=p.density, 
+                                                 frac=frac))                    
+            # write to BED format
+            name = "%s|%s(%.1f)" % (gene_id_str, tx_id_str, p.density)
+            fields = write_bed(locus_chrom, name, strand, int(round(1000.0*frac)), p.path)
+            print >>bed_fileh, '\t'.join(fields)
     # output GTF
     if gtf_fileh is not None:
         # in-place sort so that 'transcript' features appear before 'exon'
@@ -196,6 +199,9 @@ def main():
                         "by default]")
     parser.add_argument("gtf_input_file")
     args = parser.parse_args()
+    # check arguments
+    if args.kmax < 2:
+        parser.error("'kmax' must be set >= 2")
     # set logging level
     if args.verbose:
         level = logging.DEBUG

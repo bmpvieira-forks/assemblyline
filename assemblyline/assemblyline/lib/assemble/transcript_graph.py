@@ -23,17 +23,26 @@ def filter_transcripts(transcripts):
     """
     # filter transcripts
     new_transcripts = []
+    unstranded_multiple_exons = 0
+    zero_density = 0
     for t in transcripts:
         # check that unstranded transcripts have only one exon
         if t.strand == NO_STRAND:
             if len(t.exons) > 1:
-                logging.warning("Skipping unstranded transcript with multiple exons")
+                #logging.debug("Skipping unstranded transcript with multiple exons")
+                unstranded_multiple_exons += 1
                 continue
         # check that transcript has positive density
         if t.density > 0:
             new_transcripts.append(t)
         else:
-            logging.warning("Skipping transcript %s with density %f" % (t.id, t.density))
+            #logging.debug("Skipping transcript %s with density %f" % (t.id, t.density))
+            zero_density += 1
+    if zero_density > 0:
+        logging.debug("\tSkipped %d transcripts with zero density" % (zero_density))
+    if unstranded_multiple_exons > 0:
+        logging.debug("\tSkipped %d unstranded transcripts with multiple exons" % 
+                      (unstranded_multiple_exons))
     return new_transcripts
 
 def find_exon_boundaries(transcripts):

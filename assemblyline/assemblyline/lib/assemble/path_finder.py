@@ -74,7 +74,7 @@ def subtract_path(G, path, density):
         d = G.node[u]
         d[TMP_NODE_DENSITY] = imax2(MIN_DENSITY, d[TMP_NODE_DENSITY] - density)
 
-def find_suboptimal_paths(G, fraction_major_path=1e-3, max_paths=100):
+def find_suboptimal_paths(G, fraction_major_path=1e-3, max_paths=1000):
     """
     finds suboptimal paths through graph G using greedy algorithm
     that finds the highest density path, subtracts the path density 
@@ -97,19 +97,23 @@ def find_suboptimal_paths(G, fraction_major_path=1e-3, max_paths=100):
     iterations = 0
     highest_density = 0.0
     while (len(seed_nodes) > 0) and (iterations < max_paths):
-        # get seed node with highest density and re-sort
+        # get seed node with highest density
         seed = seed_nodes.pop()
-        seed_nodes.sort(key=lambda n: G.node[n][TMP_NODE_DENSITY])
-        # find path and subtract
+        # stop if seed density approaches zero
+        seed_density = G.node[seed][TMP_NODE_DENSITY]
+        if seed_density < 1e-7:
+            break
+        # find path
         path, density = find_path(G, seed)
-        logging.debug("TSS? %s" % ("tss_id" in G.node[path[0]].keys()))
-        logging.debug("PATH %s" % (map(str,path)))
-        subtract_path(G, path, density)
-        highest_density = imax2(highest_density, density)
         logging.debug("\t\tdensity=%f" % (density))
         # store path
         if path not in path_results:
             path_results[path] = density
+        # update optimal density
+        highest_density = imax2(highest_density, density)
+        # subtract path density from graph and resort seed nodes
+        subtract_path(G, path, density)
+        seed_nodes.sort(key=lambda n: G.node[n][TMP_NODE_DENSITY])
         iterations +=1
     logging.debug("\t\tpath finding iterations=%d" % iterations)
     # cleanup graph attributes
