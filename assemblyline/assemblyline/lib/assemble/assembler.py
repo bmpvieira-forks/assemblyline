@@ -109,22 +109,21 @@ def get_partial_path_kmers(G, seed_path, k):
     assert len(seed_path) < k
     # extend path in both directions
     L = (k - len(seed_path))
-    rev_paths = enumerate_paths_reverse(G, seed_path[0], L, k)
-    fwd_paths = enumerate_paths_forward(G, seed_path[-1], L, k)
+    rev_paths = enumerate_paths_reverse(G, seed_path[0], L)
+    fwd_paths = enumerate_paths_forward(G, seed_path[-1], L)
     # enumerate kmers
     kmers = {}
     for rp in rev_paths:
-        #print 'REV', rp
+        kmer = rp + seed_path
+        kmers[kmer] = SMOOTH_REV
+    for fp in fwd_paths:
+        kmer = seed_path + fp
+        kmers[kmer] = SMOOTH_FWD
+    for rp in rev_paths:
         for fp in fwd_paths:
-            #print 'FWD', fp
-            for pos in xrange(L+1):
+            for pos in xrange(1,L):
                 kmer = rp[pos:] + seed_path + fp[:pos]
-                if pos == 0:
-                    kmers[kmer] = SMOOTH_REV
-                elif pos == L:
-                    kmers[kmer] = SMOOTH_FWD
-                else:
-                    kmers[kmer] = None
+                kmers[kmer] = None
     return kmers
 
 def smooth_iteration(K, density_attr, smooth_attr):
@@ -238,22 +237,35 @@ def assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_pat
     # choose 'k' no larger than largest partial path
     k = min(kmax, len(sorted_partial_paths[-1][0]))
     print "K = ", k
+    for n,d in G.nodes_iter(data=True):
+        if NODE_TSS_ID in d:
+            print "TSS", n
+        if "GSM554126.43857.1" in d['ids']:
+            print "GSM554126.43857.1", n
+
     # append/prepend dummy nodes to start/end nodes
     add_dummy_start_end_nodes(G, k)
     # build a k-mer graph using partial paths
     K = create_kmer_graph(G, sorted_partial_paths, k)
+
+    for n in K:
+        if Exon(1833766,1833873) in n:
+            print "NODE HAS IT", n
+
+    import sys
+    sys.exit(0)
+    
     # find up to 'max_paths' paths through graph
     path_info_list = []
     for kmer_path, density in find_suboptimal_paths(K, fraction_major_path,
                                                     max_paths):
         # get nodes from kmer path
-        print kmer_path
-        #path = list(kmer_path[0])
-        #path.extend(kmer[-1] for kmer in kmer_path[1:])
-        #print "PATH", path
-        continue
+        print "FIRST KMER", kmer_path[0]
+        path = list(kmer_path[0])
+        path.extend(kmer[-1] for kmer in kmer_path[1:])
+        print "PATH", path
+        path = [n for n in path if n.start >= 0]
         # get tss_id from path
-        path = list(path)
         tss_id = G.node[path[0]][NODE_TSS_ID]
         # cleanup and expand chained nodes within path
         path = expand_path_chains(G, strand, path)
