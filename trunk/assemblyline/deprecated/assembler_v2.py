@@ -237,24 +237,12 @@ def smooth_iteration(K, density_attr, smooth_attr):
         ud = K.node[u]
         smooth_density = ud[smooth_attr]
         succ = K.successors(u)
-        if len(succ) == 0:
-            continue
-        total_nbr_density = sum(K.node[v][density_attr] for v in succ)        
-        if total_nbr_density == 0:
-            # if all successors have zero density apply smoothing evenly
-            avg_density = smooth_density / len(succ)
-            for v in succ:
-                vd = K.node[v]
-                vd[SMOOTH_TMP] += avg_density
-                vd[smooth_attr] += avg_density
-        else:
-            # apply smoothing proportionately
-            for v in succ:
-                vd = K.node[v]
-                frac = vd[density_attr]/float(total_nbr_density)
-                adj_density = frac * smooth_density
-                vd[SMOOTH_TMP] += adj_density
-                vd[smooth_attr] += adj_density
+        total_nbr_density = sum(K.node[v][density_attr] for v in succ)
+        for v in succ:
+            vd = K.node[v]
+            frac = vd[density_attr]/float(total_nbr_density)
+            vd[SMOOTH_TMP] += frac * smooth_density
+            vd[smooth_attr] += frac * smooth_density
 
 def smooth_kmer_graph(K, density_attr=NODE_DENSITY):
     # smooth in forward direction
@@ -266,6 +254,75 @@ def smooth_kmer_graph(K, density_attr=NODE_DENSITY):
     # apply densities to nodes
     for n,d in K.nodes_iter(data=True):
         d[density_attr] += d[SMOOTH_TMP]
+
+def create_kmer_graph(G, partial_paths, k):
+    """
+    partial_paths: must be sorted by smallest -> largest path fragment
+    """
+    # private function to add kmers to graph and sum density
+    def add_kmer(K, n, density):
+        if n not in K:
+            K.add_node(n, attr_dict={NODE_DENSITY: 0.0,
+                                     SMOOTH_FWD: 0.0,
+                                     SMOOTH_REV: 0.0,
+                                     SMOOTH_TMP: 0.0})
+        nd = K.node[n]
+        nd[NODE_DENSITY] += density
+    # create a graph of k-mers
+    K = nx.DiGraph()
+    # add kmers to graph
+    while len(partial_paths) > 0:
+        # get next largest partial path from list
+        path, density = partial_paths[-1]
+        # stop iteration when path lengths drop below 'k'
+        if len(path) < k:
+            break
+        # create kmers and add to graph
+        u = path[0:k]
+        add_kmer(K, u, density)
+        # the first kmer should be "smoothed"
+        K.node[u][SMOOTH_REV] += density
+        for i in xrange(1, len(path)-(k-1)):
+            v = path[i:i+k]
+            add_kmer(K, v, density)
+            K.add_edge(u,v)
+            u = v
+        # the last kmer should be "smoothed"
+        K.node[u][SMOOTH_FWD] += density
+        # pop path from list
+        partial_paths.pop()
+    # add small partial paths by first extending 
+    # them to be k-mers
+    while len(partial_paths) > 0:
+        # get next largest partial path from list
+        path, density = partial_paths.pop()
+        # find all kmers that could match this path
+        kmer_dict = get_partial_path_kmers(G, path, k)
+        total_density = sum(K.node[kmer][NODE_DENSITY] for kmer in kmer_dict
+                            if kmer in K)
+        if total_density == 0:
+            # no k-mers with this path exist, so apply an averaged density 
+            # to all possible matching kmers
+            avg_density = density / float(len(kmer_dict))
+            for kmer,smooth_dir in kmer_dict.iteritems():
+                # add these k-mers since they don't exist
+                add_kmer(K, kmer, avg_density)
+                if smooth_dir is not None:
+                    K.node[kmer][smooth_dir] += avg_density
+        else:
+            # apply density proportionately to all matching kmers 
+            for kmer,smooth_dir in kmer_dict.iteritems():
+                if kmer not in K:
+                    continue
+                nd = K.node[kmer]
+                frac = nd[NODE_DENSITY] / float(total_density)
+                nd[NODE_DENSITY] += (frac * density)
+                if smooth_dir is not None:
+                    nd[smooth_dir] += (frac * density)
+    # perform "smoothing" of kmer graph
+    smooth_kmer_graph(K)
+    return K
+
 
 def assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_path, max_paths):
     """
@@ -281,27 +338,44 @@ def assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_pat
         fraction_major_path = 0.0
     if fraction_major_path >= 1.0:
         fraction_major_path = 1.0
-    # kmax should not be set to less than '2'
-    kmax = max(2, kmax)
     # sort partial path data by increasing length of the path
     sorted_partial_paths = sorted(partial_paths, key=lambda x: len(x[0])) 
     # choose 'k' no larger than largest partial path
     k = min(kmax, len(sorted_partial_paths[-1][0]))
+    print "K = ", k
+    for n,d in G.nodes_iter(data=True):
+        if NODE_TSS_ID in d:
+            print "TSS", n
+        if "GSM554126.43857.1" in d['ids']:
+            print "GSM554126.43857.1", n
+
     # append/prepend dummy nodes to start/end nodes
     start_nodes, end_nodes = add_dummy_start_end_nodes(G, k)
     # initialize k-mer graph
     K = create_kmer_graph(G, k)
     # add partial paths k-mers to graph
-    add_partial_path_kmers(G, K, sorted_partial_paths, k)
+    add_partial_path_kmers(K, sorted_partial_paths, k)
     # smooth kmer graph
     smooth_kmer_graph(K)
+
+
+
+    for n in K:
+        if Exon(1833766,1833873) in n:
+            print "NODE HAS IT", n
+
+    import sys
+    sys.exit(0)
+    
     # find up to 'max_paths' paths through graph
     path_info_list = []
     for kmer_path, density in find_suboptimal_paths(K, fraction_major_path,
                                                     max_paths):
         # get nodes from kmer path
+        print "FIRST KMER", kmer_path[0]
         path = list(kmer_path[0])
         path.extend(kmer[-1] for kmer in kmer_path[1:])
+        print "PATH", path
         path = [n for n in path if n.start >= 0]
         # get tss_id from path
         tss_id = G.node[path[0]][NODE_TSS_ID]
