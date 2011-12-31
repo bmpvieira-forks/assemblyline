@@ -10,6 +10,7 @@ import operator
 import bisect
 import numpy as np
 
+from assemblyline.lib.bx.cluster import ClusterTree
 from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
 from base import NODE_DENSITY, NODE_LENGTH, NODE_TSS_ID, STRAND_DENSITY, TRANSCRIPT_IDS, GLOBAL_TSS_ID
 from trim import trim_transcripts
@@ -77,7 +78,7 @@ def split_exon(exon, boundaries):
         start, end = exon_splits[j-1], exon_splits[j]
         yield start, end
 
-def add_node_undirected(G, n, id, strand, density):
+def add_node_undirected(G, n, t_id, strand, density):
     """
     add node to undirected graph
     
@@ -92,7 +93,7 @@ def add_node_undirected(G, n, id, strand, density):
                    STRAND_DENSITY: np.zeros(3,float)} 
         G.add_node(n, attr_dict=attr_dict)
     nd = G.node[n]
-    nd[TRANSCRIPT_IDS].add(id)
+    nd[TRANSCRIPT_IDS].add(t_id)
     nd[STRAND_DENSITY][strand] += density
 
 def create_undirected_transcript_graph(transcripts):
@@ -129,43 +130,86 @@ def get_transcript_node_map(G):
         t_node_map[id] = sorted(nodes, key=operator.attrgetter('start'))
     return t_node_map
 
-def redistribute_iteration(G, transcripts, transcript_node_map):
+def redistribute_unstranded_transcripts(G, transcripts, transcript_node_map):
     """
     predicts strandedness of transcripts that lack strand information
     based on the distribution of fwd/rev strand transcripts across 
     overlapping nodes in the graph
 
-    updates strand density attribute of transcript
+    updates strand density attribute of transcript and strand density
+    attribute of graph nodes
     """
     # iterate through transcripts and redistribute density
     num_resolved = 0
     unresolved = []
+    node_density_delta_dict = collections.defaultdict(lambda: np.zeros(3,float))
     for t in transcripts:
         # ignore stranded transcripts
         if t.strand != NO_STRAND:
             continue
         nodes = transcript_node_map[t.id]
-        # sum the coverage mass across the transcript
-        mass_arr = np.zeros(3,float)
+        # sum the coverage density across the transcript
+        density_arr = np.zeros(3,float)
         for n in nodes:
-            d = G.node[n]
-            mass_arr += d[NODE_LENGTH] * d[STRAND_DENSITY]
+            density_arr += G.node[n][STRAND_DENSITY]
         # calculate total mass across transcript
-        total_strand_mass = mass_arr[POS_STRAND] + mass_arr[NEG_STRAND]
+        total_strand_density = density_arr[POS_STRAND] + density_arr[NEG_STRAND]
         # if there is "stranded" mass on any of the nodes comprising
         # this transcript, then use the proportion of fwd/rev mass
         # to redistribute
-        if total_strand_mass > 0:
+        if total_strand_density > 0:
             # proportionally assign unstranded mass based on amount of
             # plus and minus strand mass
-            pos_frac = mass_arr[POS_STRAND] / float(total_strand_mass)
+            pos_frac = density_arr[POS_STRAND] / float(total_strand_density)
+            density_delta_arr = t.density * np.array((pos_frac, 1.0-pos_frac, -1.0))
+            # save all density adjustments in a dictionary and wait to apply
+            # until strand fractions are computed for all transcripts
+            for i,n in enumerate(nodes):
+                node_density_delta_dict[n] += density_delta_arr
+            # adjust strand density for transcript
             t.attrs[STRAND_DENSITY] = t.density * np.array((pos_frac, 1.0-pos_frac, 0.0)) 
             num_resolved += 1
         else:
             unresolved.append(t)
+    # subtract density from unstranded and add to stranded
+    for n, density_delta_arr in node_density_delta_dict.iteritems():
+        G.node[n][STRAND_DENSITY] += density_delta_arr
     return num_resolved, unresolved
 
-def redistribute_unstranded_density(G, transcripts):
+def redistribute_unstranded_node_clusters(G, transcripts, transcript_node_map):
+    # find set of unresolved nodes
+    unresolved_nodes = set()
+    for t in transcripts:
+        unresolved_nodes.update(transcript_node_map[t.id])
+    unresolved_nodes = sorted(unresolved_nodes, key=operator.attrgetter('start'))
+    # cluster unresolved nodes
+    cluster_tree = ClusterTree(0,1)
+    for i,n in enumerate(unresolved_nodes):
+        cluster_tree.insert(n.start, n.end, i)
+    # try to assign stranded density to clusters
+    node_density_delta_dict = collections.defaultdict(lambda: np.zeros(3,float))
+    for start, end, indexes in cluster_tree.getregions():
+        nodes = [unresolved_nodes[i] for i in indexes]
+        # sum density across cluster
+        density_arr = np.zeros(3,float)
+        for n in nodes:
+            density_arr += G.node[n][STRAND_DENSITY]
+        # calculate total mass across cluster
+        total_strand_density = density_arr[POS_STRAND] + density_arr[NEG_STRAND]            
+        if total_strand_density > 0:
+            # proportionally assign unstranded mass based on amount of
+            # plus and minus strand mass
+            pos_frac = density_arr[POS_STRAND] / float(total_strand_density)
+            density_delta_arr = t.density * np.array((pos_frac, 1.0-pos_frac, -1.0))
+            # save all density adjustments in a dictionary and wait to apply
+            # until strand fractions are computed for all transcripts
+            for i,n in enumerate(nodes):
+                node_density_delta_dict[n] += density_delta_arr
+    # subtract density from unstranded and add to stranded
+    for n, density_delta_arr in node_density_delta_dict.iteritems():
+        G.node[n][STRAND_DENSITY] += density_delta_arr
+
+def redistribute_density(G, transcripts):
     '''
     reallocate coverage mass of unstranded transcripts to the fwd/rev
     strand proportionately.
@@ -184,11 +228,20 @@ def redistribute_unstranded_density(G, transcripts):
         t.attrs[STRAND_DENSITY] = strand_density
         if t.strand == NO_STRAND:
             unresolved.append(t)
-    num_redist, unresolved = redistribute_iteration(G, unresolved, transcript_node_map)
-    while (num_redist > 0):
-        num_redist, unresolved = redistribute_iteration(G, unresolved, transcript_node_map)
+    # try to reassign unstranded transcript density
+    logging.debug("\tRedistributing density across unstranded transcripts")
+    num_redist, unresolved = redistribute_unstranded_transcripts(G, unresolved, transcript_node_map)
+    logging.debug("\tRescued %d unstranded transcripts (%d unresolved)" % (num_redist, len(unresolved)))
+    if len(unresolved) > 0:
+        # cluster remaining unstranded nodes and redistribute density
+        # across the clusters
+        logging.debug("\tRedistributing density across unstranded node clusters")
+        redistribute_unstranded_node_clusters(G, unresolved, transcript_node_map)
+        # try to reassign unstranded transcript density
+        num_redist, unresolved = redistribute_unstranded_transcripts(G, unresolved, transcript_node_map)
+        logging.debug("\tRescued another %d unstranded transcripts (%d unresolved)" % (num_redist, len(unresolved)))
 
-def add_node_directed(G, n, id, density):
+def add_node_directed(G, n, t_id, density):
     """
     add node to directed (strand-specific) graph
     
@@ -203,7 +256,7 @@ def add_node_directed(G, n, id, density):
                    NODE_DENSITY: 0}
         G.add_node(n, attr_dict=attr_dict)
     nd = G.node[n]
-    nd[TRANSCRIPT_IDS].add(id)
+    nd[TRANSCRIPT_IDS].add(t_id)
     nd[NODE_DENSITY] += density
 
 def create_strand_specific_graph(transcripts, strand, overhang_threshold):
@@ -292,7 +345,7 @@ def create_transcript_graph(transcripts, overhang_threshold=0):
     Gundir = create_undirected_transcript_graph(transcripts)
     # reallocate unstranded transcripts to fwd/rev strand according
     # fraction of fwd/rev density across transcript nodes
-    redistribute_unstranded_density(Gundir, transcripts)
+    redistribute_density(Gundir, transcripts)
     # now that density has been allocated, partition transcripts 
     # into fwd/rev/unknown strands
     strand_transcripts = [[],[],[]]
