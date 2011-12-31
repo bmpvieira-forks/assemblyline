@@ -34,14 +34,20 @@ def clear_tmp_attributes(G):
     for n,d in G.nodes_iter(data=True):
         del d[TMP_NODE_DENSITY]
 
-def find_path(G, seed):
+def find_path(G, seed, density_attr=TMP_NODE_DENSITY):
+    '''
+    extends the 'seed' node in both directions using a greedy
+    algorithm to find the highest scoring path
+    
+    paths of score equal to 0.0 are ignored
+    '''
     path = collections.deque([seed])
-    density = G.node[seed][TMP_NODE_DENSITY]
+    density = G.node[seed][density_attr]
     while True:
         best_node = None
         best_density = None
         for n in G.successors_iter(path[-1]):
-            n_density = G.node[n][TMP_NODE_DENSITY]
+            n_density = G.node[n][density_attr]
             if (best_density is None) or (n_density > best_density):
                 best_node = n
                 best_density = n_density
@@ -51,9 +57,9 @@ def find_path(G, seed):
         density = imin2(density, best_density)
     while True:
         best_node = None
-        best_density = None
+        best_density = 0.0
         for n in G.predecessors_iter(path[0]):
-            n_density = G.node[n][TMP_NODE_DENSITY]
+            n_density = G.node[n][density_attr]
             if (best_density is None) or (n_density > best_density):
                 best_node = n
                 best_density = n_density
@@ -123,4 +129,3 @@ def find_suboptimal_paths(G, fraction_major_path=1e-3, max_paths=1000):
     path_list = [(p,d) for (p,d) in path_results.iteritems() if d >= lowest_density]
     path_list.sort(key=operator.itemgetter(1), reverse=True)
     return path_list
-
