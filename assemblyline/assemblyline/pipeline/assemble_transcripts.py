@@ -109,14 +109,12 @@ def assemble_locus(transcripts, overhang_threshold, kmax,
         gene_id_str = "G%d" % (gene_id)
         GLOBAL_GENE_ID += 1
         # compute total density across all paths
-        total_density = float(sum(p.density for p in path_info_list))
-        if total_density == 0.0:
-            total_density = 1e-8
+        highest_density = max(1e-8, path_info_list[0].density)
         # create GTF features for each transcript path
         for p in path_info_list:
             tss_id_str = "TSS%d" % p.tss_id
             tx_id_str = "TU%d" % p.tx_id
-            frac = p.density / total_density
+            frac = p.density / highest_density
             # write to GTF
             if gtf_fileh is not None:
                 features.extend(get_gtf_features(locus_chrom, strand, p.path,

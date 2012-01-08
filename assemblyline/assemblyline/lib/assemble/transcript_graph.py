@@ -205,6 +205,7 @@ def redistribute_unstranded_node_clusters(G, transcripts, transcript_node_map):
             # until strand fractions are computed for all transcripts
             for i,n in enumerate(nodes):
                 node_density_delta_dict[n] += density_delta_arr
+    del cluster_tree
     # subtract density from unstranded and add to stranded
     for n, density_delta_arr in node_density_delta_dict.iteritems():
         G.node[n][STRAND_DENSITY] += density_delta_arr

@@ -14,7 +14,7 @@ import sys
 import numpy as np
 
 from assemblyline.lib.transcript import NO_STRAND, POS_STRAND, NEG_STRAND
-from assemblyline.lib.transcript_parser import parse_gtf
+from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
 from assemblyline.lib.sampletable import LibInfo
 from assemblyline.lib.bx.cluster import ClusterTree
 from assemblyline.lib.bx.intersection import Interval, IntervalTree
@@ -126,7 +126,7 @@ def categorize_transcripts(known_genes_bed_file, transcripts_gtf_file,
         fh_dict[category] = open(filename, "w")
     # read transcripts by locus
     logging.debug("Categorizing transcripts")
-    for locus_transcripts in parse_gtf(open(transcripts_gtf_file)):
+    for locus_transcripts in parse_gtf(open(transcripts_gtf_file), cufflinks_attr_defs):
         # compute overlap with known genes
         annotate_overlap(locus_transcripts, exon_trees, intron_trees)
         category_features = {INTERGENIC: [], WITHIN_GENES: []}
@@ -244,7 +244,7 @@ def annotate_transcripts(lib_table_file, transcripts_gtf_file, ctree_dir,
         filename_dict[libinfo.library] = filename 
     # read transcripts by locus
     logging.debug("Annotating transcripts")
-    for locus_transcripts in parse_gtf(open(transcripts_gtf_file)):
+    for locus_transcripts in parse_gtf(open(transcripts_gtf_file), cufflinks_attr_defs):
         # compute recurrence and expression density
         annotate_recurrence_and_density(locus_transcripts, libs_per_sample)        
         for tx in locus_transcripts:
