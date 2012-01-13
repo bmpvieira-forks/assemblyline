@@ -37,8 +37,10 @@ ensembl_to_ucsc_dict = dict((v,k) for k,v in ucsc_to_ensembl_dict.iteritems())
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-r", action="store_true", default=False, dest="reverse")
+parser.add_argument("--col", dest="colnum", type=int, default=0)
 parser.add_argument("filename")
 args = parser.parse_args()
+colnum = max(0, args.colnum - 1)
 
 if args.reverse:
     mydict = ensembl_to_ucsc_dict
@@ -53,8 +55,8 @@ for line in open(args.filename):
         print line
     else: 
         fields = line.strip().split('\t')    
-        if fields[0] not in mydict:
+        if fields[colnum] not in mydict:
             print >>sys.stderr, "skipped line %s" % line
             continue
-        fields[0] = mydict[fields[0]]
+        fields[colnum] = mydict[fields[colnum]]
         print '\t'.join(fields)
