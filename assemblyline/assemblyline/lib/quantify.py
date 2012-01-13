@@ -12,32 +12,7 @@ from bx.cluster import ClusterTree
 from transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, strand_str_to_int, strand_int_to_str
 from transcript_parser import parse_gtf
 
-CIGAR_M = 0 #match  Alignment match (can be a sequence match or mismatch)
-CIGAR_I = 1 #insertion  Insertion to the reference
-CIGAR_D = 2 #deletion  Deletion from the reference
-CIGAR_N = 3 #skip  Skipped region from the reference
-CIGAR_S = 4 #softclip  Soft clip on the read (clipped sequence present in <seq>)
-CIGAR_H = 5 #hardclip  Hard clip on the read (clipped sequence NOT present in <seq>)
-CIGAR_P = 6 #padding  Padding (silent deletion from the padded reference sequence)
 
-TAG_STRAND = "XS"
-TAG_NUM_HITS = "NH"
-
-def get_genomic_intervals(read):
-    intervals = []
-    astart = read.pos
-    aend = astart
-    for op,length in read.cigar:
-        if (op == CIGAR_D) or (op == CIGAR_M):
-            aend += length
-        elif (op == CIGAR_N):
-            if aend > astart:
-                intervals.append((astart, aend))
-            astart = aend + length
-            aend = astart
-    if aend > astart:
-        intervals.append((astart, aend))
-    return intervals
 
 class Gene(object):
     def __init__(self):
@@ -150,9 +125,9 @@ def main():
     import argparse
     # parse command line
     parser = argparse.ArgumentParser()
-    parser.add_argument("gtf_file")
-    parser.add_argument("bam_file")
     parser.add_argument("output_file")
+    parser.add_argument("gtf_file")
+    parser.add_argument("bam_file") 
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")    
