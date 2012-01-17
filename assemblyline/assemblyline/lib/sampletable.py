@@ -79,7 +79,10 @@ class LibInfo(object):
             l.frag_len_std_dev = int(l.frag_len_std_dev)
         l.valid = int(l.valid)
         l.for_assembly = int(l.for_assembly)
-        l.has_pe_lanes = int(l.has_pe_lanes)
+        if l.has_pe_lanes == "NA":
+            l.has_pe_lanes = None
+        else:
+            l.has_pe_lanes = int(l.has_pe_lanes)
         if l.cufflinks_gtf_file == "NA": 
             l.cufflinks_gtf_file = None
         if l.bam_file == "NA": 
