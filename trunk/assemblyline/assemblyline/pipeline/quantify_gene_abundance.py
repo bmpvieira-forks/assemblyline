@@ -29,8 +29,8 @@ def run_quantify(bam_file, gtf_file, output_dir, sample_id, library_id):
     # run abundance estimation
     try:
         quantify_gene_abundance(gtf_file, bam_file, output_file)
-    except:
-        logging.error("Exception caught")
+    except Exception as e:
+        logging.error("Exception caught: %s" % (str(e)))
         return 2, sample_id, library_id
     if made_symlink:
         #os.remove(bai_file)
@@ -82,6 +82,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--output-dir', dest="output_dir", default=".")
     parser.add_argument('-p', '--num-processors', dest="num_processors", type=int, default=1)
+    parser.add_argument('--GTF', dest="reference_gtf_file", default=None)
     parser.add_argument('gtf_file')
     parser.add_argument('library_table')
     parser.add_argument('matrix_file')
