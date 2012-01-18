@@ -42,6 +42,7 @@ def main():
         for feature in gtf.GTFFeature.parse(open(libinfo.cufflinks_gtf_file)):
             feature.attrs['cohort'] = libinfo.cohort
             feature.attrs['sample'] = libinfo.sample
+            feature.attrs['library'] = libinfo.library
             print >>outfh, str(feature)
     # cleanup
     if args.output_file is not None:
