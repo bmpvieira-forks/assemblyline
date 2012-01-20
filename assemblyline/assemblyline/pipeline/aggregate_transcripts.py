@@ -19,6 +19,7 @@ def main():
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', dest="output_file", default=None)
+    parser.add_argument('--rename-ids', dest="rename_ids", action="store_true", default=False)
     parser.add_argument('lib_table')
     args = parser.parse_args()
     # open output file
@@ -43,6 +44,9 @@ def main():
             feature.attrs['cohort'] = libinfo.cohort
             feature.attrs['sample'] = libinfo.sample
             feature.attrs['library'] = libinfo.library
+            if args.rename_ids:
+                feature.attrs['gene_id'] = "%s.%s" % (libinfo.library, feature.attrs['gene_id'])  
+                feature.attrs['transcript_id'] = "%s.%s" % (libinfo.library, feature.attrs['transcript_id'])  
             print >>outfh, str(feature)
     # cleanup
     if args.output_file is not None:
