@@ -81,7 +81,8 @@ def add_dummy_start_end_nodes(G, k):
     """
     start_nodes = set()
     end_nodes = set()
-    for n in G.nodes_iter():
+    nodes = G.nodes()
+    for n in nodes:
         if G.in_degree(n) == 0:
             start_nodes.add(add_dummy_nodes(G, n, k, REV))
         if G.out_degree(n) == 0:
