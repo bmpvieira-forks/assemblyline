@@ -15,6 +15,10 @@ import assemblyline.utils
 utils_dir = assemblyline.utils.__path__[0]
 bam_to_sam_sr_script = os.path.join(utils_dir, "bam_to_sam_sr.py")
 
+# test imports
+import HTSeq
+import pysam
+
 def run_htseq_count(bam_file, gtf_file, output_dir, library_type, 
                     sample_id, library_id):
     # bam -> sam (converts PE reads to SR)
