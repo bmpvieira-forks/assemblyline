@@ -92,13 +92,19 @@ def get_gene_metadata(locus_chrom, locus_start, locus_end, transcripts):
         del cluster_tree
     # get transcript attributes
     category = transcripts[0].attrs.get("category", "-")
+    if not category:
+        category = "-"
     nearest_genes = transcripts[0].attrs.get("nearest_genes", "-")
+    if not nearest_genes:
+        nearest_genes = "-"
     #annotation_sources = transcripts[0].attrs.get("annotation_sources", "")
     for gene_id, g in gene_id_map.iteritems():
         # sum mass on all strands over the exonic intervals of the transcript
         length = sum((e.end - e.start) for e in g.exons)
-        locus_string = "%s:%d-%d[%s]" % (locus_chrom, g.exons[0].start, g.exons[-1].end, strand_int_to_str(g.strand)) 
-        yield (gene_id, locus_string, nearest_genes, category, length)
+        strand = strand_int_to_str(g.strand)
+        description = "category=%s,strand=%s,exons=%d" % (category, strand, len(g.exons))
+        locus_string = "%s:%d-%d" % (locus_chrom, g.exons[0].start, g.exons[-1].end) 
+        yield (gene_id, locus_string, nearest_genes, description, length)
 
 def get_metadata(gtf_file):
     for transcripts in parse_gtf(open(gtf_file)):
@@ -199,9 +205,15 @@ def main():
     num_metadata_rows = len(header_fields)
     header_fields.extend([libinfo.library for libinfo in libinfos])
     print >>f, '\t'.join(header_fields)
+    # sample names
     fields = [""] * (num_metadata_rows - 1)
     fields.append("sample")
     fields.extend([libinfo.sample for libinfo in libinfos])
+    print >>f, '\t'.join(fields)    
+    # sum of fragment vectors
+    fields = [""] * (num_metadata_rows - 1)
+    fields.append("total_frags")
+    fields.extend(map(str,np.sum(mat,axis=0)))
     print >>f, '\t'.join(fields)    
     for i in xrange(len(gene_metadata)):
         fields = []
