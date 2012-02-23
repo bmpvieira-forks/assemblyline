@@ -7,12 +7,13 @@ import sys
 import pysam
 
 if __name__ == '__main__':
-    inf = pysam.Samfile(sys.argv[1], "rb")
-    outf = pysam.Samfile("-", "w", template=inf)
-    for r in inf:
-        r.is_paired = False
-        r.is_proper_pair = False
-        r.is_read1 = True
-        outf.write(r)
-    inf.close()
-    outf.close()
+    fin = pysam.Samfile(sys.argv[1], "rb")
+    fout = pysam.Samfile("-", "w", template=fin)
+    for r in fin:
+        if r.is_paired:
+            r.is_paired = False
+            r.is_proper_pair = False
+            r.is_read1 = True
+            fout.write(r)
+    fin.close()
+    fout.close()
