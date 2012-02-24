@@ -14,6 +14,6 @@ if __name__ == '__main__':
             r.is_paired = False
             r.is_proper_pair = False
             r.is_read1 = True
-            fout.write(r)
+        fout.write(r)
     fin.close()
     fout.close()
