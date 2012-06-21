@@ -3,17 +3,15 @@ Created on Feb 20, 2011
 
 @author: mkiyer
 '''
-import networkx as nx
+import logging
 import collections
-import numpy as np
+import networkx as nx
 
-from assemblyline.lib.transcript import Exon, NEG_STRAND, NO_STRAND
-from base import NODE_DENSITY, NODE_LENGTH, NODE_TSS_ID, FWD, REV, EDGE_IN_FRAC, EDGE_OUT_FRAC, \
-    GLOBAL_GENE_ID, GLOBAL_TSS_ID, GLOBAL_TRANSCRIPT_ID
+from assemblyline.lib.transcript import Exon, NEG_STRAND
+from base import GLOBAL_TRANSCRIPT_ID, NODE_DENSITY, NODE_LENGTH, NODE_TSS_ID, FWD, REV
 from path_finder import find_suboptimal_paths
 
 # private constants
-DUMMY_NODE_ID = 1
 SMOOTH_FWD = 'smfwd'
 SMOOTH_REV = 'smrev'
 SMOOTH_TMP = 'smtmp'
@@ -27,41 +25,43 @@ class PathInfo(object):
         self.path = path
         self.tx_id = -1
 
-def add_dummy_nodes(G, n, k, dir=FWD):
-    global DUMMY_NODE_ID
-    if k <= 1:
-        return n
-    # create 'k-1' dummy nodes
-    dummy_nodes = [Exon(-id,-id) for id in xrange(DUMMY_NODE_ID, DUMMY_NODE_ID + (k-1))]
-    DUMMY_NODE_ID += (k-1)
+def _add_dummy_nodes(G, dummy_nodes):
     # add to graph
     G.add_node(dummy_nodes[0], attr_dict={NODE_LENGTH:0, NODE_DENSITY:0})
-    for i in xrange(1,k-1):
+    for i in xrange(1, len(dummy_nodes)):
         G.add_node(dummy_nodes[i], attr_dict={NODE_LENGTH:0, NODE_DENSITY:0})
         G.add_edge(dummy_nodes[i-1], dummy_nodes[i])
-    # link to true node
-    if dir == FWD:
-        G.add_edge(n, dummy_nodes[0])
-        # return end node
-        return dummy_nodes[-1]
-    else:
-        # return start node
-        G.add_edge(dummy_nodes[-1], n)
-        return dummy_nodes[0]
 
 def add_dummy_start_end_nodes(G, k):
     """
-    returns lists of start nodes and end nodes
+    prepend/append 'k' dummy nodes to start/end of graph in order
+    to facilitate the creation of a k-mer graph with a unique source
+    and sink node where all paths are all least 'k' in length
     """
-    start_nodes = set()
-    end_nodes = set()
-    nodes = G.nodes()
-    for n in nodes:
+    # get all leaf nodes
+    start_nodes = []
+    end_nodes = []
+    for n in G.nodes():
         if G.in_degree(n) == 0:
-            start_nodes.add(add_dummy_nodes(G, n, k, REV))
+            start_nodes.append(n)
         if G.out_degree(n) == 0:
-            end_nodes.add(add_dummy_nodes(G, n, k, FWD))
-    return start_nodes, end_nodes
+            end_nodes.append(n)   
+    # create 'k' source dummy nodes
+    source_node_id = -1
+    source_dummy_nodes = [Exon(i,i) for i in xrange(source_node_id, source_node_id - k, -1)]
+    # create 'k' sink dummy nodes
+    sink_node_id = source_node_id - k
+    sink_dummy_nodes = [Exon(i,i) for i in xrange(sink_node_id, sink_node_id - k, -1)]
+    sink_dummy_nodes.reverse()
+    # add dummy nodes to graph
+    _add_dummy_nodes(G, source_dummy_nodes)
+    _add_dummy_nodes(G, sink_dummy_nodes)
+    # connect all leaf nodes to dummy nodes
+    for n in start_nodes:
+        G.add_edge(source_dummy_nodes[-1], n)
+    for n in end_nodes:
+        G.add_edge(n, sink_dummy_nodes[0])
+    return tuple(source_dummy_nodes), tuple(sink_dummy_nodes)
 
 def get_forward_kmers(G, seed_path, k):
     paths = []
@@ -94,12 +94,9 @@ def create_kmer_graph(G, k):
                                         SMOOTH_FWD: 0.0,
                                         SMOOTH_REV: 0.0,
                                         SMOOTH_TMP: 0.0})
-            # update hash (not necessary if k equals 1)
-            if k > 1:
-                #kmer[0] -> kmer[1:]
-                kmer_hash[kmer[1:]][REV].add(kmer[0])
-                #kmer[:-1] -> kmer[-1]
-                kmer_hash[kmer[:-1]][FWD].add(kmer[-1])
+            # update hash
+            kmer_hash[kmer[1:]][REV].add(kmer[0])
+            kmer_hash[kmer[:-1]][FWD].add(kmer[-1])
     # now connect kmers using kmer hash
     for kminus1mer, fwd_rev_node_sets in kmer_hash.iteritems():
         for fwd_node in fwd_rev_node_sets[FWD]:
@@ -235,14 +232,14 @@ def _add_partial_paths_bin(G, K, partial_paths, k):
                 assert kmer in K
                 kmerattrs = K.node[kmer]
                 kmerattrs[NODE_DENSITY] += density
-            # the last kmers should be "smoothed"
+            # the last kmer should be "smoothed"
             kmerattrs[SMOOTH_FWD] += density
         # pop path from list
         partial_paths.pop()
 
 def add_partial_path_kmers(G, K, partial_paths, k):
     """
-    add partial paths from graph 'G' to 'k'-mer graph 'K'
+    add partial paths from graph 'G' to k-mer graph 'K'
 
     partial_paths is a list of (path,density) tuples
     """
@@ -320,8 +317,15 @@ def expand_path_chains(G, strand, path):
 
 def assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_path, max_paths):
     """
-    partial_path_data: dictionary where key is partial path tuple and value
-    is density
+    enumerates individual transcript isoforms from transcript graph using
+    a greedy algorithm
+    
+    strand: strand of graph G
+    partial_paths: list of (path,density) tuples comprising transcripts
+    kmax: de-bruijn graph assembly parameter
+    fraction_major_path: only return isoforms with density greater than 
+    some fraction of the highest density path
+    max_paths: do not enumerate more than max_paths isoforms     
     """
     global GLOBAL_TRANSCRIPT_ID
     # don't allow fraction_major_path to equal zero because that 
@@ -333,12 +337,14 @@ def assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_pat
     if fraction_major_path >= 1.0:
         fraction_major_path = 1.0
     # kmax should not be set to less than '2'
-    kmax = max(2, kmax)
-    # choose 'k' no larger than largest partial path
+    kmin = 2
+    kmax = max(kmin, kmax)
+    # choose k >= kmin and k <= length of longest partial path
     longest_path = max(len(x[0]) for x in partial_paths)
-    k = min(kmax, longest_path)
+    k = max(kmin, min(kmax, longest_path))
+    logging.debug("\tConstructing k-mer graph with k=%d" % (k))
     # append/prepend dummy nodes to start/end nodes
-    start_nodes, end_nodes = add_dummy_start_end_nodes(G, k)
+    add_dummy_start_end_nodes(G, k)
     # initialize k-mer graph
     K = create_kmer_graph(G, k)
     # add partial paths k-mers to graph
@@ -346,12 +352,14 @@ def assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_pat
     # smooth kmer graph
     smooth_kmer_graph(K)
     # find up to 'max_paths' paths through graph
+    logging.debug("\tFinding suboptimal paths in k-mer graph with %d nodes" % (len(K)))
     path_info_list = []
-    for kmer_path, density in find_suboptimal_paths(K, fraction_major_path,
+    for kmer_path, density in find_suboptimal_paths(K, fraction_major_path, 
                                                     max_paths):
         # get nodes from kmer path
         path = list(kmer_path[0])
         path.extend(kmer[-1] for kmer in kmer_path[1:])
+        # remove dummy nodes
         path = [n for n in path if n.start >= 0]
         # get tss_id from path
         tss_id = G.node[path[0]][NODE_TSS_ID]
@@ -363,6 +371,5 @@ def assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_pat
         GLOBAL_TRANSCRIPT_ID += 1
         # add to path list
         path_info_list.append(path_info)
+        logging.debug("\t\tdensity=%f length=%d nodes" % (density, len(path)))
     return path_info_list
-
-
