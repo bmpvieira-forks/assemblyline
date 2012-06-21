@@ -10,9 +10,8 @@ import sys
 from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
 from assemblyline.lib.transcript import strand_int_to_str
 from assemblyline.lib.gtf import GTFFeature
-
-from assemblyline.lib.assemble.transcript_graph import create_transcript_graph
 from assemblyline.lib.assemble.base import GLOBAL_LOCUS_ID, GLOBAL_GENE_ID
+from assemblyline.lib.assemble.transcript_graph import create_transcript_graph
 from assemblyline.lib.assemble.assembler import assemble_transcript_graph
 
 def write_bed(chrom, name, strand, score, exons):
