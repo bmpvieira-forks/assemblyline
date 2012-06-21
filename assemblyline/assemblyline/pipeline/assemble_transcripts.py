@@ -8,14 +8,12 @@ import logging
 import sys
 
 from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
-from assemblyline.lib.transcript import Exon, strand_int_to_str, NEG_STRAND, POS_STRAND, NO_STRAND
+from assemblyline.lib.transcript import strand_int_to_str
 from assemblyline.lib.gtf import GTFFeature
 
 from assemblyline.lib.assemble.transcript_graph import create_transcript_graph
 from assemblyline.lib.assemble.base import GLOBAL_LOCUS_ID, GLOBAL_GENE_ID
 from assemblyline.lib.assemble.assembler import assemble_transcript_graph
-
-global GLOBAL_LOCUS_ID
 
 def write_bed(chrom, name, strand, score, exons):
     assert all(exons[0].start < x.start for x in exons[1:])
@@ -83,7 +81,7 @@ def assemble_locus(transcripts, overhang_threshold, kmax,
                    fraction_major_isoform, max_paths,
                    bed_fileh, gtf_fileh=None):
     global GLOBAL_GENE_ID
-
+    global GLOBAL_LOCUS_ID
     # gather properties of locus
     locus_chrom = transcripts[0].chrom
     locus_start = transcripts[0].start
@@ -93,6 +91,7 @@ def assemble_locus(transcripts, overhang_threshold, kmax,
                    len(transcripts)))
     locus_id_str = "L%d" % (GLOBAL_LOCUS_ID)
     # build transcript graph
+    logging.debug("\tCreating transcript graph")
     transcript_graphs = create_transcript_graph(transcripts, overhang_threshold)
     # assemble transcripts on each strand
     features = []

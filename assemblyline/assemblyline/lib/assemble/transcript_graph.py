@@ -40,9 +40,9 @@ def filter_transcripts(transcripts):
             #logging.debug("Skipping transcript %s with density %f" % (t.id, t.density))
             zero_density += 1
     if zero_density > 0:
-        logging.debug("\tSkipped %d transcripts with zero density" % (zero_density))
+        logging.debug("\t\tSkipped %d transcripts with zero density" % (zero_density))
     if unstranded_multiple_exons > 0:
-        logging.debug("\tSkipped %d unstranded transcripts with multiple exons" % 
+        logging.debug("\t\tSkipped %d unstranded transcripts with multiple exons" % 
                       (unstranded_multiple_exons))
     return new_transcripts
 
@@ -230,17 +230,17 @@ def redistribute_density(G, transcripts):
         if t.strand == NO_STRAND:
             unresolved.append(t)
     # try to reassign unstranded transcript density
-    logging.debug("\tRedistributing density across unstranded transcripts")
+    logging.debug("\t\tRedistributing density across unstranded transcripts")
     num_redist, unresolved = redistribute_unstranded_transcripts(G, unresolved, transcript_node_map)
-    logging.debug("\tRescued %d unstranded transcripts (%d unresolved)" % (num_redist, len(unresolved)))
+    logging.debug("\t\tRescued %d unstranded transcripts (%d unresolved)" % (num_redist, len(unresolved)))
     if len(unresolved) > 0:
         # cluster remaining unstranded nodes and redistribute density
         # across the clusters
-        logging.debug("\tRedistributing density across unstranded node clusters")
+        logging.debug("\t\tRedistributing density across unstranded node clusters")
         redistribute_unstranded_node_clusters(G, unresolved, transcript_node_map)
         # try to reassign unstranded transcript density
         num_redist, unresolved = redistribute_unstranded_transcripts(G, unresolved, transcript_node_map)
-        logging.debug("\tRescued another %d unstranded transcripts (%d unresolved)" % (num_redist, len(unresolved)))
+        logging.debug("\t\tRescued another %d unstranded transcripts (%d unresolved)" % (num_redist, len(unresolved)))
 
 def add_node_directed(G, n, t_id, density):
     """

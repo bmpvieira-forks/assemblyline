@@ -14,9 +14,6 @@ NODE_DENSITY = 'density'
 NODE_LENGTH = 'length'
 NODE_TSS_ID = 'tss_id'
 
-EDGE_IN_FRAC = 'ein'
-EDGE_OUT_FRAC = 'eout'
-
 # constants for fake 'start' and 'end' nodes
 SOURCE_NODE = Exon(-1,-1)
 SINK_NODE = Exon(-2,-2)
