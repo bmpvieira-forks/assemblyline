@@ -27,6 +27,32 @@ class PathInfo(object):
         self.path = path
         self.tx_id = -1
 
+def expand_path_chains(G, strand, path):
+    # reverse negative stranded data so that all paths go from 
+    # small -> large genomic coords
+    if strand == NEG_STRAND:
+        path.reverse()
+    # get chains (children nodes) along path
+    newpath = []
+    for n in path:
+        newpath.extend(G.node[n]['chain'])
+    path = newpath
+    # collapse contiguous nodes along path
+    newpath = []
+    chain = [path[0]]
+    for v in path[1:]:
+        if chain[-1].end != v.start:
+            # update path with merge chain node
+            newpath.append(Exon(chain[0].start, 
+                                chain[-1].end))
+            # reset chain
+            chain = []
+        chain.append(v)
+    # add last chain
+    newpath.append(Exon(chain[0].start, 
+                        chain[-1].end))
+    return newpath
+
 def add_dummy_nodes(G, n, k, dir=FWD):
     global DUMMY_NODE_ID
     if k <= 1:
@@ -134,7 +160,7 @@ def extend_path_forward(G, seed, length):
                 stack.append(path + (succ,))
     return paths
 
-def _get_partial_path_kmers(G, seed_path, k):
+def get_partial_path_kmers(G, seed_path, k):
     assert len(seed_path) < k
     # since seed_path length is less than k, need to extend to a set
     # of possible k-mers
@@ -151,110 +177,60 @@ def _get_partial_path_kmers(G, seed_path, k):
             kmers.append(rp + seed_path + fp)
     return kmers
 
-def _extend_partial_paths(G, partial_paths):
-    """
-    extend paths in both directions along graph while edge degree is 
-    equal to one, and bin paths by length
-    """  
-    new_partial_paths = []
-    for path, density in partial_paths:
-        new_path = tuple(path)
-        # extend backward
-        preds = G.predecessors(new_path[0])
-        while len(preds) == 1:
-            new_path = (preds[0],) + new_path
-            preds = G.predecessors(new_path[0])
-        # extend forward
-        succs = G.successors(new_path[-1])
-        while len(succs) == 1:
-            new_path = new_path + (succs[0],)
-            succs = G.successors(new_path[-1])
-        new_partial_paths.append((new_path, density))
-    return new_partial_paths
-
-def _bin_partial_paths(G, partial_paths, k):
-    """
-    bin partial paths by their length (up to length 'k') and sort 
-    paths in each bin by their density levels
-    """   
-    # bin paths by length
-    path_bins = collections.defaultdict(lambda: [])
-    for path, density in partial_paths:
-        kbin = k if len(path) > k else len(path)
-        path_bins[kbin].append((path,density))
-    # sort paths within each bin by density
-    for kbin in path_bins:
-        path_bins[kbin].sort(key=lambda x: x[1])
-    return path_bins
-
-def _add_partial_paths_bin(G, K, partial_paths, k):
-    """
-    add the list of 'partial_paths' paths to graph 'K'
-
-    paths longer than 'k' are broken into k-mers before being 
-    added to the graph. similarly, paths shorter than 'k' are 
-    extrapolated into k-mers before being added to the graph
-    """
-    while len(partial_paths) > 0:
-        # get next highest density path from list
-        path, density = partial_paths[-1]
-        # if path length is shorter than 'k', we must extrapolate the path
-        # include all possible 'kmers'
-        if len(path) < k:
-            # extend path in both directions to find all compatible 'kmers'
-            kmers = _get_partial_path_kmers(G, path, k)
-            total_density = sum(K.node[kmer][NODE_DENSITY] for kmer in kmers)
-            if total_density == 0:
-                # all k-mers have zero density, so divide the density equally
-                avg_density = density / float(len(kmers))
-                for kmer in kmers:
-                    kmerattrs = K.node[kmer]
-                    kmerattrs[NODE_DENSITY] += avg_density
-                    kmerattrs[SMOOTH_FWD] += avg_density
-                    kmerattrs[SMOOTH_REV] += avg_density
-            else:
-                # apply density proportionately to all matching kmers 
-                for kmer in kmers:
-                    kmerattrs = K.node[kmer]
-                    frac = kmerattrs[NODE_DENSITY] / float(total_density)
-                    adj_density = (frac * density)
-                    kmerattrs[NODE_DENSITY] += adj_density
-                    kmerattrs[SMOOTH_FWD] += adj_density
-                    kmerattrs[SMOOTH_REV] += adj_density
-        else:
-            # break longer paths into kmers of length 'k' and add them
-            # to the graph
-            kmer = path[0:k]
-            assert kmer in K
-            kmerattrs = K.node[kmer]
-            kmerattrs[NODE_DENSITY] += density
-            # the first kmer should be "smoothed" in reverse direction
-            kmerattrs[SMOOTH_REV] += density
-            for i in xrange(1,len(path) - (k-1)):
-                kmer = path[i:i+k]
-                assert kmer in K
-                kmerattrs = K.node[kmer]
-                kmerattrs[NODE_DENSITY] += density
-            # the last kmers should be "smoothed"
-            kmerattrs[SMOOTH_FWD] += density
-        # pop path from list
-        partial_paths.pop()
-
 def add_partial_path_kmers(G, K, partial_paths, k):
     """
     add partial paths from graph 'G' to 'k'-mer graph 'K'
 
-    partial_paths is a list of (path,density) tuples
+    partial_paths must be sorted by smallest -> largest path fragment
     """
-    # extend paths in both directions along graph while edge degree is 
-    # equal to one  
-    partial_paths = _extend_partial_paths(G, partial_paths)
-    # bin partial paths by their length (up to length 'k') and sort 
-    # paths in each bin by their density levels
-    partial_path_bins = _bin_partial_paths(G, partial_paths, k)
-    # iterate from large to small path-length bins
-    for kbin in sorted(partial_path_bins, reverse=True):
-        _add_partial_paths_bin(G, K, partial_path_bins[kbin], k)
+    # start by adding partial paths with length >= k
+    while len(partial_paths) > 0:
+        # get next largest partial path from list
+        path, density = partial_paths[-1]
+        # stop iteration when path lengths drop below 'k'
+        if len(path) < k:
+            break
+        # create kmers and add to graph
+        kmer = path[0:k]
+        assert kmer in K
+        kmerattrs = K.node[kmer]
+        kmerattrs[NODE_DENSITY] += density
+        # the first kmer should be "smoothed" in reverse direction
+        kmerattrs[SMOOTH_REV] += density
+        for i in xrange(1,len(path) - (k-1)):
+            kmer = path[i:i+k]
+            assert kmer in K
+            kmerattrs = K.node[kmer]
+            kmerattrs[NODE_DENSITY] += density
+        # the last kmers should be "smoothed"
+        kmerattrs[SMOOTH_FWD] += density
+        # pop path from list
+        partial_paths.pop()
+    # now add partial paths with length < k
+    while len(partial_paths) > 0:
+        # get next largest partial path from list
+        path, density = partial_paths.pop()
+        # extend short partial paths in both directions to find all 
+        # compatible kmers
+        kmers = get_partial_path_kmers(G, path, k)
+        total_density = sum(K.node[kmer][NODE_DENSITY] for kmer in kmers)
+        if total_density == 0:
+            # all k-mers have zero density, so divide the density equally
+            avg_density = density / float(len(kmers))
+            for kmer in kmers:
+                kmerattrs = K.node[kmer]
+                kmerattrs[NODE_DENSITY] += avg_density
+                kmerattrs[SMOOTH_FWD] += avg_density
+                kmerattrs[SMOOTH_REV] += avg_density
+        else:
+            # apply density proportionately to all matching kmers 
+            for kmer in kmers:
+                kmerattrs = K.node[kmer]
+                frac = kmerattrs[NODE_DENSITY] / float(total_density)
+                adj_density = (frac * density)
+                kmerattrs[NODE_DENSITY] += adj_density
+                kmerattrs[SMOOTH_FWD] += adj_density
+                kmerattrs[SMOOTH_REV] += adj_density
 
 def smooth_iteration(K, density_attr, smooth_attr):
     nodes = nx.topological_sort(K)
@@ -292,32 +268,6 @@ def smooth_kmer_graph(K, density_attr=NODE_DENSITY):
     for n,d in K.nodes_iter(data=True):
         d[density_attr] += d[SMOOTH_TMP]
 
-def expand_path_chains(G, strand, path):
-    # reverse negative stranded data so that all paths go from 
-    # small -> large genomic coords
-    if strand == NEG_STRAND:
-        path.reverse()
-    # get chains (children nodes) along path
-    newpath = []
-    for n in path:
-        newpath.extend(G.node[n]['chain'])
-    path = newpath
-    # collapse contiguous nodes along path
-    newpath = []
-    chain = [path[0]]
-    for v in path[1:]:
-        if chain[-1].end != v.start:
-            # update path with merge chain node
-            newpath.append(Exon(chain[0].start, 
-                                chain[-1].end))
-            # reset chain
-            chain = []
-        chain.append(v)
-    # add last chain
-    newpath.append(Exon(chain[0].start, 
-                        chain[-1].end))
-    return newpath
-
 def assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_path, max_paths):
     """
     partial_path_data: dictionary where key is partial path tuple and value
@@ -334,15 +284,17 @@ def assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_pat
         fraction_major_path = 1.0
     # kmax should not be set to less than '2'
     kmax = max(2, kmax)
+    # sort partial path data by increasing length of the path
+    # TODO: sort by expression level instead of path length   
+    sorted_partial_paths = sorted(partial_paths, key=lambda x: len(x[0])) 
     # choose 'k' no larger than largest partial path
-    longest_path = max(len(x[0]) for x in partial_paths)
-    k = min(kmax, longest_path)
+    k = min(kmax, len(sorted_partial_paths[-1][0]))
     # append/prepend dummy nodes to start/end nodes
     start_nodes, end_nodes = add_dummy_start_end_nodes(G, k)
     # initialize k-mer graph
     K = create_kmer_graph(G, k)
     # add partial paths k-mers to graph
-    add_partial_path_kmers(G, K, partial_paths, k)
+    add_partial_path_kmers(G, K, sorted_partial_paths, k)
     # smooth kmer graph
     smooth_kmer_graph(K)
     # find up to 'max_paths' paths through graph

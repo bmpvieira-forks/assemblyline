@@ -93,7 +93,7 @@ def find_suboptimal_paths(G, fraction_major_path=1e-3, max_paths=1000):
     # setup temporary graph attributes
     init_tmp_attributes(G)    
     # store paths in a dictionary in order to avoid redundant paths
-    # that arise due to issues in the data
+    # that arise when the heuristic assumptions of the algorithm fail
     path_results = collections.OrderedDict()
     # maintain list of nodes sorted by density 
     seed_nodes = G.nodes()

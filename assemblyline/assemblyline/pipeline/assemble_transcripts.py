@@ -96,7 +96,6 @@ def assemble_locus(transcripts, overhang_threshold, kmax,
     transcript_graphs = create_transcript_graph(transcripts, overhang_threshold)
     # assemble transcripts on each strand
     features = []
-    
     for G, partial_paths, strand in transcript_graphs:
         logging.debug("[LOCUS][STRAND] (%s) graph has %d nodes and %d partial paths" % 
                       (strand_int_to_str(strand), len(G), len(partial_paths)))
