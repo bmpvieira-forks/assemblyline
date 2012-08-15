@@ -6,7 +6,7 @@ Created on Dec 7, 2011
 import operator
 import networkx as nx
 
-from base import Exon, TRANSCRIPT_IDS, NODE_DENSITY, NODE_LENGTH, NODE_TSS_ID
+from base import Exon, TRANSCRIPT_IDS, NODE_DENSITY, NODE_LENGTH
 
 def can_collapse(G,u,v):
     # see if edge nodes have degree larger than '1'
@@ -97,24 +97,16 @@ def recalc_strand_specific_graph_attributes(G):
         total_mass = 0.0
         total_length = 0
         ids = set()
-        tss_ids = set()
         for cn in chain_nodes:
             ids.update(chain_data[cn][TRANSCRIPT_IDS])
             length = (cn.end - cn.start)
             total_mass += length * chain_data[cn][NODE_DENSITY]
             total_length += length
-            if NODE_TSS_ID in chain_data[cn]:
-                tss_ids.add(chain_data[cn][NODE_TSS_ID])
         density = total_mass / float(total_length)
         # set attributes
         d[TRANSCRIPT_IDS] = ids
         d[NODE_DENSITY] = density
         d[NODE_LENGTH] = total_length
-        # update TSS ID
-        assert len(tss_ids) <= 1
-        if len(tss_ids) > 0:
-            tss_id = tss_ids.pop()
-            d[NODE_TSS_ID] = tss_id
 
 def collapse_strand_specific_graph(G):
     """

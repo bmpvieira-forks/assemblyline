@@ -12,15 +12,6 @@ TRANSCRIPT_IDS = 'ids'
 # assembler graph attributes
 NODE_DENSITY = 'density'
 NODE_LENGTH = 'length'
-NODE_TSS_ID = 'tss_id'
-
-# constants for fake 'start' and 'end' nodes
-SOURCE_NODE = Exon(-1,-1)
-SINK_NODE = Exon(-2,-2)
-
-# constants for direction in path growing
-FWD = 0
-REV = 1
 
 # constant minimum path density
 MIN_DENSITY = 1.0e-8
