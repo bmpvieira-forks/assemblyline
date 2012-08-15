@@ -7,10 +7,11 @@ import argparse
 import logging
 import sys
 
+from assemblyline.lib.bx.cluster import ClusterTree
 from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
-from assemblyline.lib.transcript import strand_int_to_str
+from assemblyline.lib.transcript import strand_int_to_str, NEG_STRAND
 from assemblyline.lib.gtf import GTFFeature
-from assemblyline.lib.assemble.base import GLOBAL_LOCUS_ID, GLOBAL_GENE_ID
+from assemblyline.lib.assemble.base import GLOBAL_LOCUS_ID, GLOBAL_GENE_ID, GLOBAL_TSS_ID, GLOBAL_TRANSCRIPT_ID
 from assemblyline.lib.assemble.transcript_graph import create_transcript_graph
 from assemblyline.lib.assemble.assembler import assemble_transcript_graph
 
@@ -76,11 +77,40 @@ def get_gtf_features(chrom, strand, exons, locus_id, gene_id, tss_id,
         features.append(f)
     return features
 
+def _annotate_gene_and_tss_ids(path_info_list, strand):
+    global GLOBAL_GENE_ID
+    global GLOBAL_TSS_ID
+    # cluster paths to determine gene ids
+    cluster_tree = ClusterTree(0,1)
+    # map tss positions to unique ids
+    tss_pos_id_map = {}
+    for i,path_info in enumerate(path_info_list):
+        start = path_info.path[0].start
+        end = path_info.path[-1].end
+        # cluster transcript coordinates
+        cluster_tree.insert(start, end, i)
+        # map TSS positions to IDs
+        tss_pos = end if strand == NEG_STRAND else start
+        if tss_pos not in tss_pos_id_map:
+            tss_pos_id_map[tss_pos] = GLOBAL_TSS_ID
+            tss_id = GLOBAL_TSS_ID
+            GLOBAL_TSS_ID += 1
+        else:
+            tss_id = tss_pos_id_map[tss_pos]
+        path_info.tss_id = tss_id
+    # retrieve transcript clusters and assign gene ids
+    for start, end, indexes in cluster_tree.getregions():
+        gene_id = GLOBAL_GENE_ID
+        GLOBAL_GENE_ID += 1
+        for i in indexes:
+            path_info_list[i].gene_id = gene_id
+
+
 def assemble_locus(transcripts, overhang_threshold, kmax, 
                    fraction_major_isoform, max_paths,
                    bed_fileh, gtf_fileh=None):
-    global GLOBAL_GENE_ID
     global GLOBAL_LOCUS_ID
+    global GLOBAL_TRANSCRIPT_ID
     # gather properties of locus
     locus_chrom = transcripts[0].chrom
     locus_start = transcripts[0].start
@@ -89,6 +119,7 @@ def assemble_locus(transcripts, overhang_threshold, kmax,
                   (locus_chrom, locus_start, locus_end, 
                    len(transcripts)))
     locus_id_str = "L%d" % (GLOBAL_LOCUS_ID)
+    GLOBAL_LOCUS_ID += 1
     # build transcript graph
     logging.debug("\tCreating transcript graph")
     transcript_graphs = create_transcript_graph(transcripts, overhang_threshold)
@@ -101,16 +132,20 @@ def assemble_locus(transcripts, overhang_threshold, kmax,
                                                    kmax, fraction_major_isoform, 
                                                    max_paths)
         logging.debug("\tAssembled %d transcript(s)" % (len(path_info_list)))
-        # assign gene id to this set of paths
-        gene_id = GLOBAL_GENE_ID
-        gene_id_str = "G%d" % (gene_id)
-        GLOBAL_GENE_ID += 1
         # compute total density across all paths
         highest_density = max(1e-8, path_info_list[0].density)
+        # determine gene ids and tss ids
+        _annotate_gene_and_tss_ids(path_info_list, strand)
         # create GTF features for each transcript path
         for p in path_info_list:
-            tss_id_str = "TSS%d" % p.tss_id
-            tx_id_str = "TU%d" % p.tx_id
+            # assign transcript id
+            tx_id = GLOBAL_TRANSCRIPT_ID
+            GLOBAL_TRANSCRIPT_ID += 1
+            # get strings for each id
+            tx_id_str = "TU%d" % tx_id
+            tss_id_str = "TSS%d" % (p.tss_id)
+            gene_id_str = "G%d" % (p.gene_id)
+            # compute isoform fractions
             frac = p.density / highest_density
             # write to GTF
             if gtf_fileh is not None:
@@ -121,7 +156,7 @@ def assemble_locus(transcripts, overhang_threshold, kmax,
                                                  transcript_id=tx_id_str,
                                                  density=p.density, 
                                                  frac=frac))                    
-            # write to BED format
+            # write to BED
             name = "%s|%s(%.1f)" % (gene_id_str, tx_id_str, p.density)
             fields = write_bed(locus_chrom, name, strand, int(round(1000.0*frac)), p.path)
             print >>bed_fileh, '\t'.join(fields)
@@ -136,7 +171,6 @@ def assemble_locus(transcripts, overhang_threshold, kmax,
 
 def run(gtf_file, overhang_threshold, kmax, fraction_major_isoform, max_paths,
         bed_output_file=None, gtf_output_file=None):
-    global GLOBAL_LOCUS_ID
     # setup output files
     if bed_output_file is not None:
         bed_fileh = open(bed_output_file, "w")
@@ -156,7 +190,6 @@ def run(gtf_file, overhang_threshold, kmax, fraction_major_isoform, max_paths,
         assemble_locus(locus_transcripts, overhang_threshold, 
                        kmax, fraction_major_isoform, max_paths,
                        bed_fileh, gtf_fileh)
-        GLOBAL_LOCUS_ID += 1
     # cleanup output files
     if bed_output_file is not None:
         bed_fileh.close()

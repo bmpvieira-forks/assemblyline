@@ -12,7 +12,7 @@ import numpy as np
 
 from assemblyline.lib.bx.cluster import ClusterTree
 from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
-from base import NODE_DENSITY, NODE_LENGTH, NODE_TSS_ID, STRAND_DENSITY, TRANSCRIPT_IDS, GLOBAL_TSS_ID
+from base import NODE_DENSITY, NODE_LENGTH, STRAND_DENSITY, TRANSCRIPT_IDS
 from trim import trim_transcripts
 from collapse import collapse_strand_specific_graph
 
@@ -303,24 +303,6 @@ def create_strand_specific_graph(transcripts, strand, overhang_threshold):
             u = v
     return G
     
-def mark_tss_nodes(G, strand):
-    """
-    finds start nodes and end nodes in graph and annotates start nodes with 
-    'tss_id' attributes
-    """
-    global GLOBAL_TSS_ID
-    tss_pos_id_map = {}
-    for n,d in G.in_degree_iter():
-        # found TSS if no incoming edges
-        if d == 0:
-            tss_pos = n.end if strand == NEG_STRAND else n.start
-            # map TSS positions to IDs
-            if tss_pos not in tss_pos_id_map:
-                tss_pos_id_map[tss_pos] = GLOBAL_TSS_ID
-                GLOBAL_TSS_ID += 1
-            # add tss_id attribute to graph
-            G.node[n][NODE_TSS_ID] = tss_pos_id_map[tss_pos]
-
 def create_transcript_graph(transcripts, overhang_threshold=0):
     '''
     overhang_threshold: integer greater than zero specifying the 
@@ -362,8 +344,6 @@ def create_transcript_graph(transcripts, overhang_threshold=0):
         H = create_strand_specific_graph(mytranscripts, strand, overhang_threshold)
         # index transcript density by id
         transcript_id_density_map = dict((t.id, t.attrs[STRAND_DENSITY][strand]) for t in mytranscripts)
-        # find start nodes and mark them with tss_id
-        mark_tss_nodes(H, strand)
         # collapse graph to form chains
         G = collapse_strand_specific_graph(H)
         # get connected components of graph which represent independent genes
