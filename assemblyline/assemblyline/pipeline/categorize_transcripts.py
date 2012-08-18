@@ -7,7 +7,6 @@ import logging
 import argparse
 import collections
 import operator
-import os
 
 from assemblyline.lib.bx.intersection import Interval, IntervalTree
 from assemblyline.lib.bx.cluster import ClusterTree
@@ -15,6 +14,13 @@ from assemblyline.lib.bx.cluster import ClusterTree
 from assemblyline.lib import gtf
 from assemblyline.lib.transcript import strand_int_to_str
 from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
+
+MAX_DIST = 1000000
+CATEGORY_PROTEIN = "protein"
+CATEGORY_NCRNA = "ncrna"
+CATEGORY_ANTISENSE = "antisense"
+CATEGORY_INTRONIC = "intronic"
+CATEGORY_INTERGENIC = "intergenic"
 
 class Gene(object):
     def __init__(self):
@@ -71,7 +77,7 @@ def get_locus_genes(features):
     return sorted(gene_map.values(), key=operator.attrgetter('gene_start'))
     
 def read_reference_gtf(ref_gtf_file):
-    gene_map = collections.defaultdict(lambda: Gene())
+    gene_map = {}
     logging.info("Reading GTF file")
     for f in gtf.GTFFeature.parse(open(ref_gtf_file)):
         # get gene by id
@@ -124,81 +130,135 @@ def read_reference_gtf(ref_gtf_file):
                     exon_tree.insert_interval(Interval(start, end, value=g))
             # add to locus interval tree
             locus_trees[chrom].insert_interval(Interval(locus_start, locus_end, value=exon_tree))
+    logging.info("Done indexing reference GTF file")
     return locus_trees
 
-def categorize_gene_transcripts(transcripts, locus_trees):
-    any_is_sense = False
-    any_is_coding = False
-    any_exon_hits = False
-    any_transcript_hits = False
-    gene_names = set()
-    annotation_sources = set()
+def cluster_isoforms(transcripts):
+    # cluster exons
+    cluster_tree = ClusterTree(0,1)
     for t in transcripts:
-        # intersect transcript with reference loci
-        transcript_hits = locus_trees[t.chrom].find(t.start, t.end)
-        strand = strand_int_to_str(t.strand)
-        if len(transcript_hits) > 0:
-            # this transcript overlaps known loci, now categories
-            # as sense/antisense, coding/noncoding, exon/intron
-            for transcript_hit in transcript_hits:
-                gene_tree = transcript_hit.value
-                for exon in t.exons:
-                    for gene_hit in gene_tree.find(exon.start, exon.end):
-                        g = gene_hit.value
-                        any_exon_hits = True
-                        if cmp_strand(g.strand, strand):
-                            any_is_sense = True
-                        if g.is_coding:
-                            any_is_coding = True
-                        gene_names.update(g.gene_names)
-                        annotation_sources.update(g.annotation_sources)
-            any_transcript_hits = True
-    if any_transcript_hits:        
-        if any_exon_hits:
-            if any_is_sense:
-                if any_is_coding:
-                    category = "protein"
-                else:
-                    category = "ncrna"
-            else:
-                category = "antisense"
-        else:
-            category = "intronic"
-        nearest_genes = "|".join(sorted(gene_names))
-        annotation_sources = "|".join(sorted(annotation_sources))
+        for e in t.exons:
+            cluster_tree.insert(e.start, e.end, 1)
+    exons = []
+    for start,end,indexes in cluster_tree.getregions():
+        exons.append((start,end))
+    del cluster_tree
+    return exons
+
+def get_nearest_genes(chrom, start, end, locus_trees):
+    # look left and right
+    hits = locus_trees[chrom].before(start, num_intervals=1, max_dist=MAX_DIST)        
+    hits.extend(locus_trees[chrom].after(end, num_intervals=1, max_dist=MAX_DIST))
+    nearest_locus_hit = None
+    nearest_dist = MAX_DIST
+    for hit in hits:
+        dist = min(abs(start - hit.end), abs(hit.start - end))
+        if dist < nearest_dist:
+            nearest_dist = dist
+            nearest_locus_hit = hit
+    nearest_genes = []
+    if nearest_locus_hit is None:
+        nearest_dist = -1
+    else:        
+        # find dist to nearest genes
+        nearest_dist = MAX_DIST
+        gene_tree = nearest_locus_hit.value
+        gene_hits = gene_tree.find(nearest_locus_hit.start, nearest_locus_hit.end)
+        for gene_hit in gene_hits:
+            g = gene_hit.value
+            dist = min(abs(start - hit.end), abs(hit.start - end))
+            if dist < nearest_dist:
+                nearest_dist = dist
+        # get nearest gene(s) at distance
+        for gene_hit in gene_hits:
+            g = gene_hit.value
+            dist = min(abs(start - hit.end), abs(hit.start - end))
+            if dist == nearest_dist:
+                nearest_genes.append(g)
+    return nearest_genes, nearest_dist
+
+def categorize_gene_transcripts(transcripts, locus_trees):
+    # get single set of exons for all isoforms in gene
+    gene_exons = cluster_isoforms(transcripts)
+    gene_start = min(e[0] for e in gene_exons)
+    gene_end = max(e[1] for e in gene_exons) 
+    gene_chrom = transcripts[0].chrom
+    gene_strand = strand_int_to_str(transcripts[0].strand)
+    tx_gene_id = transcripts[0].gene_id
+    # determine whether gene overlaps known loci
+    # intersect transcript with reference loci
+    locus_hits = locus_trees[gene_chrom].find(gene_start, gene_end)
+    if len(locus_hits) == 0:
+        # this is a completely unannotated transcript
+        category = CATEGORY_INTERGENIC
+        nearest_genes, nearest_dist = get_nearest_genes(gene_chrom, gene_start, gene_end, locus_trees)
     else:
-        category = "intergenic"
-        gene_start = min(t.start for t in transcripts)
-        gene_end = max(t.end for t in transcripts) 
-        nearest_hit, nearest_genes, nearest_dist = None, "NA", 10000000
-        before_hits = locus_trees[t.chrom].before(gene_start, num_intervals=1, max_dist=10000000)        
-        for locus_hit in before_hits:
-            dist = gene_start - locus_hit.end
-            if dist < nearest_dist:
-                nearest_dist = dist
-                nearest_hit = locus_hit
-        after_hits = locus_trees[t.chrom].after(gene_end, num_intervals=1, max_dist=10000000)
-        for locus_hit in after_hits:
-            dist = locus_hit.start - gene_end
-            if dist < nearest_dist:
-                nearest_dist = dist
-                nearest_hit = locus_hit
-        if nearest_hit is not None:        
-            gene_tree = nearest_hit.value
-            gene_names = set()
-            for gene_hit in gene_tree.find(nearest_hit.start, nearest_hit.end):
-                g = gene_hit.value
-                gene_names.update(g.gene_names)
-            nearest_genes = "|".join(sorted(gene_names)) 
+        # this transcript overlaps at least one known locus, so
+        # categorize as sense/antisense, coding/noncoding, exon/intron
+        protein_genes = {}
+        ncrna_genes = {}
+        antisense_genes = {}
+        for locus_hit in locus_hits:
+            gene_tree = locus_hit.value
+            for exon in gene_exons:
+                for gene_hit in gene_tree.find(exon[0], exon[1]):
+                    g = gene_hit.value
+                    if cmp_strand(g.strand, gene_strand):
+                        if g.is_coding:
+                            protein_genes[g.gene_id] = g
+                        else:
+                            ncrna_genes[g.gene_id] = g
+                    else:
+                        antisense_genes[g.gene_id] = g
+        protein_genes = protein_genes.values()
+        ncrna_genes = ncrna_genes.values()
+        antisense_genes = antisense_genes.values()
+        nearest_dist = 0
+        if len(protein_genes) > 0:
+            category = CATEGORY_PROTEIN
+            nearest_genes = protein_genes
+        elif len(ncrna_genes) > 0:
+            category = CATEGORY_NCRNA
+            nearest_genes = ncrna_genes
+        elif len(antisense_genes) > 0:
+            category = CATEGORY_ANTISENSE
+            nearest_genes = antisense_genes
+        else:
+            category = CATEGORY_INTRONIC
+            nearest_genes = []
+            for locus_hit in locus_hits:
+                gene_tree = locus_hit.value
+                gene_hits = gene_tree.find(locus_hit.start, locus_hit.end)
+                for gene_hit in gene_hits:
+                    nearest_genes.append(gene_hit.value)
+    # using 'nearest genes' list get gene names and annotation sources    
+    if len(nearest_genes) == 0:
+        gene_ids = "NA"
+        gene_names = "NA"
         annotation_sources = "NA"
+        nearest_dist = -1
+    else:
+        gene_ids = set()
+        gene_names = set()
+        annotation_sources = set()
+        for g in nearest_genes:
+            gene_ids.add(g.gene_id)
+            gene_names.update(g.gene_names)
+            annotation_sources.update(g.annotation_sources)
+        gene_ids = ",".join(sorted(gene_ids))
+        gene_names = ",".join(sorted(gene_names))
+        annotation_sources = ",".join(sorted(annotation_sources))
+    # add attributes to original transcripts
     for t in transcripts:
         t.attrs["category"] = category
-        t.attrs["nearest_genes"] = nearest_genes
+        t.attrs["nearest_gene_ids"] = gene_ids
+        t.attrs["nearest_gene_names"] = gene_names
+        t.attrs["nearest_dist"] = nearest_dist
         t.attrs["annotation_sources"] = annotation_sources
-        
 
 def categorize_transcripts(ref_gtf_file, gtf_file):
     locus_trees = read_reference_gtf(ref_gtf_file)
+    logging.debug("Categorizing GTF file")
     for locus_transcripts in parse_gtf(open(gtf_file), attr_defs=cufflinks_attr_defs):
         # group transcripts by gene id
         gene_transcript_map = collections.defaultdict(lambda: [])

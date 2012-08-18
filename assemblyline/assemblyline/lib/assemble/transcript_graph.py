@@ -26,7 +26,12 @@ def filter_transcripts(transcripts):
     new_transcripts = []
     unstranded_multiple_exons = 0
     zero_density = 0
+    no_exons = 0
     for t in transcripts:
+        # check that transcript has exons
+        if len(t.exons) == 0:
+            no_exons += 1
+            continue 
         # check that unstranded transcripts have only one exon
         if t.strand == NO_STRAND:
             if len(t.exons) > 1:
@@ -39,6 +44,8 @@ def filter_transcripts(transcripts):
         else:
             #logging.debug("Skipping transcript %s with density %f" % (t.id, t.density))
             zero_density += 1
+    if no_exons > 0:
+        logging.debug("\t\tSkipped %d transcripts with no exons" % (no_exons))
     if zero_density > 0:
         logging.debug("\t\tSkipped %d transcripts with zero density" % (zero_density))
     if unstranded_multiple_exons > 0:
@@ -67,6 +74,11 @@ def find_exon_boundaries(transcripts):
     return sorted(exon_boundaries)
 
 def split_exon(exon, boundaries):
+    """
+    partition the exon given list of node boundaries
+    
+    generator yields (start,end) intervals for exon
+    """
     # find the indexes into the intron boundaries list that
     # border the exon.  all the indexes in between these two
     # are overlapping the exon and we must use them to break
@@ -110,8 +122,8 @@ def create_undirected_transcript_graph(transcripts):
         # nodes in the transcript path
         nodes = []
         for exon in t.exons:
-            nodes.extend([Exon(start, end) for start, end in 
-                          split_exon(exon, boundaries)])
+            for start,end in split_exon(exon, boundaries):
+                nodes.append(Exon(start, end))
         # add nodes/edges to graph
         u = nodes[0]
         add_node_undirected(G, u, t.id, t.strand, t.fpkm)
@@ -289,8 +301,8 @@ def create_strand_specific_graph(transcripts, strand, overhang_threshold):
         # nodes in the transcript path
         nodes = []
         for exon in t.exons:
-            nodes.extend([Exon(start, end) for start, end in 
-                          split_exon(exon, boundaries)])
+            for start, end in split_exon(exon, boundaries):
+                nodes.append(Exon(start,end))
         # add nodes/edges to graph
         u = nodes[0]
         add_node_directed(G, u, t.id, density)
@@ -302,7 +314,71 @@ def create_strand_specific_graph(transcripts, strand, overhang_threshold):
                 G.add_edge(u,v)
             u = v
     return G
-    
+
+def _trim_utr_nodes(G, nodes, coverage_fraction, reverse=False):
+    """
+    return list of nodes that should be clipped
+    """
+    if reverse:
+        nodes.reverse()
+    before_total_density = 0
+    after_total_density = sum(G.node[nodes[j]][NODE_DENSITY] for j in xrange(len(nodes)))
+    trim_index = 0
+    for i in xrange(1,len(nodes)):
+        density = G.node[nodes[i-1]][NODE_DENSITY]        
+        before_total_density += density
+        after_total_density -= density
+        before_avg_density = before_total_density / float(i)
+        after_avg_density = after_total_density / float(len(nodes) - i)
+        fraction = before_avg_density / after_avg_density
+        #print i, fraction, before_avg_density, after_avg_density
+        if fraction <= coverage_fraction:
+            trim_index = i
+    trim_nodes = []
+    if trim_index > 0:
+        trim_nodes = nodes[:trim_index] 
+    if reverse:
+        nodes.reverse()
+    return trim_nodes
+
+def trim_utrs(G, coverage_fraction):
+    trim_nodes = set()
+    for n in G.nodes():
+        # utrs are leaf nodes
+        in_degree = G.in_degree(n)
+        out_degree = G.out_degree(n)
+        if (in_degree == 0) and (out_degree == 0):
+            continue
+        elif in_degree == 0:
+            nodes = [n]
+            # extend forward
+            succs = G.successors(nodes[-1])
+            while (len(succs) == 1):
+                nodes.append(succs[0])
+                succs = G.successors(nodes[-1])
+            # TODO: single exon transcripts will break
+            # because trimming could happen from both ends
+            if len(succs) < 1:
+                continue
+            if len(nodes) == 1:
+                continue
+            #print '5UTR', len(nodes), nodes[0].start, nodes[-1].end
+            trim_nodes.update(_trim_utr_nodes(G, nodes, coverage_fraction, reverse=False))            
+        elif out_degree == 0:
+            nodes = [n]
+            # extend backward
+            preds = G.predecessors(nodes[-1])
+            while (len(preds) == 1):
+                nodes.append(preds[0])
+                preds = G.predecessors(nodes[-1])
+            if len(preds) < 1:
+                continue
+            if len(nodes) == 1:
+                continue
+            #print '3UTR', len(nodes), nodes[0].start, nodes[-1].end
+            trim_nodes.update(_trim_utr_nodes(G, nodes, coverage_fraction, reverse=False))
+    return trim_nodes
+
 def create_transcript_graph(transcripts, overhang_threshold=0):
     '''
     overhang_threshold: integer greater than zero specifying the 
@@ -342,6 +418,11 @@ def create_transcript_graph(transcripts, overhang_threshold=0):
     GG = []
     for strand, mytranscripts in enumerate(strand_transcripts):
         H = create_strand_specific_graph(mytranscripts, strand, overhang_threshold)
+        # trim ends of utrs when coverage is below a certain fraction
+        trim_nodes = trim_utrs(H, coverage_fraction=0.1)
+        if len(trim_nodes) > 0:
+            logging.debug("\t\tTrimming %d nodes from UTRs" % (len(trim_nodes)))
+        H.remove_nodes_from(trim_nodes)
         # index transcript density by id
         transcript_id_density_map = dict((t.id, t.attrs[STRAND_DENSITY][strand]) for t in mytranscripts)
         # collapse graph to form chains

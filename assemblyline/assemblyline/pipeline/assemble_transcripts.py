@@ -6,11 +6,12 @@ Created on Dec 2, 2011
 import argparse
 import logging
 import sys
+import collections
 
 from assemblyline.lib.bx.cluster import ClusterTree
+from assemblyline.lib.gtf import GTFFeature
 from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
 from assemblyline.lib.transcript import strand_int_to_str, NEG_STRAND
-from assemblyline.lib.gtf import GTFFeature
 from assemblyline.lib.assemble.base import GLOBAL_LOCUS_ID, GLOBAL_GENE_ID, GLOBAL_TSS_ID, GLOBAL_TRANSCRIPT_ID
 from assemblyline.lib.assemble.transcript_graph import create_transcript_graph
 from assemblyline.lib.assemble.assembler import assemble_transcript_graph
@@ -132,34 +133,39 @@ def assemble_locus(transcripts, overhang_threshold, kmax,
                                                    kmax, fraction_major_isoform, 
                                                    max_paths)
         logging.debug("\tAssembled %d transcript(s)" % (len(path_info_list)))
-        # compute total density across all paths
-        highest_density = max(1e-8, path_info_list[0].density)
         # determine gene ids and tss ids
         _annotate_gene_and_tss_ids(path_info_list, strand)
-        # create GTF features for each transcript path
+        # bin transcripts by gene id
+        gene_path_info_dict = collections.defaultdict(lambda: [])
         for p in path_info_list:
-            # assign transcript id
-            tx_id = GLOBAL_TRANSCRIPT_ID
-            GLOBAL_TRANSCRIPT_ID += 1
-            # get strings for each id
-            tx_id_str = "TU%d" % tx_id
-            tss_id_str = "TSS%d" % (p.tss_id)
-            gene_id_str = "G%d" % (p.gene_id)
-            # compute isoform fractions
-            frac = p.density / highest_density
-            # write to GTF
-            if gtf_fileh is not None:
-                features.extend(get_gtf_features(locus_chrom, strand, p.path,
-                                                 locus_id=locus_id_str, 
-                                                 gene_id=gene_id_str, 
-                                                 tss_id=tss_id_str, 
-                                                 transcript_id=tx_id_str,
-                                                 density=p.density, 
-                                                 frac=frac))                    
-            # write to BED
-            name = "%s|%s(%.1f)" % (gene_id_str, tx_id_str, p.density)
-            fields = write_bed(locus_chrom, name, strand, int(round(1000.0*frac)), p.path)
-            print >>bed_fileh, '\t'.join(fields)
+            gene_path_info_dict[p.gene_id].append(p)
+        for gene_path_info_list in gene_path_info_dict.itervalues():
+            # highest density path is always first in list
+            highest_density = max(1e-8, gene_path_info_list[0].density)
+            # create GTF features for each transcript path
+            for p in gene_path_info_list:
+                # assign transcript id
+                tx_id = GLOBAL_TRANSCRIPT_ID
+                GLOBAL_TRANSCRIPT_ID += 1
+                # get strings for each id
+                tx_id_str = "TU%d" % tx_id
+                tss_id_str = "TSS%d" % (p.tss_id)
+                gene_id_str = "G%d" % (p.gene_id)
+                # compute isoform fractions
+                frac = p.density / highest_density
+                # write to GTF
+                if gtf_fileh is not None:
+                    features.extend(get_gtf_features(locus_chrom, strand, p.path,
+                                                     locus_id=locus_id_str, 
+                                                     gene_id=gene_id_str, 
+                                                     tss_id=tss_id_str, 
+                                                     transcript_id=tx_id_str,
+                                                     density=p.density, 
+                                                     frac=frac))                    
+                # write to BED
+                name = "%s|%s(%.1f)" % (gene_id_str, tx_id_str, p.density)
+                fields = write_bed(locus_chrom, name, strand, int(round(1000.0*frac)), p.path)
+                print >>bed_fileh, '\t'.join(fields)
     # output GTF
     if gtf_fileh is not None:
         # in-place sort so that 'transcript' features appear before 'exon'
