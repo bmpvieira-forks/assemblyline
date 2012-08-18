@@ -31,20 +31,19 @@ def _init_kmer_attrs():
 
 def _extend_partial_paths(G, partial_paths):
     """
-    extend paths in both directions along graph while edge degree is 
-    equal to one, and bin paths by length
+    extend paths in both directions to include dummy start/end nodes
     """  
     new_partial_paths = []
     for path, density in partial_paths:
         new_path = tuple(path)
         # extend backward
         preds = G.predecessors(new_path[0])
-        while len(preds) == 1:
+        while (len(preds) == 1) and (preds[0].start < 0):
             new_path = (preds[0],) + new_path
             preds = G.predecessors(new_path[0])
         # extend forward
         succs = G.successors(new_path[-1])
-        while len(succs) == 1:
+        while (len(succs) == 1) and (succs[0].start < 0):
             new_path = new_path + (succs[0],)
             succs = G.successors(new_path[-1])
         new_partial_paths.append((new_path, density))
@@ -265,9 +264,6 @@ def create_kmer_graph(G, partial_paths, k):
     """
     # create a graph of k-mers
     K = nx.DiGraph()
-    # extend paths in both directions along graph while edge degree is 
-    # equal to one  
-    partial_paths = _extend_partial_paths(G, partial_paths)
     # bin partial paths by their length (up to length 'k') and sort 
     # paths in each bin by their density levels
     partial_path_bins = _bin_partial_paths(G, partial_paths, k)
@@ -386,6 +382,8 @@ def assemble_transcript_graph(G, strand, partial_paths, kmax, fraction_major_pat
     logging.debug("\tConstructing k-mer graph with k=%d" % (k))
     # append/prepend dummy nodes to start/end nodes
     source_kmer, sink_kmer = add_dummy_start_end_nodes(G, k)
+    # extend paths in both directions to include the dummy start/end nodes
+    partial_paths = _extend_partial_paths(G, partial_paths)   
     # create k-mer graph and add partial paths
     K = create_kmer_graph(G, partial_paths, k)
     # connect all kmer nodes with degree zero to the source/sink node
