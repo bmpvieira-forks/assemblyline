@@ -6,7 +6,9 @@ Created on Dec 17, 2011
 import logging
 import bisect
 
-from assemblyline.lib.transcript import POS_STRAND, NEG_STRAND, NO_STRAND
+from assemblyline.lib.transcript import POS_STRAND, NEG_STRAND, NO_STRAND, strand_int_to_str
+from base import NODE_DENSITY
+from collapse import get_chains
 
 def find_intron_starts_and_ends(transcripts):
     '''
@@ -115,6 +117,185 @@ def trim_transcripts(transcripts, overhang_threshold):
         t.exons[0].start = trim_start
         t.exons[-1].end = trim_end
         
-        
-        
-        
+
+def _trim_utr_nodes(G, nodes, coverage_fraction):
+    """
+    return list of nodes that should be clipped
+    """
+    before_total_density = 0
+    after_total_density = sum(G.node[nodes[j]][NODE_DENSITY] for j in xrange(len(nodes)))
+    trim_index = 0
+    for i in xrange(1,len(nodes)):
+        density = G.node[nodes[i-1]][NODE_DENSITY]        
+        before_total_density += density
+        after_total_density -= density
+        before_avg_density = before_total_density / float(i)
+        after_avg_density = after_total_density / float(len(nodes) - i)
+        fraction = before_avg_density / after_avg_density
+        if fraction <= coverage_fraction:
+            trim_index = i
+    trim_nodes = []
+    if trim_index > 0:
+        trim_nodes = nodes[:trim_index] 
+    return trim_nodes, nodes[trim_index]
+
+def get_start_end_nodes(G):
+    start_nodes = []
+    end_nodes = []
+    both_nodes = []
+    for n in G.nodes_iter():
+        in_degree = G.in_degree(n)
+        out_degree = G.out_degree(n)
+        if (in_degree == 0) and (out_degree == 0):
+            both_nodes.append(n)
+        elif G.in_degree(n) == 0:
+            print '5UTR', n
+            start_nodes.append(n)
+        elif G.out_degree(n) == 0:
+            print '3UTR', n
+            end_nodes.append(n)
+    return start_nodes, end_nodes, both_nodes
+
+def trim_utrs(G, coverage_fraction):
+    start_nodes, end_nodes, both_nodes = get_start_end_nodes(G)
+    nodes_to_remove = set()
+    for n in start_nodes:
+        nodes = [n]
+        # extend forward
+        succs = G.successors(nodes[-1])
+        while (len(succs) == 1) and (G.in_degree(succs[0]) == 1):
+            nodes.append(succs[0])
+            succs = G.successors(nodes[-1])
+        # TODO: single exon transcripts will break
+        # because trimming could happen from both ends
+        if (len(succs) < 1) or (len(nodes) == 1):
+            continue
+        trim_nodes, new_utr_node = _trim_utr_nodes(G, nodes, coverage_fraction)
+        nodes_to_remove.update(trim_nodes)
+    for n in end_nodes:
+        nodes = [n]
+        # extend backward
+        preds = G.predecessors(nodes[-1])
+        while (len(preds) == 1) and (G.out_degree(preds[0]) == 1):
+            nodes.append(preds[0])
+            preds = G.predecessors(nodes[-1])
+        # TODO: single exon transcripts will break
+        # because trimming could happen from both ends
+        if (len(preds) < 1) or (len(nodes) == 1):
+            continue
+        trim_nodes, new_utr_node = _trim_utr_nodes(G, nodes, coverage_fraction)
+        nodes_to_remove.update(trim_nodes)
+    # remove nodes from graph
+    G.remove_nodes_from(nodes_to_remove)
+    logging.debug("\t\tTrimmed %d nodes from UTRs" % (len(nodes_to_remove)))
+
+def get_introns(G, reverse=False):
+    '''
+    input: DiGraph G
+    output: introns as (start,end) tuples
+    '''
+    if reverse:
+        G.reverse(copy=False)
+    introns = set()
+    for u,nbrdict in G.adjacency_iter():
+        for v in nbrdict:
+            if u.end == v.start:
+                continue
+            introns.add((u.end,v.start))
+    if reverse:
+        G.reverse(copy=False)
+    return introns
+
+def calc_average_density(G, nodes):
+    total_mass = 0.0
+    total_length = 0
+    for n in nodes:
+        length = (n.end - n.start)
+        total_mass += length * G.node[n][NODE_DENSITY]
+        total_length += length
+    return total_mass / float(total_length)
+    
+def trim_intron(G, chains, node_chain_map, successor_dict, 
+                parent, nodes, trim_intron_fraction=0.25):
+    # find the nodes immediately downstream of the intron
+    succ = None
+    for succ in successor_dict[nodes[-1]]:
+        if (parent.end == succ.start) or (parent.start == succ.end):
+            break
+    assert succ is not None
+    # calculate the average density of the nodes bordering the intron
+    succ_chain_node = node_chain_map[succ]
+    succ_nodes = chains[succ_chain_node]
+    succ_density = calc_average_density(G, succ_nodes)
+    # remove intron nodes with density less than the bordering exons
+    trim_nodes = set()
+    for n in nodes:
+        density = G.node[n][NODE_DENSITY]
+        if density < (trim_intron_fraction * succ_density):
+            trim_nodes.add(n)
+    return trim_nodes
+    
+def trim_utr(G, nodes, coverage_fraction):
+    """
+    return list of nodes that should be clipped
+    """
+    before_total_density = 0
+    after_total_density = sum(G.node[nodes[j]][NODE_DENSITY] for j in xrange(len(nodes)))
+    trim_index = 0
+    for i in xrange(1,len(nodes)):
+        density = G.node[nodes[i-1]][NODE_DENSITY]        
+        before_total_density += density
+        after_total_density -= density
+        before_avg_density = before_total_density / float(i)
+        after_avg_density = after_total_density / float(len(nodes) - i)
+        fraction = before_avg_density / after_avg_density
+        #print i, fraction, before_avg_density, after_avg_density
+        if fraction <= coverage_fraction:
+            trim_index = i
+    trim_nodes = []
+    if trim_index > 0:
+        trim_nodes = nodes[:trim_index] 
+    return trim_nodes
+   
+def trim_graph(G, strand,
+               overhang_threshold, 
+               trim_utr_fraction,
+               trim_intron_fraction):
+    # get introns
+    introns = get_introns(G, reverse=(strand == NEG_STRAND))
+    # get lookup table of node predecessors and successors
+    successor_dict = {}
+    for n,nbrdict in G.adjacency_iter():
+        successor_dict[n] = nbrdict.keys()
+    predecessor_dict = {}
+    G.reverse(copy=False)
+    for n,nbrdict in G.adjacency_iter():
+        predecessor_dict[n] = nbrdict.keys()
+    G.reverse(copy=False)        
+    # get 'chains' of contiguous nodes with edge degree of one or less
+    node_chain_map, chains = get_chains(G)
+    # trim chains
+    all_trim_nodes = set()
+    for parent, nodes in chains.iteritems():
+        if strand == NEG_STRAND:
+            nodes.reverse()
+        trim_nodes = []
+        if (parent.start, parent.end) in introns:
+            trim_nodes = trim_intron(G, chains, node_chain_map, successor_dict, 
+                                     parent, nodes, trim_intron_fraction)
+        else:
+            in_degree = len(predecessor_dict[nodes[0]])
+            out_degree = len(successor_dict[nodes[-1]])
+            if (in_degree > 0) and (out_degree > 0):
+                # do not trim unless intron retention
+                continue
+            elif (in_degree == 0) and (out_degree == 0):
+                # TODO: trim in both directions
+                continue
+            elif in_degree == 0:
+                trim_nodes = trim_utr(G, nodes, trim_utr_fraction)
+            elif out_degree == 0:
+                trim_nodes = trim_utr(G, nodes[::-1], trim_utr_fraction)
+        all_trim_nodes.update(trim_nodes)
+    G.remove_nodes_from(all_trim_nodes)
+    logging.debug("\t\t(%s) trimmed %d nodes from graph" % (strand_int_to_str(strand), len(all_trim_nodes)))

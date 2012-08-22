@@ -93,9 +93,7 @@ class Transcript(object):
         return self.attrs["gene_id"]
     @property
     def library(self):
-        # TODO: convert to using library attribute
         return self.attrs["library"]
-        #return self.attrs["gene_id"].split(".")[0]
     @property
     def sample(self):
         return self.attrs["sample"]

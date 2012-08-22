@@ -35,7 +35,7 @@ def separate_transcripts(gtf_features):
             transcript.start = feature.start
             transcript.end = feature.end
             # convert from string strand notation ("+", "-", ".") 
-            # to integer (0, 1)            
+            # to integer (0, 1)
             transcript.strand = strand_str_to_int(feature.strand)
             transcript.exons = {}
             transcript.attrs = feature.attrs

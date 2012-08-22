@@ -6,8 +6,7 @@ Created on Dec 7, 2011
 import operator
 import networkx as nx
 
-from base import Exon, TRANSCRIPT_IDS, NODE_DENSITY, NODE_LENGTH, \
-    CHAIN_NODES, CHAIN_EDGES, CHAIN_DATA
+from base import Exon, TRANSCRIPT_IDS, NODE_DENSITY, NODE_LENGTH
 
 def can_collapse(G,u,v):
     # see if edge nodes have degree larger than '1'
@@ -48,9 +47,6 @@ def get_chains(G):
         for n in merged_chain:
             node_chain_map[n] = merged_node
         chains[merged_node] = merged_chain
-    # sort chain nodes by genome position as store as list
-    for parent in chains:
-        chains[parent] = sorted(chains[parent], key=operator.attrgetter('start'))
     return node_chain_map, chains
 
 def add_chains(G, chains, node_chain_map):
@@ -64,18 +60,18 @@ def add_chains(G, chains, node_chain_map):
         chain_data = {}
         for n in nodes:
             d = G.node[n]
-            if CHAIN_NODES in d:
-                new_nodes.extend(d[CHAIN_NODES])
-            if CHAIN_DATA in d:
-                chain_data.update(d[CHAIN_DATA])
+            if 'chain' in d:
+                new_nodes.extend(d['chain'])
+            if 'chain_data' in d:
+                chain_data.update(d['chain_data'])
         new_nodes.extend(nodes)
         # sort nodes by genome position and find the min/max
         sorted_nodes = sorted(new_nodes, key=operator.attrgetter('start'))
         # add node attributes
         chain_data.update(dict((n, G.node[n]) for n in nodes))
-        attr_dict = {CHAIN_NODES: sorted_nodes,
-                     CHAIN_DATA: chain_data,
-                     CHAIN_EDGES: []} 
+        attr_dict = {'chain': sorted_nodes,
+                     'chain_data': chain_data,
+                     'chain_edges': []} 
         H.add_node(parent, attr_dict=attr_dict)
     # add chain edges
     for u,v,d in G.edges_iter(data=True):
@@ -86,7 +82,7 @@ def add_chains(G, chains, node_chain_map):
         else:
             # add internal chain edge attribute data
             # as 'chain_edges' attribute of parent node
-            H.node[u_chain_node][CHAIN_EDGES].append((u,v,d))
+            H.node[u_chain_node]['chain_edges'].append((u,v,d))
     return H
 
 def recalc_strand_specific_graph_attributes(G):
@@ -95,17 +91,16 @@ def recalc_strand_specific_graph_attributes(G):
     is divided into strand-specific subgraphs and collapsed
     """
     for n,d in G.nodes_iter(data=True):
-        chain_nodes = d[CHAIN_NODES]
-        chain_data = d[CHAIN_DATA]
+        chain_nodes = d['chain']
+        chain_data = d['chain_data']
         # calculate density of all nodes in chain
         total_mass = 0.0
         total_length = 0
         ids = set()
         for cn in chain_nodes:
-            cattrs = chain_data[cn]
-            ids.update(cattrs[TRANSCRIPT_IDS])
+            ids.update(chain_data[cn][TRANSCRIPT_IDS])
             length = (cn.end - cn.start)
-            total_mass += length * cattrs[NODE_DENSITY]
+            total_mass += length * chain_data[cn][NODE_DENSITY]
             total_length += length
         density = total_mass / float(total_length)
         # set attributes
