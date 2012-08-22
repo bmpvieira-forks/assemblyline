@@ -12,10 +12,52 @@ import numpy as np
 
 from assemblyline.lib.bx.cluster import ClusterTree
 from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, strand_int_to_str
-from base import NODE_DENSITY, NODE_LENGTH, STRAND_DENSITY, TRANSCRIPT_IDS, init_directed_node_attrs
-from filter import filter_transcripts
-from trim import trim_transcripts, trim_utrs, trim_graph
+from base import NODE_DENSITY, NODE_LENGTH, STRAND_DENSITY, TRANSCRIPT_IDS
+from trim import trim_transcripts
 from collapse import collapse_strand_specific_graph
+
+def filter_transcripts(transcripts, min_length=200):
+    """
+    removes invalid transcripts or transcripts with zero density
+    
+    returns list of transcripts
+    """
+    # filter transcripts
+    new_transcripts = []
+    unstranded_multiple_exons = 0
+    zero_density = 0
+    no_exons = 0
+    too_short = 0
+    for t in transcripts:
+        # check that transcript has exons
+        if len(t.exons) == 0:
+            no_exons += 1
+            continue 
+        # check that unstranded transcripts have only one exon
+        if t.strand == NO_STRAND:
+            if len(t.exons) > 1:
+                #logging.debug("Skipping unstranded transcript with multiple exons")
+                unstranded_multiple_exons += 1
+                continue
+        # check length requirement
+        if t.length < min_length:
+            too_short += 1
+            continue
+        # check that transcript has positive density
+        if t.density > 0:
+            new_transcripts.append(t)
+        else:
+            #logging.debug("Skipping transcript %s with density %f" % (t.id, t.density))
+            zero_density += 1
+    if no_exons > 0:
+        logging.debug("\t\tSkipped %d transcripts with no exons" % (no_exons))
+    if unstranded_multiple_exons > 0:
+        logging.debug("\t\tSkipped %d unstranded transcripts with multiple exons" % (unstranded_multiple_exons))
+    if too_short > 0:
+        logging.debug("\t\tSkipped %d transcripts with length < %d" % (too_short, min_length))
+    if zero_density > 0:
+        logging.debug("\t\tSkipped %d transcripts with zero density" % (zero_density))
+    return new_transcripts
 
 def find_exon_boundaries(transcripts):
     '''
@@ -53,15 +95,6 @@ def split_exon(exon, boundaries):
     for j in xrange(1, len(exon_splits)):
         start, end = exon_splits[j-1], exon_splits[j]
         yield start, end
-
-def get_transcript_node_map(G):
-    t_node_map = collections.defaultdict(lambda: set())
-    for n,d in G.nodes_iter(data=True):
-        for id in d[TRANSCRIPT_IDS]:
-            t_node_map[id].add(n)
-    for id,nodes in t_node_map.iteritems():
-        t_node_map[id] = sorted(nodes, key=operator.attrgetter('start'))
-    return t_node_map
 
 def add_node_undirected(G, n, t_id, strand, density):
     """
@@ -105,6 +138,15 @@ def create_undirected_transcript_graph(transcripts):
             G.add_edge(u, v)
             u = v
     return G
+
+def get_transcript_node_map(G):
+    t_node_map = collections.defaultdict(lambda: set())
+    for n,d in G.nodes_iter(data=True):
+        for id in d[TRANSCRIPT_IDS]:
+            t_node_map[id].add(n)
+    for id,nodes in t_node_map.iteritems():
+        t_node_map[id] = sorted(nodes, key=operator.attrgetter('start'))
+    return t_node_map
 
 def redistribute_unstranded_transcripts(G, transcripts, transcript_node_map):
     """
@@ -218,61 +260,25 @@ def redistribute_density(G, transcripts):
         num_redist, unresolved = redistribute_unstranded_transcripts(G, unresolved, transcript_node_map)
         logging.debug("\t\tRescued another %d unstranded transcripts (%d unresolved)" % (num_redist, len(unresolved)))
 
-def create_strand_transcript_maps(transcripts):
-    """
-    builds an undirected graph of all transcripts in order to
-    resolve strandedness for unstranded transcripts and reallocate
-    transcript density onto specific strands
-    
-    returns a list of dictionaries for each strand, dictionary
-    keyed by transcript id
-    """
-    # build the initial transcript graph
-    Gundir = create_undirected_transcript_graph(transcripts)
-    # reallocate unstranded transcripts to fwd/rev strand according
-    # fraction of fwd/rev density across transcript nodes
-    redistribute_density(Gundir, transcripts)
-    # now that density has been allocated, partition transcripts 
-    # into fwd/rev/unknown strands
-    transcript_maps = [{}, {}, {}]    
-    for t in transcripts:
-        for strand in xrange(0,3):
-            if t.attrs[STRAND_DENSITY][strand] > 1e-8:
-                transcript_maps[strand][t.id] = t
-    # done with the undirected graph
-    Gundir.clear()
-    return transcript_maps
-
 def add_node_directed(G, n, t_id, density):
     """
     add node to directed (strand-specific) graph
+    
+    each node in graph maintains attributes:
+    'ids': set() of transcript id strings
+    'strand_density': numpy array containing density on each strand
+    'length': size of node in nucleotides
     """
     if n not in G: 
-        G.add_node(n, attr_dict=init_directed_node_attrs(n))
+        attr_dict = {TRANSCRIPT_IDS: set(),
+                     NODE_LENGTH: (n.end - n.start),
+                     NODE_DENSITY: 0}
+        G.add_node(n, attr_dict=attr_dict)
     nd = G.node[n]
     nd[TRANSCRIPT_IDS].add(t_id)
     nd[NODE_DENSITY] += density
 
-def add_transcript_directed(G, strand, boundaries, transcript):
-    # get strand-specific density
-    density = transcript.attrs[STRAND_DENSITY][strand]
-    # split exons that cross boundaries and to get the
-    # nodes in the transcript path
-    nodes = []
-    for exon in transcript.exons:
-        for start, end in split_exon(exon, boundaries):
-            nodes.append(Exon(start,end))
-    if strand == NEG_STRAND:
-        nodes.reverse()
-    # add nodes/edges to graph
-    u = nodes[0]
-    add_node_directed(G, u, transcript.id, density)
-    for v in nodes[1:]:
-        add_node_directed(G, v, transcript.id, density)
-        G.add_edge(u,v)
-        u = v
-    
-def create_strand_specific_graph(strand, transcripts):
+def create_strand_specific_graph(transcripts, strand, overhang_threshold):
     '''
     build strand-specific subgraphs for forward/reverse/unknown strands
 
@@ -287,23 +293,101 @@ def create_strand_specific_graph(strand, transcripts):
     returns a 3-tuple containing DiGraph objects corresponding
     to the forward/reverse/unknown strand
     '''
+    # trim the transcripts (modifies transcripts in place)
+    trim_transcripts(transcripts, overhang_threshold)
     # find the intron domains of the transcripts
     boundaries = find_exon_boundaries(transcripts)
     # initialize transcript graph
     G = nx.DiGraph()
     # add transcripts
     for t in transcripts:
-        add_transcript_directed(G, strand, boundaries, t)
+        # get strand-specific density
+        density = t.attrs[STRAND_DENSITY][strand]
+        # split exons that cross boundaries and to get the
+        # nodes in the transcript path
+        nodes = []
+        for exon in t.exons:
+            for start, end in split_exon(exon, boundaries):
+                nodes.append(Exon(start,end))
+        # add nodes/edges to graph
+        u = nodes[0]
+        add_node_directed(G, u, t.id, density)
+        for v in nodes[1:]:
+            add_node_directed(G, v, t.id, density)
+            if strand == NEG_STRAND:
+                G.add_edge(v,u)
+            else:
+                G.add_edge(u,v)
+            u = v
     return G
 
-def create_transcript_graphs(transcripts, 
-                             min_length=0,
-                             overhang_threshold=0, 
-                             trim_utr_fraction=0.0,
-                             trim_intron_fraction=0.0):
+def _trim_utr_nodes(G, nodes, coverage_fraction, reverse=False):
+    """
+    return list of nodes that should be clipped
+    """
+    if reverse:
+        nodes.reverse()
+    before_total_density = 0
+    after_total_density = sum(G.node[nodes[j]][NODE_DENSITY] for j in xrange(len(nodes)))
+    trim_index = 0
+    for i in xrange(1,len(nodes)):
+        density = G.node[nodes[i-1]][NODE_DENSITY]        
+        before_total_density += density
+        after_total_density -= density
+        before_avg_density = before_total_density / float(i)
+        after_avg_density = after_total_density / float(len(nodes) - i)
+        fraction = before_avg_density / after_avg_density
+        #print i, fraction, before_avg_density, after_avg_density
+        if fraction <= coverage_fraction:
+            trim_index = i
+    trim_nodes = []
+    if trim_index > 0:
+        trim_nodes = nodes[:trim_index] 
+    if reverse:
+        nodes.reverse()
+    return trim_nodes
+
+def trim_utrs(G, coverage_fraction):
+    trim_nodes = set()
+    for n in G.nodes():
+        # utrs are leaf nodes
+        in_degree = G.in_degree(n)
+        out_degree = G.out_degree(n)
+        if (in_degree == 0) and (out_degree == 0):
+            continue
+        elif in_degree == 0:
+            nodes = [n]
+            # extend forward
+            succs = G.successors(nodes[-1])
+            while (len(succs) == 1):
+                nodes.append(succs[0])
+                succs = G.successors(nodes[-1])
+            # TODO: single exon transcripts will break
+            # because trimming could happen from both ends
+            if len(succs) < 1:
+                continue
+            if len(nodes) == 1:
+                continue
+            #print '5UTR', len(nodes), nodes[0].start, nodes[-1].end
+            trim_nodes.update(_trim_utr_nodes(G, nodes, coverage_fraction, reverse=False))            
+        elif out_degree == 0:
+            nodes = [n]
+            # extend backward
+            preds = G.predecessors(nodes[-1])
+            while (len(preds) == 1):
+                nodes.append(preds[0])
+                preds = G.predecessors(nodes[-1])
+            if len(preds) < 1:
+                continue
+            if len(nodes) == 1:
+                continue
+            #print '3UTR', len(nodes), nodes[0].start, nodes[-1].end
+            trim_nodes.update(_trim_utr_nodes(G, nodes, coverage_fraction, reverse=False))
+    return trim_nodes
+
+def create_transcript_graph(transcripts, overhang_threshold=0, 
+                            trim_utr_fraction=0.0):
     '''
-    min_length: minimum transcript length
-    
     overhang_threshold: integer greater than zero specifying the 
     maximum exon overhang that can be trimmed to match an intron
     boundary.  exons that overhang more than this will be 
@@ -312,30 +396,48 @@ def create_transcript_graphs(transcripts,
     trim_utr_fraction: float specifying the fraction of the average UTR
     coverage below which the ends of the UTR will be trimmed
     
+    returns a 3-tuple containing fwd/rev/unknown transcript graphs
+    and a 3-tuple containing (path,density) information for each
+    transcript
+    
     nodes have the following attributes:
     chain: list of children nodes
     density: coverage density at node 
     length: total length of node
-
-    generates (graph, strand) tuples with transcript graphs
+    
+    edges have the following attributes:
+    density: coverage density flowing through edge
     '''
     # remove bad transcripts
-    logging.debug("\tFiltering transcripts")
-    transcripts = filter_transcripts(transcripts, min_length)
-    # redistribute transcript density by strand
-    logging.debug("\tResolving unstranded transcripts")
-    transcript_maps = create_strand_transcript_maps(transcripts)
+    transcripts = filter_transcripts(transcripts)
+    # build the initial transcript graph
+    Gundir = create_undirected_transcript_graph(transcripts)
+    # reallocate unstranded transcripts to fwd/rev strand according
+    # fraction of fwd/rev density across transcript nodes
+    redistribute_density(Gundir, transcripts)
+    # now that density has been allocated, partition transcripts 
+    # into fwd/rev/unknown strands
+    transcript_maps = [{}, {}, {}]    
+    for t in transcripts:
+        for strand in xrange(0,3):
+            if t.attrs[STRAND_DENSITY][strand] > 1e-8:
+                transcript_maps[strand][t.id] = t
+    # done with the undirected graph
+    Gundir.clear()
     # create strand-specific graphs using redistributed density
-    logging.debug("\tCreating transcript graphs")
+    GG = []
     for strand, strand_transcript_map in enumerate(transcript_maps):
-        # create strand specific transcript graph
-        G = create_strand_specific_graph(strand, strand_transcript_map.values())
-        # trim utrs and intron retentions
-        trim_graph(G, strand, overhang_threshold, trim_utr_fraction, 
-                   trim_intron_fraction)
+        H = create_strand_specific_graph(strand_transcript_map.values(), strand, overhang_threshold)
+        # trim ends of utrs when coverage is below a certain fraction
+        trim_nodes = trim_utrs(H, coverage_fraction=trim_utr_fraction)
+        if len(trim_nodes) > 0:
+            logging.debug("\t\t(%s) trimmed %d nodes from UTRs" % (strand_int_to_str(strand), len(trim_nodes)))
+        H.remove_nodes_from(trim_nodes)
+        # collapse graph to form chains
+        G = collapse_strand_specific_graph(H)
         # get connected components of graph which represent independent genes
         # unconnected components are considered different genes
-        Gsubs = nx.weakly_connected_component_subgraphs(G)
+        Gsubs = nx.weakly_connected_component_subgraphs(G)        
         for Gsub in Gsubs:
             # get partial path data supporting graph
             transcript_node_map = get_transcript_node_map(Gsub)
@@ -348,7 +450,10 @@ def create_transcript_graphs(transcripts,
                 # transcript length by renormalizing by length
                 t = strand_transcript_map[t_id]
                 density = t.attrs[STRAND_DENSITY][strand]
+                length = t.length
                 path_length = sum(G.node[n][NODE_LENGTH] for n in nodes)
-                new_density = density * max(1.0, float(t.length) / path_length)
+                new_density = density * max(1.0, float(length) / path_length)
                 path_density_dict[tuple(nodes)] += new_density
-            yield Gsub, path_density_dict.items(), strand
+            # return (DiGraph, partial path tuples, strand) for each gene
+            GG.append((Gsub, path_density_dict.items(), strand))
+    return tuple(GG)

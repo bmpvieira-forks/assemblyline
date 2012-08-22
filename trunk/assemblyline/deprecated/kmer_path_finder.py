@@ -123,11 +123,22 @@ def find_suboptimal_paths(G, source, sink, fraction_major_path=1e-3,
     # find highest density path
     path, density = find_path(G, source, sink)
     path_results[path] = density
+
+    print "before 1 iteration"
+    for n in sorted(G.nodes()):
+        print n, G.node[n][TMP_NODE_DENSITY]
+    print "subtracting", density
+
     subtract_path(G, path, density)
     # iterate to find suboptimal paths
     iterations = 1
     highest_density = density
     lowest_density = highest_density * fraction_major_path
+    
+    print "after 1 iteration"
+    for n in sorted(G.nodes()):
+        print n, G.node[n][TMP_NODE_DENSITY]
+    
     while iterations < max_paths:
         # find path
         path, density = find_path(G, source, sink)
