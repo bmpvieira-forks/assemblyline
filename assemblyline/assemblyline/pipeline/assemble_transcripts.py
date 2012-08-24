@@ -17,7 +17,6 @@ from assemblyline.lib.assemble.base import GLOBAL_LOCUS_ID, GLOBAL_GENE_ID, \
 from assemblyline.lib.assemble.transcript_graph import create_strand_transcript_maps, create_transcript_graphs
 from assemblyline.lib.assemble.assembler import assemble_transcript_graph
 
-
 def write_bed(chrom, name, strand, score, exons):
     assert all(exons[0].start < x.start for x in exons[1:])
     assert all(exons[-1].end > x.end for x in exons[:-1])
@@ -115,7 +114,6 @@ def annotate_gene_and_tss_ids(path_info_list, strand):
         for i in indexes:
             path_info_list[i].gene_id = gene_id
 
-
 def assemble_locus(transcripts, min_length, overhang_threshold, 
                    trim_utr_fraction, trim_intron_fraction, 
                    kmax, fraction_major_isoform, max_paths, 
@@ -132,7 +130,6 @@ def assemble_locus(transcripts, min_length, overhang_threshold,
     locus_id_str = "L%d" % (GLOBAL_LOCUS_ID)
     GLOBAL_LOCUS_ID += 1
     # build transcript graphs
-    logging.debug("\tCreating transcript graphs")
     features = []
     for G, partial_paths, strand in \
         create_transcript_graphs(transcripts, 
