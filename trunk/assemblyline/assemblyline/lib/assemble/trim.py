@@ -222,6 +222,8 @@ def trim_intron(G, chains, node_chain_map, successor_dict,
     for succ in successor_dict[nodes[-1]]:
         if (parent.end == succ.start) or (parent.start == succ.end):
             break
+    if succ is None:
+        logging.debug("%s %s" % (str(nodes[-1]), str(successor_dict[nodes[-1]])))
     assert succ is not None
     # calculate the average density of the nodes bordering the intron
     succ_chain_node = node_chain_map[succ]
@@ -277,19 +279,17 @@ def trim_graph(G, strand,
     # trim chains
     all_trim_nodes = set()
     for parent, nodes in chains.iteritems():
+        trim_nodes = []
         if strand == NEG_STRAND:
             nodes.reverse()
-        trim_nodes = []
-        if (parent.start, parent.end) in introns:
+        in_degree = len(predecessor_dict[nodes[0]])
+        out_degree = len(successor_dict[nodes[-1]])
+        if ((in_degree == 1) and (out_degree == 1) and 
+            (parent.start, parent.end) in introns):
             trim_nodes = trim_intron(G, chains, node_chain_map, successor_dict, 
                                      parent, nodes, trim_intron_fraction)
         else:
-            in_degree = len(predecessor_dict[nodes[0]])
-            out_degree = len(successor_dict[nodes[-1]])
-            if (in_degree > 0) and (out_degree > 0):
-                # do not trim unless intron retention
-                continue
-            elif (in_degree == 0) and (out_degree == 0):
+            if (in_degree == 0) and (out_degree == 0):
                 # TODO: trim in both directions
                 continue
             elif in_degree == 0:
@@ -298,4 +298,5 @@ def trim_graph(G, strand,
                 trim_nodes = trim_utr(G, nodes[::-1], trim_utr_fraction)
         all_trim_nodes.update(trim_nodes)
     G.remove_nodes_from(all_trim_nodes)
-    logging.debug("\t\t(%s) trimmed %d nodes from graph" % (strand_int_to_str(strand), len(all_trim_nodes)))
+    if len(all_trim_nodes) > 0:
+        logging.debug("\t\t(%s) trimmed %d nodes from graph" % (strand_int_to_str(strand), len(all_trim_nodes)))
