@@ -78,7 +78,7 @@ def get_locus_genes(features):
     
 def read_reference_gtf(ref_gtf_file):
     gene_map = {}
-    logging.info("Reading GTF file")
+    logging.info("Reading reference GTF file")
     for f in gtf.GTFFeature.parse(open(ref_gtf_file)):
         # get gene by id
         gene_id = f.attrs["gene_id"]
@@ -184,7 +184,6 @@ def categorize_gene_transcripts(transcripts, locus_trees):
     gene_end = max(e[1] for e in gene_exons) 
     gene_chrom = transcripts[0].chrom
     gene_strand = strand_int_to_str(transcripts[0].strand)
-    tx_gene_id = transcripts[0].gene_id
     # determine whether gene overlaps known loci
     # intersect transcript with reference loci
     locus_hits = locus_trees[gene_chrom].find(gene_start, gene_end)

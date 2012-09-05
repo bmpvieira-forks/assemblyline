@@ -24,8 +24,8 @@ def run_htseq_count(bam_file, gtf_file, output_dir, library_type,
     # bam -> sam (converts PE reads to SR)
     args = ["python", bam_to_sam_sr_script, bam_file]
     bam2sam_p = subprocess.Popen(args, stdout=subprocess.PIPE)
+    # need to quantify as unstranded to remove bias
     stranded = "no"
-    # need to quantify ALL as unstranded to remove bias
     #if library_type == "fr-unstranded":
     #    stranded = "no"
     #else:
