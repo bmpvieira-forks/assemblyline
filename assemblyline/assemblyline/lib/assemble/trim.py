@@ -5,10 +5,9 @@ Created on Dec 17, 2011
 '''
 import logging
 import bisect
-import collections
 
 from assemblyline.lib.transcript import POS_STRAND, NEG_STRAND, NO_STRAND, strand_int_to_str
-from base import NODE_DENSITY
+from base import NODE_SCORE
 from collapse import get_chains
 
 def find_intron_starts_and_ends(transcripts):
@@ -123,16 +122,16 @@ def _trim_utr_nodes(G, nodes, coverage_fraction):
     """
     return list of nodes that should be clipped
     """
-    before_total_density = 0
-    after_total_density = sum(G.node[nodes[j]][NODE_DENSITY] for j in xrange(len(nodes)))
+    before_total_score = 0
+    after_total_score = sum(G.node[nodes[j]][NODE_SCORE] for j in xrange(len(nodes)))
     trim_index = 0
     for i in xrange(1,len(nodes)):
-        density = G.node[nodes[i-1]][NODE_DENSITY]        
-        before_total_density += density
-        after_total_density -= density
-        before_avg_density = before_total_density / float(i)
-        after_avg_density = after_total_density / float(len(nodes) - i)
-        fraction = before_avg_density / after_avg_density
+        score = G.node[nodes[i-1]][NODE_SCORE]        
+        before_total_score += score
+        after_total_score -= score
+        before_avg_score = before_total_score / float(i)
+        after_avg_score = after_total_score / float(len(nodes) - i)
+        fraction = before_avg_score / after_avg_score
         if fraction <= coverage_fraction:
             trim_index = i
     trim_nodes = []
@@ -228,7 +227,7 @@ def get_intron_starts_and_ends(G, reverse=False):
     
 def trim_intron(G, chains, node_chain_map, 
                 predecessor_dict, successor_dict, 
-                parent, nodes, trim_intron_fraction=0.25):
+                parent, nodes, coverage_fraction):
     # find the nodes immediately upstream of the intron
     pred = None
     for pred in predecessor_dict[nodes[0]]:
@@ -237,11 +236,11 @@ def trim_intron(G, chains, node_chain_map,
     if pred is None:
         logging.debug("%s %s" % (str(nodes[-1]), str(successor_dict[nodes[-1]])))
     assert pred is not None
-    # calculate the average density of the nodes bordering the intron
+    # calculate the average score of the nodes bordering the intron
     pred_chain_node = node_chain_map[pred]
     pred_nodes = chains[pred_chain_node]
-    pred_total_density = sum(G.node[n][NODE_DENSITY] for n in pred_nodes)
-    pred_avg_density = pred_total_density / len(pred_nodes)
+    pred_total_score = sum(G.node[n][NODE_SCORE] for n in pred_nodes)
+    pred_avg_score = pred_total_score / len(pred_nodes)
     # find the nodes immediately downstream of the intron
     succ = None
     for succ in successor_dict[nodes[-1]]:
@@ -250,97 +249,105 @@ def trim_intron(G, chains, node_chain_map,
     if succ is None:
         logging.debug("%s %s" % (str(nodes[-1]), str(successor_dict[nodes[-1]])))
     assert succ is not None
-    # calculate the average density of the nodes bordering the intron
+    # calculate the average score of the nodes bordering the intron
     succ_chain_node = node_chain_map[succ]
     succ_nodes = chains[succ_chain_node]
-    succ_total_density = sum(G.node[n][NODE_DENSITY] for n in succ_nodes)
-    succ_avg_density = succ_total_density / len(succ_nodes)    
-    # remove intron nodes with density less than the bordering exons
-    cutoff_density = trim_intron_fraction * max(pred_avg_density, succ_avg_density)
+    succ_total_score = sum(G.node[n][NODE_SCORE] for n in succ_nodes)
+    succ_avg_score = succ_total_score / len(succ_nodes)    
+    # remove intron nodes with score less than the bordering exons
+    cutoff_score = coverage_fraction * max(pred_avg_score, succ_avg_score)
     trim_nodes = set()
     for n in nodes:
-        density = G.node[n][NODE_DENSITY]
-        if density < cutoff_density:
+        score = G.node[n][NODE_SCORE]
+        if score < cutoff_score:
             trim_nodes.add(n)
     return trim_nodes
     
-def trim_utr(G, nodes, coverage_fraction):
+def trim_utr(G, nodes, min_trim_length, coverage_fraction):
     """
     return list of nodes that should be clipped
     """
-    before_total_density = 0
-    after_total_density = sum(G.node[nodes[j]][NODE_DENSITY] for j in xrange(len(nodes)))
-    trim_index = 0
-    for i in xrange(1,len(nodes)):
-        density = G.node[nodes[i-1]][NODE_DENSITY]        
-        before_total_density += density
-        after_total_density -= density
-        before_avg_density = before_total_density / float(i)
-        after_avg_density = after_total_density / float(len(nodes) - i)
-        fraction = before_avg_density / after_avg_density
-        #print i, fraction, before_avg_density, after_avg_density
-        if fraction <= coverage_fraction:
-            trim_index = i
-    trim_nodes = []
-    if trim_index > 0:
-        trim_nodes = nodes[:trim_index] 
-    return trim_nodes
+    # establish seed nodes at least 'min_trim_length' long
+    seed_end = 1
+    seed_score = G.node[nodes[0]][NODE_SCORE]
+    seed_length = (nodes[0].end - nodes[0].start)
+    while (seed_length < min_trim_length):
+        seed_score += G.node[nodes[seed_end]][NODE_SCORE]
+        seed_length += (nodes[seed_end].end - nodes[seed_end].start)
+        seed_end += 1
+    # extend seed until ratio between seed score and 
+    # utr score dips below coverage fraction
+    trim_score = sum(G.node[nodes[j]][NODE_SCORE] for j in xrange(seed_end, len(nodes)))
+    i = seed_end
+    while i < len(nodes):
+        seed_avg_score = seed_score / float(i)
+        trim_avg_score = trim_score / float(len(nodes) - i)
+        frac = trim_avg_score / seed_avg_score
+        if frac < coverage_fraction:
+            break
+        score = G.node[nodes[i]][NODE_SCORE]        
+        seed_score += score
+        trim_score -= score
+        i += 1
+    return nodes[i:]
 
-def trim_bidirectional(G, nodes, min_length, trim_utr_fraction):
+def trim_bidirectional(G, nodes, min_trim_length, coverage_fraction):
     # find max node and use as seed
     seed_index = None
-    seed_density = None
+    seed_score = None
     for i,n in enumerate(nodes):
-        density = G.node[n][NODE_DENSITY]
-        if (seed_index is None) or (density > seed_density):
+        score = G.node[n][NODE_SCORE]
+        if (seed_index is None) or (score > seed_score):
             seed_index = i
-            seed_density = density
+            seed_score = score
     #print "nodes", nodes
-    #print "seed", seed_index, nodes[seed_index], seed_density
+    #print "seed", seed_index, nodes[seed_index], seed_score
     # extend seed nodes until length greater than min_length
     seed_start = seed_index
     seed_end = seed_index
     seed_length = (nodes[seed_index].end - nodes[seed_index].start)
-    while ((seed_length < min_length) and
+    while ((seed_length < min_trim_length) and
            ((seed_start > 0) or (seed_end < len(nodes)-1))):
         if seed_start == 0:
-            pred_density = 0.0
+            pred_score = 0.0
         else:
-            pred_density = G.node[nodes[seed_start-1]][NODE_DENSITY]
+            pred_score = G.node[nodes[seed_start-1]][NODE_SCORE]
         if seed_end == (len(nodes)-1):
-            succ_density = 0.0
+            succ_score = 0.0
         else:
-            succ_density = G.node[nodes[seed_end+1]][NODE_DENSITY]
-        if (succ_density > pred_density):
+            succ_score = G.node[nodes[seed_end+1]][NODE_SCORE]
+        if (succ_score > pred_score):
             seed_end += 1
             seed_length += nodes[seed_end].end - nodes[seed_end].start
-            seed_density += succ_density
+            seed_score += succ_score
         else:
             seed_start -= 1
             seed_length += nodes[seed_start].end - nodes[seed_start].start
-            seed_density += pred_density
+            seed_score += pred_score
         #print "extend", seed_start, seed_end, seed_length
-    # compute seed density and trimming density cutoff
-    seed_avg_density = seed_density / float(seed_end - seed_start + 1)
-    density_cutoff = trim_utr_fraction * seed_avg_density
+    # compute seed score and trimming score cutoff
+    seed_avg_score = seed_score / float(seed_end - seed_start + 1)
+    score_cutoff = coverage_fraction * seed_avg_score
     trim_nodes = []
     # trim left
-    for i in xrange(seed_start-1, -1, -1):
-        #print nodes[i], G.node[nodes[i]][NODE_DENSITY], density_cutoff
-        if G.node[nodes[i]][NODE_DENSITY] < density_cutoff:
-            break
-    trim_nodes.extend(nodes[:i+1])
+    if seed_start > 0:
+        for i in xrange(seed_start-1, -1, -1):
+            #print nodes[i], G.node[nodes[i]][NODE_SCORE], score_cutoff
+            if G.node[nodes[i]][NODE_SCORE] < score_cutoff:
+                trim_nodes.extend(nodes[:i+1])
+                break
     # trim_right
-    for i in xrange(seed_end+1, len(nodes)):
-        #print nodes[i], G.node[nodes[i]][NODE_DENSITY], density_cutoff
-        if G.node[nodes[i]][NODE_DENSITY] < density_cutoff:
-            break
-    trim_nodes.extend(nodes[i:])
+    if (seed_end+1) < len(nodes):
+        for i in xrange(seed_end+1, len(nodes)):
+            #print nodes[i], G.node[nodes[i]][NODE_SCORE], score_cutoff
+            if G.node[nodes[i]][NODE_SCORE] < score_cutoff:
+                trim_nodes.extend(nodes[i:])
+                break
     #print "trim", trim_nodes
     return trim_nodes
 
 def trim_graph(G, strand,
-               overhang_threshold, 
+               min_trim_length, 
                trim_utr_fraction,
                trim_intron_fraction):
     # get introns
@@ -371,11 +378,11 @@ def trim_graph(G, strand,
                                      parent, nodes, trim_intron_fraction)
         else:
             if (in_degree == 0) and (out_degree == 0):
-                trim_nodes = trim_bidirectional(G, nodes, overhang_threshold, trim_utr_fraction)
+                trim_nodes = trim_bidirectional(G, nodes, min_trim_length, trim_utr_fraction)
             elif in_degree == 0:
-                trim_nodes = trim_utr(G, nodes, trim_utr_fraction)
+                trim_nodes = trim_utr(G, nodes[::-1], min_trim_length, trim_utr_fraction)
             elif out_degree == 0:
-                trim_nodes = trim_utr(G, nodes[::-1], trim_utr_fraction)
+                trim_nodes = trim_utr(G, nodes, min_trim_length, trim_utr_fraction)
         all_trim_nodes.update(trim_nodes)
     G.remove_nodes_from(all_trim_nodes)
     if len(all_trim_nodes) > 0:

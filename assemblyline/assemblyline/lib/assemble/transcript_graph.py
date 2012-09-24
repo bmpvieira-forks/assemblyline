@@ -12,7 +12,8 @@ import numpy as np
 
 from assemblyline.lib.bx.cluster import ClusterTree
 from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
-from base import NODE_DENSITY, NODE_LENGTH, STRAND_DENSITY, TRANSCRIPT_IDS, init_directed_node_attrs
+from base import NODE_SCORE, NODE_LENGTH, STRAND_SCORE, TRANSCRIPT_IDS, \
+    init_directed_node_attrs
 from trim import trim_graph
 from collapse import collapse_strand_specific_graph
 
@@ -62,23 +63,23 @@ def get_transcript_node_map(G):
         t_node_map[t_id] = sorted(nodes, key=operator.attrgetter('start'))
     return t_node_map
 
-def add_node_undirected(G, n, t_id, strand, density):
+def add_node_undirected(G, n, t_id, strand, score):
     """
     add node to undirected graph
     
     each node in graph maintains attributes:
     'ids': set() of transcript id strings
-    'strand_density': numpy array containing density on each strand
+    'strand_score': numpy array containing score on each strand
     'length': size of node in nucleotides
     """
     if n not in G: 
         attr_dict = {TRANSCRIPT_IDS: set(),
                      NODE_LENGTH: (n.end - n.start),
-                     STRAND_DENSITY: np.zeros(3,float)} 
+                     STRAND_SCORE: np.zeros(3,float)} 
         G.add_node(n, attr_dict=attr_dict)
     nd = G.node[n]
     nd[TRANSCRIPT_IDS].add(t_id)
-    nd[STRAND_DENSITY][strand] += density
+    nd[STRAND_SCORE][strand] += score
 
 def create_undirected_transcript_graph(transcripts):
     '''
@@ -98,9 +99,9 @@ def create_undirected_transcript_graph(transcripts):
                 nodes.append(Exon(start, end))
         # add nodes/edges to graph
         u = nodes[0]
-        add_node_undirected(G, u, t.id, t.strand, t.fpkm)
+        add_node_undirected(G, u, t.attrs["transcript_id"], t.strand, t.score)
         for v in nodes[1:]:
-            add_node_undirected(G, v, t.id, t.strand, t.fpkm)
+            add_node_undirected(G, v, t.attrs["transcript_id"], t.strand, t.score)
             G.add_edge(u, v)
             u = v
     return G
@@ -111,109 +112,109 @@ def redistribute_unstranded_transcripts(G, transcripts, transcript_node_map):
     based on the distribution of fwd/rev strand transcripts across 
     overlapping nodes in the graph
 
-    updates strand density attribute of transcript and strand density
+    updates strand score attribute of transcript and strand score
     attribute of graph nodes
     """
-    # iterate through transcripts and redistribute density
+    # iterate through transcripts and redistribute score
     num_resolved = 0
     unresolved = []
-    node_density_delta_dict = collections.defaultdict(lambda: np.zeros(3,float))
+    node_score_delta_dict = collections.defaultdict(lambda: np.zeros(3,float))
     for t in transcripts:
         # ignore stranded transcripts
         if t.strand != NO_STRAND:
             continue
-        nodes = transcript_node_map[t.id]
-        # sum the coverage density across the transcript
-        density_arr = np.zeros(3,float)
+        nodes = transcript_node_map[t.attrs["transcript_id"]]
+        # sum the coverage score across the transcript
+        score_arr = np.zeros(3,float)
         for n in nodes:
-            density_arr += G.node[n][STRAND_DENSITY]
+            score_arr += G.node[n][STRAND_SCORE]
         # calculate total mass across transcript
-        total_strand_density = density_arr[POS_STRAND] + density_arr[NEG_STRAND]
+        total_strand_score = score_arr[POS_STRAND] + score_arr[NEG_STRAND]
         # if there is "stranded" mass on any of the nodes comprising
         # this transcript, then use the proportion of fwd/rev mass
         # to redistribute
-        if total_strand_density > 0:
+        if total_strand_score > 0:
             # proportionally assign unstranded mass based on amount of
             # plus and minus strand mass
-            pos_frac = density_arr[POS_STRAND] / float(total_strand_density)
-            density_delta_arr = t.density * np.array((pos_frac, 1.0-pos_frac, -1.0))
-            # save all density adjustments in a dictionary and wait to apply
+            pos_frac = score_arr[POS_STRAND] / float(total_strand_score)
+            score_delta_arr = t.score * np.array((pos_frac, 1.0-pos_frac, -1.0))
+            # save all score adjustments in a dictionary and wait to apply
             # until strand fractions are computed for all transcripts
             for n in nodes:
-                node_density_delta_dict[n] += density_delta_arr
-            # adjust strand density for transcript
-            t.attrs[STRAND_DENSITY] = t.density * np.array((pos_frac, 1.0-pos_frac, 0.0)) 
+                node_score_delta_dict[n] += score_delta_arr
+            # adjust strand score for transcript
+            t.attrs[STRAND_SCORE] = t.score * np.array((pos_frac, 1.0-pos_frac, 0.0)) 
             num_resolved += 1
         else:
             unresolved.append(t)
-    # subtract density from unstranded and add to stranded
-    for n, density_delta_arr in node_density_delta_dict.iteritems():
-        G.node[n][STRAND_DENSITY] += density_delta_arr
+    # subtract score from unstranded and add to stranded
+    for n, score_delta_arr in node_score_delta_dict.iteritems():
+        G.node[n][STRAND_SCORE] += score_delta_arr
     return num_resolved, unresolved
 
 def redistribute_unstranded_node_clusters(G, transcripts, transcript_node_map):
     # find set of unresolved nodes
     unresolved_nodes = set()
     for t in transcripts:
-        unresolved_nodes.update(transcript_node_map[t.id])
+        unresolved_nodes.update(transcript_node_map[t.attrs["transcript_id"]])
     unresolved_nodes = sorted(unresolved_nodes, key=operator.attrgetter('start'))
     # cluster unresolved nodes
     cluster_tree = ClusterTree(0,1)
     for i,n in enumerate(unresolved_nodes):
         cluster_tree.insert(n.start, n.end, i)
-    # try to assign stranded density to clusters
-    node_density_delta_dict = collections.defaultdict(lambda: np.zeros(3,float))
+    # try to assign stranded score to clusters
+    node_score_delta_dict = collections.defaultdict(lambda: np.zeros(3,float))
     for start, end, indexes in cluster_tree.getregions():
         nodes = [unresolved_nodes[i] for i in indexes]
-        # sum density across cluster
-        density_arr = np.zeros(3,float)
+        # sum score across cluster
+        score_arr = np.zeros(3,float)
         for n in nodes:
-            density_arr += G.node[n][STRAND_DENSITY]
+            score_arr += G.node[n][STRAND_SCORE]
         # calculate total mass across cluster
-        total_strand_density = density_arr[POS_STRAND] + density_arr[NEG_STRAND]            
-        if total_strand_density > 0:
+        total_strand_score = score_arr[POS_STRAND] + score_arr[NEG_STRAND]            
+        if total_strand_score > 0:
             # proportionally assign unstranded mass based on amount of
             # plus and minus strand mass
-            pos_frac = density_arr[POS_STRAND] / float(total_strand_density)
-            density_delta_arr = t.density * np.array((pos_frac, 1.0-pos_frac, -1.0))
-            # save all density adjustments in a dictionary and wait to apply
+            pos_frac = score_arr[POS_STRAND] / float(total_strand_score)
+            score_delta_arr = t.score * np.array((pos_frac, 1.0-pos_frac, -1.0))
+            # save all score adjustments in a dictionary and wait to apply
             # until strand fractions are computed for all transcripts
             for i,n in enumerate(nodes):
-                node_density_delta_dict[n] += density_delta_arr
+                node_score_delta_dict[n] += score_delta_arr
     del cluster_tree
-    # subtract density from unstranded and add to stranded
-    for n, density_delta_arr in node_density_delta_dict.iteritems():
-        G.node[n][STRAND_DENSITY] += density_delta_arr
+    # subtract score from unstranded and add to stranded
+    for n, score_delta_arr in node_score_delta_dict.iteritems():
+        G.node[n][STRAND_SCORE] += score_delta_arr
 
-def redistribute_density(G, transcripts):
+def redistribute_score(G, transcripts):
     '''
     reallocate coverage mass of unstranded transcripts to the fwd/rev
     strand proportionately.
         
     after this method no nodes should contain both stranded and
-    unstranded density
+    unstranded score
     '''
     # build a mapping from transcripts to graph nodes using the 
     # transcript id attributes of the nodes
     transcript_node_map = get_transcript_node_map(G)
     unresolved = []
     for t in transcripts:
-        # set initial value in density vector
-        strand_density = np.zeros(3,float)
-        strand_density[t.strand] = t.density
-        t.attrs[STRAND_DENSITY] = strand_density
+        # set initial value in score vector
+        strand_score = np.zeros(3,float)
+        strand_score[t.strand] = t.score
+        t.attrs[STRAND_SCORE] = strand_score
         if t.strand == NO_STRAND:
             unresolved.append(t)
-    # try to reassign unstranded transcript density
-    logging.debug("\t\tRedistributing density across unstranded transcripts")
+    # try to reassign unstranded transcript score
+    logging.debug("\t\tRedistributing score across unstranded transcripts")
     num_redist, unresolved = redistribute_unstranded_transcripts(G, unresolved, transcript_node_map)
     logging.debug("\t\tRescued %d unstranded transcripts (%d unresolved)" % (num_redist, len(unresolved)))
     if len(unresolved) > 0:
-        # cluster remaining unstranded nodes and redistribute density
+        # cluster remaining unstranded nodes and redistribute score
         # across the clusters
-        logging.debug("\t\tRedistributing density across unstranded node clusters")
+        logging.debug("\t\tRedistributing score across unstranded node clusters")
         redistribute_unstranded_node_clusters(G, unresolved, transcript_node_map)
-        # try to reassign unstranded transcript density
+        # try to reassign unstranded transcript score
         num_redist, unresolved = redistribute_unstranded_transcripts(G, unresolved, transcript_node_map)
         logging.debug("\t\tRescued another %d unstranded transcripts (%d unresolved)" % (num_redist, len(unresolved)))
 
@@ -221,7 +222,7 @@ def create_strand_transcript_maps(transcripts):
     """
     builds an undirected graph of all transcripts in order to
     resolve strandedness for unstranded transcripts and reallocate
-    transcript density onto specific strands
+    transcript score onto specific strands
     
     returns a list of dictionaries for each strand, dictionary
     keyed by transcript id
@@ -229,20 +230,20 @@ def create_strand_transcript_maps(transcripts):
     # build the initial transcript graph
     Gundir = create_undirected_transcript_graph(transcripts)
     # reallocate unstranded transcripts to fwd/rev strand according
-    # fraction of fwd/rev density across transcript nodes
-    redistribute_density(Gundir, transcripts)
-    # now that density has been allocated, partition transcripts 
+    # fraction of fwd/rev score across transcript nodes
+    redistribute_score(Gundir, transcripts)
+    # now that score has been allocated, partition transcripts 
     # into fwd/rev/unknown strands
     transcript_maps = [{}, {}, {}]    
     for t in transcripts:
         for strand in xrange(0,3):
-            if t.attrs[STRAND_DENSITY][strand] > 1e-8:
-                transcript_maps[strand][t.id] = t
+            if t.attrs[STRAND_SCORE][strand] > 1e-8:
+                transcript_maps[strand][t.attrs["transcript_id"]] = t
     # done with the undirected graph
     Gundir.clear()
     return transcript_maps
 
-def add_node_directed(G, n, t_id, density):
+def add_node_directed(G, n, t_id, score):
     """
     add node to directed (strand-specific) graph
     """
@@ -250,11 +251,11 @@ def add_node_directed(G, n, t_id, density):
         G.add_node(n, attr_dict=init_directed_node_attrs(n))
     nd = G.node[n]
     nd[TRANSCRIPT_IDS].add(t_id)
-    nd[NODE_DENSITY] += density
+    nd[NODE_SCORE] += score
 
 def add_transcript_directed(G, strand, boundaries, transcript):
-    # get strand-specific density
-    density = transcript.attrs[STRAND_DENSITY][strand]
+    # get strand-specific score
+    score = transcript.attrs[STRAND_SCORE][strand]
     # split exons that cross boundaries and to get the
     # nodes in the transcript path
     nodes = []
@@ -265,9 +266,9 @@ def add_transcript_directed(G, strand, boundaries, transcript):
         nodes.reverse()
     # add nodes/edges to graph
     u = nodes[0]
-    add_node_directed(G, u, transcript.id, density)
+    add_node_directed(G, u, transcript.attrs["transcript_id"], score)
     for v in nodes[1:]:
-        add_node_directed(G, v, transcript.id, density)
+        add_node_directed(G, v, transcript.attrs["transcript_id"], score)
         G.add_edge(u,v)
         u = v
     
@@ -280,8 +281,8 @@ def create_strand_specific_graph(strand, transcripts):
     boundary.  exons that overhang more than this will be 
     considered independent transcript start sites or end sites
    
-    nodes in the graph will have a 'density' attribute equal to the
-    total strand-specific density for that node
+    nodes in the graph will have a 'score' attribute equal to the
+    total strand-specific score for that node
     
     returns a 3-tuple containing DiGraph objects corresponding
     to the forward/reverse/unknown strand
@@ -302,16 +303,16 @@ def create_transcript_graphs(transcripts):
     
     nodes have the following attributes:
     chain: list of children nodes
-    density: coverage density at node 
+    score: node weight
     length: total length of node
 
     generates (graph, strand, strand_transcript_map) tuples with transcript 
     graphs
     '''
-    # redistribute transcript density by strand
+    # redistribute transcript score by strand
     logging.debug("\tResolving unstranded transcripts")
     transcript_maps = create_strand_transcript_maps(transcripts)
-    # create strand-specific graphs using redistributed density
+    # create strand-specific graphs using redistributed score
     logging.debug("\tCreating transcript graphs")
     for strand, strand_transcript_map in enumerate(transcript_maps):
         # create strand specific transcript graph
@@ -319,7 +320,7 @@ def create_transcript_graphs(transcripts):
         yield G, strand, strand_transcript_map
 
 def prune_transcript_graph(G, strand, strand_transcript_map,
-                           overhang_threshold=0, 
+                           min_trim_length=0, 
                            trim_utr_fraction=0.0,
                            trim_intron_fraction=0.0):
     '''
@@ -335,7 +336,7 @@ def prune_transcript_graph(G, strand, strand_transcript_map,
     intron coverage below which intronic nodes will be removed
     '''
     # trim utrs and intron retentions
-    trim_graph(G, strand, overhang_threshold, trim_utr_fraction, 
+    trim_graph(G, strand, min_trim_length, trim_utr_fraction, 
                trim_intron_fraction)
     # collapse consecutive nodes in graph
     #H = collapse_strand_specific_graph(G)
@@ -346,17 +347,17 @@ def prune_transcript_graph(G, strand, strand_transcript_map,
     for Gsub in Gsubs:
         # get partial path data supporting graph
         transcript_node_map = get_transcript_node_map(Gsub)
-        path_density_dict = collections.defaultdict(lambda: 0)
+        path_score_dict = collections.defaultdict(lambda: 0)
         for t_id, nodes in transcript_node_map.iteritems():
             # reverse path for negative strand transcripts
             if strand == NEG_STRAND:
                 nodes.reverse()
-            # adjust transcript density to account for changes in 
+            # adjust transcript score to account for changes in 
             # transcript length by renormalizing by length
             t = strand_transcript_map[t_id]
-            density = t.attrs[STRAND_DENSITY][strand]
-            #path_density_dict[tuple(nodes)] += t.attrs[STRAND_DENSITY][strand]
-            path_length = sum(Gsub.node[n][NODE_LENGTH] for n in nodes)
-            new_density = density * max(1.0, float(t.length) / path_length)
-            path_density_dict[tuple(nodes)] += new_density
-        yield Gsub, strand, path_density_dict.items()
+            score = t.attrs[STRAND_SCORE][strand]
+            path_score_dict[tuple(nodes)] += score
+            #path_length = sum(Gsub.node[n][NODE_LENGTH] for n in nodes)
+            #new_score = score * min(1.0, float(t.length) / path_length)
+            #path_score_dict[tuple(nodes)] += new_score
+        yield Gsub, strand, path_score_dict.items()
