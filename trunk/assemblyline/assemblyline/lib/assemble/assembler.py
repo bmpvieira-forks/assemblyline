@@ -8,15 +8,16 @@ import collections
 import networkx as nx
 
 from assemblyline.lib.transcript import Exon, NEG_STRAND
-from base import NODE_DENSITY, NODE_LENGTH, SMOOTH_FWD, SMOOTH_REV, SMOOTH_TMP, CHAIN_NODES
+from base import NODE_SCORE, NODE_LENGTH, CHAIN_NODES, \
+    SMOOTH_FWD, SMOOTH_REV, SMOOTH_TMP
 from path_finder import find_suboptimal_paths
 from smooth import smooth_graph
 
 class PathInfo(object):
     """object to store path finder results"""
-    __slots__ = ("density", "path", "gene_id", "tss_id")
-    def __init__(self, density, path):
-        self.density = density
+    __slots__ = ("score", "path", "gene_id", "tss_id")
+    def __init__(self, score, path):
+        self.score = score
         self.path = path
         self.gene_id = -1
         self.tss_id = -1
@@ -61,9 +62,9 @@ def optimize_k(G, partial_paths, kmax, sensitivity_threshold):
     determine optimal choice for parameter 'k' for assembly
     maximizes k while ensuring sensitivity constraint is met
     """
-    total_density = sum(density for path,density in partial_paths)
+    total_score = sum(score for path,score in partial_paths)
     total_paths = len(partial_paths)
-    remaining_density = float(total_density)
+    remaining_score = float(total_score)
     remaining_paths = list(partial_paths)
     k = 2
     # get all leaf nodes
@@ -74,7 +75,7 @@ def optimize_k(G, partial_paths, kmax, sensitivity_threshold):
         kmers = set()
         short_paths = []
         new_remaining_paths = []        
-        for path, density in remaining_paths:
+        for path, score in remaining_paths:
             # TODO: remove assert
             assert len(path) > 0
             # extend paths that start or end on source or sink nodes
@@ -84,20 +85,20 @@ def optimize_k(G, partial_paths, kmax, sensitivity_threshold):
             if path[-1] in end_nodes:
                 new_path = new_path + sink_dummy_nodes
             if len(new_path) < k:
-                short_paths.append((new_path, density))
+                short_paths.append((new_path, score))
             else:
                 kmers.update(get_kmers(new_path,k))
-                new_remaining_paths.append((path,density))
+                new_remaining_paths.append((path,score))
         # create a (k-1) to k-mer hash
         kmer_hash = hash_kmers(kmers, k, k-1)
-        for path,density in short_paths:
+        for path,score in short_paths:
             if path not in kmer_hash:
-                remaining_density -= density
+                remaining_score -= score
                 continue
-        sensitivity = (remaining_density / total_density)
-        logging.debug("\t\tk=%d sensitivity=%f (%d/%d paths) (%f/%f density)" %
+        sensitivity = (remaining_score / total_score)
+        logging.debug("\t\tk=%d sensitivity=%f (%d/%d paths) (%f/%f score)" %
                       (k, sensitivity, len(new_remaining_paths), 
-                       total_paths, remaining_density, total_density))
+                       total_paths, remaining_score, total_score))
         if sensitivity < sensitivity_threshold:
             break
         k += 1
@@ -106,9 +107,9 @@ def optimize_k(G, partial_paths, kmax, sensitivity_threshold):
 
 def add_dummy_nodes(G, dummy_nodes):
     # add to graph
-    G.add_node(dummy_nodes[0], attr_dict={NODE_LENGTH:0, NODE_DENSITY:0})
+    G.add_node(dummy_nodes[0], attr_dict={NODE_LENGTH:0, NODE_SCORE:0})
     for i in xrange(1, len(dummy_nodes)):
-        G.add_node(dummy_nodes[i], attr_dict={NODE_LENGTH:0, NODE_DENSITY:0})
+        G.add_node(dummy_nodes[i], attr_dict={NODE_LENGTH:0, NODE_SCORE:0})
         G.add_edge(dummy_nodes[i-1], dummy_nodes[i])
 
 def attach_dummy_leaf_nodes(G, k, partial_paths):
@@ -125,13 +126,13 @@ def attach_dummy_leaf_nodes(G, k, partial_paths):
     source_dummy_nodes, sink_dummy_nodes = get_dummy_nodes(k)    
     # extend paths that start or end on source or sink nodes
     new_partial_paths = []
-    for path, density in partial_paths:
+    for path, score in partial_paths:
         new_path = tuple(path)
         if path[0] in start_nodes:
             new_path = source_dummy_nodes + new_path
         if path[-1] in end_nodes:
             new_path = new_path + sink_dummy_nodes
-        new_partial_paths.append((new_path, density))
+        new_partial_paths.append((new_path, score))
     # add dummy nodes to graph
     add_dummy_nodes(G, source_dummy_nodes)
     add_dummy_nodes(G, sink_dummy_nodes)
@@ -143,33 +144,33 @@ def attach_dummy_leaf_nodes(G, k, partial_paths):
     return tuple(source_dummy_nodes), tuple(sink_dummy_nodes), new_partial_paths
 
 def init_kmer_attrs():
-    return {NODE_DENSITY: 0.0, SMOOTH_FWD: 0.0, 
+    return {NODE_SCORE: 0.0, SMOOTH_FWD: 0.0, 
             SMOOTH_REV: 0.0, SMOOTH_TMP: 0.0}
     
-def add_path(K, k, path, density):
+def add_path(K, k, path, score):
     # break longer paths into kmers of length 'k' and add them
     # to the graph
     from_kmer = path[0:k]
     if from_kmer not in K:
         K.add_node(from_kmer, attr_dict=init_kmer_attrs())
     kmerattrs = K.node[from_kmer]
-    kmerattrs[NODE_DENSITY] += density
+    kmerattrs[NODE_SCORE] += score
     # the first kmer should be "smoothed" in reverse direction
-    kmerattrs[SMOOTH_REV] += density
+    kmerattrs[SMOOTH_REV] += score
     for i in xrange(1,len(path) - (k-1)):
         to_kmer = path[i:i+k]
         if to_kmer not in K:
             K.add_node(to_kmer, attr_dict=init_kmer_attrs())
         kmerattrs = K.node[to_kmer]
-        kmerattrs[NODE_DENSITY] += density
+        kmerattrs[NODE_SCORE] += score
         # connect kmers
         K.add_edge(from_kmer, to_kmer)
         # update from_kmer to continue loop
         from_kmer = to_kmer
     # the last kmer should be "smoothed" in forward direction
-    kmerattrs[SMOOTH_FWD] += density
+    kmerattrs[SMOOTH_FWD] += score
 
-def extrapolate_short_path(kmer_hash, kmer_density_dict, path, density):
+def extrapolate_short_path(kmer_hash, kmer_score_dict, path, score):
     """
     add the list of 'partial_paths' paths to graph 'K'
 
@@ -178,46 +179,46 @@ def extrapolate_short_path(kmer_hash, kmer_density_dict, path, density):
     """
     if path not in kmer_hash:
         return []
-    total_density = 0
+    total_score = 0
     matching_kmers = []
     for kmer in kmer_hash[path]:
-        # get approximate density at kmer
-        kmer_density = kmer_density_dict[kmer]        
-        # compute total density at matching kmers
-        total_density += kmer_density
-        matching_kmers.append((kmer, kmer_density))
+        # get approximate score at kmer
+        kmer_score = kmer_score_dict[kmer]        
+        # compute total score at matching kmers
+        total_score += kmer_score
+        matching_kmers.append((kmer, kmer_score))
     # now calculate fractional densities for matching kmers
     new_partial_paths = [] 
-    for kmer,kmer_density in matching_kmers:
-        new_density = density * (kmer_density / total_density)
-        new_partial_paths.append((kmer, new_density))
+    for kmer,kmer_score in matching_kmers:
+        new_score = score * (kmer_score / total_score)
+        new_partial_paths.append((kmer, new_score))
     return new_partial_paths
 
 def create_kmer_graph(G, partial_paths, k):
     """
     add partial paths from graph 'G' to k-mer graph 'K'
 
-    partial_paths is a list of (path,density) tuples
+    partial_paths is a list of (path,score) tuples
     """
     # create a graph of k-mers
     K = nx.DiGraph()
     short_partial_path_dict = collections.defaultdict(lambda: [])
-    for path, density in partial_paths:
+    for path, score in partial_paths:
         if len(path) < k:
-            short_partial_path_dict[len(path)].append((path, density))
+            short_partial_path_dict[len(path)].append((path, score))
         else:
-            add_path(K, k, path, density)
+            add_path(K, k, path, score)
     # get kmer densities from linear graph
-    kmer_density_dict = {}
+    kmer_score_dict = {}
     for kmer in K.nodes_iter():
-        node_densities = [G.node[n][NODE_DENSITY] for n in kmer if n.start >= 0]
+        node_densities = [G.node[n][NODE_SCORE] for n in kmer if n.start >= 0]
         if len(node_densities) > 0:
-            kmer_density_dict[kmer] = min(node_densities)
+            kmer_score_dict[kmer] = min(node_densities)
     # extrapolate short kmers and add to graph
     for ksmall, short_partial_paths in short_partial_path_dict.iteritems():
         kmer_hash = hash_kmers(K.nodes_iter(), k, ksmall)
-        for path, density in short_partial_paths:
-            new_paths = extrapolate_short_path(kmer_hash, kmer_density_dict, path, density)
+        for path, score in short_partial_paths:
+            new_paths = extrapolate_short_path(kmer_hash, kmer_score_dict, path, score)
             for p,d in new_paths:
                 add_path(K, k, p, d)
     return K
@@ -275,8 +276,8 @@ def assemble_transcript_graph(G, strand, partial_paths,
     a greedy algorithm
     
     strand: strand of graph G
-    fraction_major_path: only return isoforms with density greater than 
-    some fraction of the highest density path
+    fraction_major_path: only return isoforms with score greater than 
+    some fraction of the highest score path
     max_paths: do not enumerate more than max_paths isoforms     
     """
     # constrain sensitivity parameter
@@ -303,7 +304,7 @@ def assemble_transcript_graph(G, strand, partial_paths,
     # find up to 'max_paths' paths through graph
     logging.debug("\tFinding suboptimal paths in k-mer graph with %d nodes" % (len(K)))
     path_info_list = []   
-    for kmer_path, density in find_suboptimal_paths(K, source_kmer, 
+    for kmer_path, score in find_suboptimal_paths(K, source_kmer, 
                                                     sink_kmer,
                                                     fraction_major_path, 
                                                     max_paths):
@@ -315,6 +316,6 @@ def assemble_transcript_graph(G, strand, partial_paths,
         # cleanup and expand nodes within path
         path = expand_path_chains(G, strand, path)
         # add to path list
-        path_info_list.append(PathInfo(density, path))
-        logging.debug("\t\tdensity=%f num_exons=%d" % (density, len(path)))
+        path_info_list.append(PathInfo(score, path))
+        logging.debug("\t\tscore=%f num_exons=%d" % (score, len(path)))
     return path_info_list

@@ -5,6 +5,10 @@ Created on Nov 30, 2011
 '''
 from gtf import GTFFeature
 
+# attributes
+TRANSCRIPT_ID = "transcript_id"
+GENE_ID = "gene_id"
+
 # strand constants
 POS_STRAND = 0
 NEG_STRAND = 1
@@ -69,60 +73,33 @@ class Exon(object):
         return interval_overlap(self, other)
     
 class Transcript(object):
-    __slots__ = ('chrom', 'start', 'end', 'strand', 'exons', 'attrs') 
+    __slots__ = ('chrom', 'start', 'end', 'strand', 'score', 'exons', 'attrs') 
 
     def __init__(self):
         self.chrom = None
         self.start = -1
         self.end = -1
         self.strand = NO_STRAND
+        self.score = 0
         self.exons = None
         self.attrs = {}
 
     def __str__(self):
         return ("<%s(chrom='%s', start='%d', end='%d', strand='%s', "
-                "exons='%s', attrs='%s'" %
+                "score='%s' exons='%s', attrs='%s'" %
                 (self.__class__.__name__, self.chrom, self.start, self.end, 
-                 strand_int_to_str(self.strand), self.exons, self.attrs))
-
-    @property
-    def id(self):
-        return self.attrs["transcript_id"]
-    @property
-    def gene_id(self):
-        return self.attrs["gene_id"]
-    @property
-    def library(self):
-        return self.attrs["library"]
-    @property
-    def sample(self):
-        return self.attrs["sample"]
-    @property
-    def cohort(self):
-        return self.attrs["cohort"]
-    @property
-    def fpkm(self):
-        return self.attrs["FPKM"]
-    @property
-    def density(self):
-        """same as fpkm"""
-        return self.fpkm
-    @property
-    def cov(self):
-        return self.attrs["cov"]
-    @property
-    def frac(self):
-        return self.attrs["frac"]
+                 strand_int_to_str(self.strand), str(self.score), self.exons, 
+                 self.attrs))
     @property
     def length(self):
         return sum((e.end - e.start) for e in self.exons)
-    @property
-    def mass(self):
-        return self.fpkm * float(self.length) * 1e-3
+
     @property
     def introns(self):
-        return zip([e[1] for e in self.exons[:-1]],
-                   [e[0] for e in self.exons[1:]])
+        e1 = self.exons[0]
+        for e2 in self.exons[1:]:
+            yield (e1.end,e2.start)
+            e1 = e2
 
     def to_bed12(self):
         block_sizes = []
@@ -134,8 +111,8 @@ class Transcript(object):
         s = '\t'.join([self.chrom, 
                        str(self.start), 
                        str(self.end),
-                       str(self.transcript_id),
-                       str(self.fpkm),
+                       str(self.attrs["transcript_id"]),
+                       '0',
                        strand_int_to_str(self.strand),
                        str(self.start),
                        str(self.start),

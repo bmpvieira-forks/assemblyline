@@ -6,7 +6,7 @@ Created on Dec 7, 2011
 import operator
 import networkx as nx
 
-from base import Exon, TRANSCRIPT_IDS, NODE_DENSITY, NODE_LENGTH, \
+from base import Exon, TRANSCRIPT_IDS, NODE_SCORE, NODE_LENGTH, \
     CHAIN_NODES, CHAIN_EDGES, CHAIN_DATA
 
 def can_collapse(G,u,v):
@@ -91,44 +91,30 @@ def add_chains(G, chains, node_chain_map):
 
 def recalc_strand_specific_graph_attributes(G):
     """
-    computes density, length, and transcript ids after graph
+    computes score, length, and transcript ids after graph
     is divided into strand-specific subgraphs and collapsed
     """
     for n,d in G.nodes_iter(data=True):
         chain_nodes = d[CHAIN_NODES]
         chain_data = d[CHAIN_DATA]
         node_ids = set()
-        total_density = 0.0
-        min_density = None
+        total_score = 0.0
+        min_score = None
         total_length = 0
         for cn in chain_nodes:
             total_length += (cn.end - cn.start)
             cattrs = chain_data[cn]
             node_ids.update(cattrs[TRANSCRIPT_IDS])
-            density = cattrs[NODE_DENSITY]
-            total_density += density
-            if (min_density is None) or (density < min_density):
-                min_density = density
+            score = cattrs[NODE_SCORE]
+            total_score += score
+            if (min_score is None) or (score < min_score):
+                min_score = score
         # set attributes
         d[TRANSCRIPT_IDS] = node_ids
-        d[NODE_DENSITY] = min_density
+        d[NODE_SCORE] = min_score
         d[NODE_LENGTH] = total_length
-#        d[NODE_DENSITY] = total_density / float(len(chain_nodes))
-#        # calculate density of all nodes in chain
-#        total_mass = 0.0
-#        total_length = 0
-#        ids = set()
-#        for cn in chain_nodes:
-#            cattrs = chain_data[cn]
-#            ids.update(cattrs[TRANSCRIPT_IDS])
-#            length = (cn.end - cn.start)
-#            total_mass += length * cattrs[NODE_DENSITY]
-#            total_length += length
-#        density = total_mass / float(total_length)
-#        # set attributes
-#        d[TRANSCRIPT_IDS] = ids
-#        d[NODE_DENSITY] = density
-#        d[NODE_LENGTH] = total_length
+        # TODO: use average or minimum?
+        # d[NODE_SCORE] = total_score / float(len(chain_nodes))
 
 def collapse_strand_specific_graph(G):
     """
