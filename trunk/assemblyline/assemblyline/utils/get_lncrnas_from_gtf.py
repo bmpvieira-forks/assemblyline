@@ -40,7 +40,8 @@ def main():
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser()
     parser.add_argument("--length", type=int, dest="length", default=250)
-    parser.add_argument("--pseudogene-exons", type=int, dest="pseudogene_exons", default=2)
+    parser.add_argument("--ncrna-exons", type=int, dest="ncrna_exons", default=1)
+    parser.add_argument("--pseudogene-exons", type=int, dest="pseudogene_exons", default=1)
     parser.add_argument("--antisense-exons", type=int, dest="antisense_exons", default=2)
     parser.add_argument("--intronic-exons", type=int, dest="intronic_exons", default=2)
     parser.add_argument("--intergenic-exons", type=int, dest="intergenic_exons", default=2)
@@ -55,6 +56,7 @@ def main():
     intronic = 0
     antisense = 0
     pseudogene = 0
+    ncrna = 0
     for transcripts in parse_gtf(open(args.gtf_file)):
         total_transcripts += len(transcripts)
         for t in transcripts:
@@ -92,6 +94,10 @@ def main():
                     if len(t.exons) < args.pseudogene_exons:
                         continue
                     pseudogene += 1
+                else:
+                    if len(t.exons) < args.ncrna_exons:
+                        continue
+                    ncrna += 1
             # output
             for f in t.to_gtf_features():
                 print str(f)
@@ -101,6 +107,7 @@ def main():
     logging.debug("intronic: %d" % (intronic))
     logging.debug("antisense: %d" % (antisense))
     logging.debug("pseudogene: %d" % (pseudogene))
+    logging.debug("ncrna: %d" % (ncrna))
 
 if __name__ == '__main__':
     main()

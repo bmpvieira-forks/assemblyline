@@ -453,6 +453,7 @@ def summarize_results(result_file, cutoff_file, gtf_file,
             assert decision == "background"
             print >>background_fh, str(feature)
     # cleanup
+    annotated_fh.close()
     expressed_fh.close()
     background_fh.close()
     result_fh.close()    

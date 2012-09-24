@@ -11,10 +11,9 @@ import bisect
 import numpy as np
 
 from assemblyline.lib.bx.cluster import ClusterTree
-from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND, strand_int_to_str
+from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
 from base import NODE_DENSITY, NODE_LENGTH, STRAND_DENSITY, TRANSCRIPT_IDS, init_directed_node_attrs
-from filter import filter_transcripts
-from trim import trim_transcripts, trim_utrs, trim_graph
+from trim import trim_graph
 from collapse import collapse_strand_specific_graph
 
 def find_exon_boundaries(transcripts):
@@ -57,10 +56,10 @@ def split_exon(exon, boundaries):
 def get_transcript_node_map(G):
     t_node_map = collections.defaultdict(lambda: set())
     for n,d in G.nodes_iter(data=True):
-        for id in d[TRANSCRIPT_IDS]:
-            t_node_map[id].add(n)
-    for id,nodes in t_node_map.iteritems():
-        t_node_map[id] = sorted(nodes, key=operator.attrgetter('start'))
+        for t_id in d[TRANSCRIPT_IDS]:
+            t_node_map[t_id].add(n)
+    for t_id,nodes in t_node_map.iteritems():
+        t_node_map[t_id] = sorted(nodes, key=operator.attrgetter('start'))
     return t_node_map
 
 def add_node_undirected(G, n, t_id, strand, density):
@@ -140,7 +139,7 @@ def redistribute_unstranded_transcripts(G, transcripts, transcript_node_map):
             density_delta_arr = t.density * np.array((pos_frac, 1.0-pos_frac, -1.0))
             # save all density adjustments in a dictionary and wait to apply
             # until strand fractions are computed for all transcripts
-            for i,n in enumerate(nodes):
+            for n in nodes:
                 node_density_delta_dict[n] += density_delta_arr
             # adjust strand density for transcript
             t.attrs[STRAND_DENSITY] = t.density * np.array((pos_frac, 1.0-pos_frac, 0.0)) 
@@ -296,32 +295,19 @@ def create_strand_specific_graph(strand, transcripts):
         add_transcript_directed(G, strand, boundaries, t)
     return G
 
-def create_transcript_graphs(transcripts, 
-                             min_length=0,
-                             overhang_threshold=0, 
-                             trim_utr_fraction=0.0,
-                             trim_intron_fraction=0.0):
+def create_transcript_graphs(transcripts):
     '''
     min_length: minimum transcript length
     
-    overhang_threshold: integer greater than zero specifying the 
-    maximum exon overhang that can be trimmed to match an intron
-    boundary.  exons that overhang more than this will be 
-    considered independent transcript start sites or end sites
-
-    trim_utr_fraction: float specifying the fraction of the average UTR
-    coverage below which the ends of the UTR will be trimmed
     
     nodes have the following attributes:
     chain: list of children nodes
     density: coverage density at node 
     length: total length of node
 
-    generates (graph, strand) tuples with transcript graphs
+    generates (graph, strand, strand_transcript_map) tuples with transcript 
+    graphs
     '''
-    # remove bad transcripts
-    logging.debug("\tFiltering transcripts")
-    transcripts = filter_transcripts(transcripts, min_length)
     # redistribute transcript density by strand
     logging.debug("\tResolving unstranded transcripts")
     transcript_maps = create_strand_transcript_maps(transcripts)
@@ -330,25 +316,47 @@ def create_transcript_graphs(transcripts,
     for strand, strand_transcript_map in enumerate(transcript_maps):
         # create strand specific transcript graph
         G = create_strand_specific_graph(strand, strand_transcript_map.values())
-        # trim utrs and intron retentions
-        trim_graph(G, strand, overhang_threshold, trim_utr_fraction, 
-                   trim_intron_fraction)
-        # get connected components of graph which represent independent genes
-        # unconnected components are considered different genes
-        Gsubs = nx.weakly_connected_component_subgraphs(G)
-        for Gsub in Gsubs:
-            # get partial path data supporting graph
-            transcript_node_map = get_transcript_node_map(Gsub)
-            path_density_dict = collections.defaultdict(lambda: 0)
-            for t_id, nodes in transcript_node_map.iteritems():
-                # reverse path for negative strand transcripts
-                if strand == NEG_STRAND:
-                    nodes = nodes[::-1]
-                # adjust transcript density to account for changes in 
-                # transcript length by renormalizing by length
-                t = strand_transcript_map[t_id]
-                density = t.attrs[STRAND_DENSITY][strand]
-                path_length = sum(G.node[n][NODE_LENGTH] for n in nodes)
-                new_density = density * max(1.0, float(t.length) / path_length)
-                path_density_dict[tuple(nodes)] += new_density
-            yield Gsub, path_density_dict.items(), strand
+        yield G, strand, strand_transcript_map
+
+def prune_transcript_graph(G, strand, strand_transcript_map,
+                           overhang_threshold=0, 
+                           trim_utr_fraction=0.0,
+                           trim_intron_fraction=0.0):
+    '''
+    overhang_threshold: integer greater than zero specifying the 
+    maximum exon overhang that can be trimmed to match an intron
+    boundary.  exons that overhang more than this will be 
+    considered independent transcript start sites or end sites
+
+    trim_utr_fraction: float specifying the fraction of the average UTR
+    coverage below which the ends of the UTR will be trimmed
+
+    trim_intron_fraction: float specifying the fraction of the average 
+    intron coverage below which intronic nodes will be removed
+    '''
+    # trim utrs and intron retentions
+    trim_graph(G, strand, overhang_threshold, trim_utr_fraction, 
+               trim_intron_fraction)
+    # collapse consecutive nodes in graph
+    #H = collapse_strand_specific_graph(G)
+    H = G
+    # get connected components of graph which represent independent genes
+    # unconnected components are considered different genes
+    Gsubs = nx.weakly_connected_component_subgraphs(H)
+    for Gsub in Gsubs:
+        # get partial path data supporting graph
+        transcript_node_map = get_transcript_node_map(Gsub)
+        path_density_dict = collections.defaultdict(lambda: 0)
+        for t_id, nodes in transcript_node_map.iteritems():
+            # reverse path for negative strand transcripts
+            if strand == NEG_STRAND:
+                nodes.reverse()
+            # adjust transcript density to account for changes in 
+            # transcript length by renormalizing by length
+            t = strand_transcript_map[t_id]
+            density = t.attrs[STRAND_DENSITY][strand]
+            #path_density_dict[tuple(nodes)] += t.attrs[STRAND_DENSITY][strand]
+            path_length = sum(Gsub.node[n][NODE_LENGTH] for n in nodes)
+            new_density = density * max(1.0, float(t.length) / path_length)
+            path_density_dict[tuple(nodes)] += new_density
+        yield Gsub, strand, path_density_dict.items()

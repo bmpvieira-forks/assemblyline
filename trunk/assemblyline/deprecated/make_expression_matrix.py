@@ -63,10 +63,7 @@ def get_gene_metadata(gtf_file, gene_id_attr="gene_id", feature_type="exon",
         strand = features[0].strand
         start = min(x.start for x in features)
         end = max(x.end for x in features)
-        if 'gene_name' in features[0].attrs:        
-            gene_name = features[0].attrs['gene_name']
-        else:
-            gene_name = features[0].attrs['gene_id']
+        gene_name = features[0].attrs['gene_name']
         # cluster exons together for each gene
         cluster_tree = ClusterTree(0,1)
         for i,f in enumerate(features):
@@ -98,6 +95,8 @@ def main():
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser()
+    parser.add_argument('--cufflinks', dest="mode", action="store_const", const="cufflinks", default="htseq") 
+    parser.add_argument('--htseq', dest="mode", action="store_const", const="htseq")
     parser.add_argument('--ucsc', dest="genome", action="store_const", const="ucsc", default="ensembl")
     parser.add_argument('--ensembl', dest="genome", action="store_const", const="ensembl")
     parser.add_argument('gtf_file')
@@ -107,7 +106,7 @@ def main():
     args = parser.parse_args()
     # read library information
     logging.info("Reading library information")
-    libdict = collections.OrderedDict()
+    libinfos = []
     for libinfo in LibInfo.from_file(args.library_table):
         if not libinfo.is_valid():
             logging.warning("\tskipping cohort=%s patient=%s sample=%s lib=%s lanes=%s" % 
@@ -116,10 +115,13 @@ def main():
             continue
         lib_dir = os.path.join(args.quantify_dir, libinfo.sample, libinfo.library)
         # check for output
-        count_file = os.path.join(lib_dir, "htseq_count.txt")
+        if args.mode == "htseq":
+            count_file = os.path.join(lib_dir, "htseq_count.txt")
+        elif args.mode == "cufflinks":
+            count_file = os.path.join(lib_dir, "genes.expr")
         job_done_file = os.path.join(lib_dir, "job.done")
         if (os.path.exists(job_done_file) and os.path.exists(count_file)):
-            libdict[libinfo.library] = libinfo
+            libinfos.append(libinfo)
         else:
             logging.info("[SKIPPED] %s %s" % (libinfo.sample, libinfo.library))
     # get gene metadata
@@ -130,9 +132,9 @@ def main():
     # aggregate runs into a single gene expression matrix
     # (assume this will fit into memory)
     logging.info("Building expression data matrix")
-    count_vector_dict = {}
-    special_vector_dict = {}
-    for libinfo in libdict.itervalues():
+    count_vectors = []
+    special_vectors = []
+    for libinfo in libinfos:
         logging.debug("sample: %s lib: %s" % (libinfo.sample, libinfo.library))
         lib_dir = os.path.join(args.quantify_dir, libinfo.sample, libinfo.library)
         count_file = os.path.join(lib_dir, "htseq_count.txt")
@@ -143,43 +145,63 @@ def main():
         specials = []
         for special_id in sorted(special_count_map):
             specials.append(special_count_map[special_id])
-        count_vector_dict[libinfo.library] = counts
-        special_vector_dict[libinfo.library] = specials
+        count_vectors.append(counts)
+        special_vectors.append(specials)
     # write phenotype file
     logging.info("Writing phenotype file")
-    fh = open(args.library_table)
-    header_fields = fh.next().strip().split('\t')
-    lib_id_col = header_fields.index("library")
+    pheno_file = args.output_file_prefix + "_pheno_data.txt"
+    f = open(pheno_file, "w")
+    header_fields = ["cohort", "patient", "sample", "library", "lanes", "library_type", 
+                     "has_pe_lanes", "frag_len_mean", "frag_len_std_dev"]
     header_fields.extend(sorted(htseq_special_fields))
     header_fields.append("total_counts")
-    pheno_file = args.output_file_prefix + "_pheno_data.txt"
-    outfh = open(pheno_file, "w")
-    print >>outfh, '\t'.join(map(str, header_fields))
-    for line in fh:
-        fields = line.strip().split('\t')
-        lib_id = fields[lib_id_col]
-        if lib_id not in libdict:
-            continue
-        fields.extend(special_vector_dict[lib_id])
-        fields.append(sum(count_vector_dict[lib_id]))
-        print >>outfh, '\t'.join(map(str, fields))
-    outfh.close()
-    fh.close()
+    print >>f, '\t'.join(map(str, header_fields))
+    for i,libinfo in enumerate(libinfos):
+        fields = [libinfo.cohort, libinfo.patient, libinfo.sample, libinfo.library,
+                  libinfo.lanes, libinfo.library_type, libinfo.has_pe_lanes, 
+                  libinfo.frag_len_mean, libinfo.frag_len_std_dev]
+        fields.extend(special_vectors[i])
+        fields.append(sum(count_vectors[i]))
+        print >>f, '\t'.join(map(str, fields))
+    f.close()
     # write matrix file
     logging.info("Writing output file")
     # combine frag count vectors to get expression matrix
-    mat = np.vstack(count_vector_dict[lib_id] for lib_id in libdict).T
+    mat = np.vstack(count_vectors).T
+    del count_vectors
     matrix_file = args.output_file_prefix + "_count_data.txt"
     f = open(matrix_file, "w")
     header_fields = ["tracking_id", "locus", "nearest_ref_id", "class_code", "transcript_length"]
-    header_fields.extend([lib_id for lib_id in libdict])
+    header_fields.extend([libinfo.library for libinfo in libinfos])
     print >>f, '\t'.join(header_fields)
     for i,gene_id in enumerate(sorted(gene_metadata_dict)):
         fields = []
         fields.extend(map(str, gene_metadata_dict[gene_id]))
         fields.extend(map(str, mat[i,:]))
         print >>f, '\t'.join(fields)
-    f.close()  
+    f.close()
+    # attributes
+    #num_metadata_rows = len(header_fields)
+    #for attrname in ('cohort', 'patient', 'sample', 'library', 'lanes', 
+    #                 'library_type', 'frag_len_mean', 'frag_len_std_dev'):
+    #    fields = [""] * (num_metadata_rows - 1)
+    #    fields.append(attrname)
+    #    fields.extend([getattr(libinfo, attrname) for libinfo in libinfos])
+    #    print >>f, '\t'.join(fields)
+    # special attributes
+    #if args.mode == "htseq":
+    #    special_mat = np.vstack(special_vectors).T
+    #    for i,attrname in enumerate(sorted(htseq_special_fields)):
+    #        fields = [""] * (num_metadata_rows - 1)
+    #        fields.append(attrname)
+    #        fields.extend(map(str, special_mat[i,:]))
+    #        print >>f, '\t'.join(fields)
+    # sum of fragment vectors
+    #fields = [""] * (num_metadata_rows - 1)
+    #fields.append("total_frags")
+    #fields.extend(map(str,np.sum(mat,axis=0)))
+    #print >>f, '\t'.join(fields)
+  
 
 if __name__ == '__main__':
     sys.exit(main())

@@ -5,6 +5,7 @@ Created on Dec 17, 2011
 '''
 import logging
 import bisect
+import collections
 
 from assemblyline.lib.transcript import POS_STRAND, NEG_STRAND, NO_STRAND, strand_int_to_str
 from base import NODE_DENSITY
@@ -206,17 +207,41 @@ def get_introns(G, reverse=False):
         G.reverse(copy=False)
     return introns
 
-def calc_average_density(G, nodes):
-    total_mass = 0.0
-    total_length = 0
-    for n in nodes:
-        length = (n.end - n.start)
-        total_mass += length * G.node[n][NODE_DENSITY]
-        total_length += length
-    return total_mass / float(total_length)
+def get_intron_starts_and_ends(G, reverse=False):
+    '''
+    input: DiGraph G
+    output: introns as (start,end) tuples
+    '''
+    if reverse:
+        G.reverse(copy=False)
+    intron_starts = set()
+    intron_ends = set()
+    for u,nbrdict in G.adjacency_iter():
+        for v in nbrdict:
+            if u.end == v.start:
+                continue
+            intron_starts.add(u.end)
+            intron_ends.add(v.start)
+    if reverse:
+        G.reverse(copy=False)
+    return intron_starts, intron_ends
     
-def trim_intron(G, chains, node_chain_map, successor_dict, 
+def trim_intron(G, chains, node_chain_map, 
+                predecessor_dict, successor_dict, 
                 parent, nodes, trim_intron_fraction=0.25):
+    # find the nodes immediately upstream of the intron
+    pred = None
+    for pred in predecessor_dict[nodes[0]]:
+        if (parent.end == pred.start) or (parent.start == pred.end):
+            break
+    if pred is None:
+        logging.debug("%s %s" % (str(nodes[-1]), str(successor_dict[nodes[-1]])))
+    assert pred is not None
+    # calculate the average density of the nodes bordering the intron
+    pred_chain_node = node_chain_map[pred]
+    pred_nodes = chains[pred_chain_node]
+    pred_total_density = sum(G.node[n][NODE_DENSITY] for n in pred_nodes)
+    pred_avg_density = pred_total_density / len(pred_nodes)
     # find the nodes immediately downstream of the intron
     succ = None
     for succ in successor_dict[nodes[-1]]:
@@ -228,12 +253,14 @@ def trim_intron(G, chains, node_chain_map, successor_dict,
     # calculate the average density of the nodes bordering the intron
     succ_chain_node = node_chain_map[succ]
     succ_nodes = chains[succ_chain_node]
-    succ_density = calc_average_density(G, succ_nodes)
+    succ_total_density = sum(G.node[n][NODE_DENSITY] for n in succ_nodes)
+    succ_avg_density = succ_total_density / len(succ_nodes)    
     # remove intron nodes with density less than the bordering exons
+    cutoff_density = trim_intron_fraction * max(pred_avg_density, succ_avg_density)
     trim_nodes = set()
     for n in nodes:
         density = G.node[n][NODE_DENSITY]
-        if density < (trim_intron_fraction * succ_density):
+        if density < cutoff_density:
             trim_nodes.add(n)
     return trim_nodes
     
@@ -258,7 +285,60 @@ def trim_utr(G, nodes, coverage_fraction):
     if trim_index > 0:
         trim_nodes = nodes[:trim_index] 
     return trim_nodes
-   
+
+def trim_bidirectional(G, nodes, min_length, trim_utr_fraction):
+    # find max node and use as seed
+    seed_index = None
+    seed_density = None
+    for i,n in enumerate(nodes):
+        density = G.node[n][NODE_DENSITY]
+        if (seed_index is None) or (density > seed_density):
+            seed_index = i
+            seed_density = density
+    #print "nodes", nodes
+    #print "seed", seed_index, nodes[seed_index], seed_density
+    # extend seed nodes until length greater than min_length
+    seed_start = seed_index
+    seed_end = seed_index
+    seed_length = (nodes[seed_index].end - nodes[seed_index].start)
+    while ((seed_length < min_length) and
+           ((seed_start > 0) or (seed_end < len(nodes)-1))):
+        if seed_start == 0:
+            pred_density = 0.0
+        else:
+            pred_density = G.node[nodes[seed_start-1]][NODE_DENSITY]
+        if seed_end == (len(nodes)-1):
+            succ_density = 0.0
+        else:
+            succ_density = G.node[nodes[seed_end+1]][NODE_DENSITY]
+        if (succ_density > pred_density):
+            seed_end += 1
+            seed_length += nodes[seed_end].end - nodes[seed_end].start
+            seed_density += succ_density
+        else:
+            seed_start -= 1
+            seed_length += nodes[seed_start].end - nodes[seed_start].start
+            seed_density += pred_density
+        #print "extend", seed_start, seed_end, seed_length
+    # compute seed density and trimming density cutoff
+    seed_avg_density = seed_density / float(seed_end - seed_start + 1)
+    density_cutoff = trim_utr_fraction * seed_avg_density
+    trim_nodes = []
+    # trim left
+    for i in xrange(seed_start-1, -1, -1):
+        #print nodes[i], G.node[nodes[i]][NODE_DENSITY], density_cutoff
+        if G.node[nodes[i]][NODE_DENSITY] < density_cutoff:
+            break
+    trim_nodes.extend(nodes[:i+1])
+    # trim_right
+    for i in xrange(seed_end+1, len(nodes)):
+        #print nodes[i], G.node[nodes[i]][NODE_DENSITY], density_cutoff
+        if G.node[nodes[i]][NODE_DENSITY] < density_cutoff:
+            break
+    trim_nodes.extend(nodes[i:])
+    #print "trim", trim_nodes
+    return trim_nodes
+
 def trim_graph(G, strand,
                overhang_threshold, 
                trim_utr_fraction,
@@ -284,14 +364,14 @@ def trim_graph(G, strand,
             nodes.reverse()
         in_degree = len(predecessor_dict[nodes[0]])
         out_degree = len(successor_dict[nodes[-1]])
-        if ((in_degree == 1) and (out_degree == 1) and 
-            (parent.start, parent.end) in introns):
-            trim_nodes = trim_intron(G, chains, node_chain_map, successor_dict, 
+        if ((in_degree == 1) and (out_degree == 1) and
+            (parent.start, parent.end) in introns): 
+            trim_nodes = trim_intron(G, chains, node_chain_map, 
+                                     predecessor_dict, successor_dict, 
                                      parent, nodes, trim_intron_fraction)
         else:
             if (in_degree == 0) and (out_degree == 0):
-                # TODO: trim in both directions
-                continue
+                trim_nodes = trim_bidirectional(G, nodes, overhang_threshold, trim_utr_fraction)
             elif in_degree == 0:
                 trim_nodes = trim_utr(G, nodes, trim_utr_fraction)
             elif out_degree == 0:
