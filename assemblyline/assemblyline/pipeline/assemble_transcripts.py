@@ -14,7 +14,9 @@ from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
 from assemblyline.lib.transcript import strand_int_to_str, NEG_STRAND
 from assemblyline.lib.assemble.base import GLOBAL_LOCUS_ID, GLOBAL_GENE_ID, \
     GLOBAL_TSS_ID, GLOBAL_TRANSCRIPT_ID, NODE_DENSITY
-from assemblyline.lib.assemble.transcript_graph import create_strand_transcript_maps, create_transcript_graphs
+from assemblyline.lib.assemble.filter import filter_transcripts
+from assemblyline.lib.assemble.transcript_graph import \
+    create_transcript_graphs, prune_transcript_graph
 from assemblyline.lib.assemble.assembler import assemble_transcript_graph
 
 def write_bed(chrom, name, strand, score, exons):
@@ -114,12 +116,58 @@ def annotate_gene_and_tss_ids(path_info_list, strand):
         for i in indexes:
             path_info_list[i].gene_id = gene_id
 
+def assemble_gene(locus_chrom, locus_id_str, G, strand, partial_paths, 
+                  sensitivity_threshold, kmax, fraction_major_isoform, 
+                  max_paths, bed_fileh, gtf_fileh):
+    global GLOBAL_TRANSCRIPT_ID
+    # run assembly algorithm
+    path_info_list = assemble_transcript_graph(G, strand, partial_paths,
+                                               sensitivity_threshold, kmax,
+                                               fraction_major_isoform, 
+                                               max_paths)
+    logging.debug("\tAssembled %d transcript(s)" % (len(path_info_list)))
+    # determine gene ids and tss ids
+    annotate_gene_and_tss_ids(path_info_list, strand)
+    # bin transcripts by gene id
+    gene_path_info_dict = collections.defaultdict(lambda: [])
+    for p in path_info_list:
+        gene_path_info_dict[p.gene_id].append(p)
+    features = []
+    for gene_path_info_list in gene_path_info_dict.itervalues():
+        # highest density path is always first in list
+        highest_density = max(1e-8, gene_path_info_list[0].density)
+        # create GTF features for each transcript path
+        for p in gene_path_info_list:
+            # assign transcript id
+            tx_id = GLOBAL_TRANSCRIPT_ID
+            GLOBAL_TRANSCRIPT_ID += 1
+            # get strings for each id
+            tx_id_str = "TU%d" % tx_id
+            tss_id_str = "TSS%d" % (p.tss_id)
+            gene_id_str = "G%d" % (p.gene_id)
+            # compute isoform fractions
+            frac = p.density / highest_density
+            # write to GTF
+            if gtf_fileh is not None:
+                features.extend(get_gtf_features(locus_chrom, strand, p.path,
+                                                 locus_id=locus_id_str, 
+                                                 gene_id=gene_id_str, 
+                                                 tss_id=tss_id_str, 
+                                                 transcript_id=tx_id_str,
+                                                 density=p.density, 
+                                                 frac=frac))                    
+            # write to BED
+            name = "%s|%s(%.1f)" % (gene_id_str, tx_id_str, p.density)
+            fields = write_bed(locus_chrom, name, strand, int(round(1000.0*frac)), p.path)
+            print >>bed_fileh, '\t'.join(fields)    
+    return features
+
 def assemble_locus(transcripts, min_length, overhang_threshold, 
                    trim_utr_fraction, trim_intron_fraction, 
-                   kmax, fraction_major_isoform, max_paths, 
-                   bed_fileh, gtf_fileh=None, bedgraph_filehs=None):
+                   sensitivity_threshold, kmax, fraction_major_isoform, 
+                   max_paths, bed_fileh, gtf_fileh=None, 
+                   bedgraph_filehs=None):
     global GLOBAL_LOCUS_ID
-    global GLOBAL_TRANSCRIPT_ID   
     # gather properties of locus
     locus_chrom = transcripts[0].chrom
     locus_start = transcripts[0].start
@@ -129,59 +177,32 @@ def assemble_locus(transcripts, min_length, overhang_threshold,
                    len(transcripts)))
     locus_id_str = "L%d" % (GLOBAL_LOCUS_ID)
     GLOBAL_LOCUS_ID += 1
+    # filter transcripts
+    logging.debug("\tFiltering transcripts")
+    transcripts = filter_transcripts(transcripts, min_length)    
     # build transcript graphs
     features = []
-    for G, partial_paths, strand in \
-        create_transcript_graphs(transcripts, 
-                                 min_length, 
-                                 overhang_threshold, 
-                                 trim_utr_fraction,
-                                 trim_intron_fraction):
-        logging.debug("[LOCUS][STRAND] (%s) graph has %d nodes and "
-                      "%d unique path fragments" % 
-                      (strand_int_to_str(strand), len(G), len(partial_paths)))
+    for G, strand, strand_transcript_map in \
+        create_transcript_graphs(transcripts):
         # output bedgraph data
         if bedgraph_filehs is not None:
             write_bedgraph(bedgraph_filehs[strand], locus_chrom, G)
-        # run assembly algorithm
-        path_info_list = assemble_transcript_graph(G, strand, partial_paths,
-                                                   kmax, 
-                                                   fraction_major_isoform, 
-                                                   max_paths)
-        logging.debug("\tAssembled %d transcript(s)" % (len(path_info_list)))
-        # determine gene ids and tss ids
-        annotate_gene_and_tss_ids(path_info_list, strand)
-        # bin transcripts by gene id
-        gene_path_info_dict = collections.defaultdict(lambda: [])
-        for p in path_info_list:
-            gene_path_info_dict[p.gene_id].append(p)
-        for gene_path_info_list in gene_path_info_dict.itervalues():
-            # highest density path is always first in list
-            highest_density = max(1e-8, gene_path_info_list[0].density)
-            # create GTF features for each transcript path
-            for p in gene_path_info_list:
-                # assign transcript id
-                tx_id = GLOBAL_TRANSCRIPT_ID
-                GLOBAL_TRANSCRIPT_ID += 1
-                # get strings for each id
-                tx_id_str = "TU%d" % tx_id
-                tss_id_str = "TSS%d" % (p.tss_id)
-                gene_id_str = "G%d" % (p.gene_id)
-                # compute isoform fractions
-                frac = p.density / highest_density
-                # write to GTF
-                if gtf_fileh is not None:
-                    features.extend(get_gtf_features(locus_chrom, strand, p.path,
-                                                     locus_id=locus_id_str, 
-                                                     gene_id=gene_id_str, 
-                                                     tss_id=tss_id_str, 
-                                                     transcript_id=tx_id_str,
-                                                     density=p.density, 
-                                                     frac=frac))                    
-                # write to BED
-                name = "%s|%s(%.1f)" % (gene_id_str, tx_id_str, p.density)
-                fields = write_bed(locus_chrom, name, strand, int(round(1000.0*frac)), p.path)
-                print >>bed_fileh, '\t'.join(fields)
+        # process transcript graphs
+        for Gsub, strand, partial_paths in \
+            prune_transcript_graph(G, strand, strand_transcript_map,
+                                   overhang_threshold, 
+                                   trim_utr_fraction,
+                                   trim_intron_fraction):
+            logging.debug("[LOCUS][STRAND] (%s) graph has %d nodes and "
+                          "%d unique path fragments" % 
+                          (strand_int_to_str(strand), len(Gsub), 
+                           len(partial_paths)))
+            # assemble subgraph
+            features.extend(assemble_gene(locus_chrom, locus_id_str, 
+                                          Gsub, strand, partial_paths, 
+                                          sensitivity_threshold, kmax,
+                                          fraction_major_isoform, 
+                                          max_paths, bed_fileh, gtf_fileh))
     # output GTF
     if gtf_fileh is not None:
         # in-place sort so that 'transcript' features appear before 'exon'
@@ -192,7 +213,8 @@ def assemble_locus(transcripts, min_length, overhang_threshold,
             print >>gtf_fileh, str(f) 
 
 def run(gtf_file, name, min_length, overhang_threshold, trim_utr_fraction,
-        trim_intron_fraction, kmax, fraction_major_isoform, max_paths, 
+        trim_intron_fraction, sensitivity_threshold, kmax,
+        fraction_major_isoform, max_paths, 
         create_bed=False, 
         create_gtf=False, 
         create_bedgraph=False):
@@ -241,10 +263,18 @@ def run(gtf_file, name, min_length, overhang_threshold, trim_utr_fraction,
         bedgraph_filehs = None
     # run assembler on each locus
     for locus_transcripts in parse_gtf(open(gtf_file), cufflinks_attr_defs):
-        assemble_locus(locus_transcripts, min_length, overhang_threshold,
-                       trim_utr_fraction, trim_intron_fraction,  kmax, 
-                       fraction_major_isoform, max_paths, bed_fileh, 
-                       gtf_fileh, bedgraph_filehs)
+        assemble_locus(locus_transcripts, 
+                       min_length, 
+                       overhang_threshold,
+                       trim_utr_fraction, 
+                       trim_intron_fraction,  
+                       sensitivity_threshold, 
+                       kmax, 
+                       fraction_major_isoform, 
+                       max_paths, 
+                       bed_fileh, 
+                       gtf_fileh, 
+                       bedgraph_filehs)
     # cleanup output files
     if create_bed:
         bed_fileh.close()
@@ -262,10 +292,16 @@ def main():
     parser.add_argument("-n", "--name", dest="name", default="assemblyline",
                         help="name of assembly used for output files "
                         "[default=%(default)s]")
-    parser.add_argument("--kmax", dest="kmax", type=int, 
-                        default=3, metavar="N",
-                        help="Max length of partial paths stored during assembly "
-                        "and path finding steps [default=%(default)s]")
+    parser.add_argument("--sensitivity", dest="sensitivity_threshold", 
+                        type=float, default=0.9, metavar="X",
+                        help="Constrain de Bruijn graph parameter 'k' "
+                        "such that at least X fraction of total expression "
+                        "is retained in k-mer graphs [default=%(default)s]")
+    parser.add_argument("--kmax", dest="kmax", 
+                        type=int, default=None, metavar="k",
+                        help="Constrain de Bruijn graph parameter 'k' "
+                        "to improve runtime performance "
+                        "[default=%(default)s]")
     parser.add_argument("--min-length", dest="min_length", type=int,  
                         default=100, metavar="N",
                         help="Ignore transcripts that are less than N bp "
@@ -326,9 +362,22 @@ def main():
     logging.info("overhang threshold:      %d" % (args.overhang_threshold))
     logging.info("trim utr fraction:       %f" % (args.trim_utr_fraction))
     logging.info("trim intron fraction:    %f" % (args.trim_intron_fraction))
-    logging.info("assembler kmax:          %d" % (args.kmax))
+    logging.info("assembler sensitivity:   %f" % (args.sensitivity_threshold))
     logging.info("fraction major isoform:  %f" % (args.fraction_major_isoform))
     logging.info("max paths:               %d" % (args.max_paths))
+    # constrain parameters
+    if args.min_length <= 0:
+        parser.error("min_length <= 0")
+    if (args.trim_utr_fraction < 0) or (args.trim_utr_fraction > 1):
+        parser.error("trim_utr_fraction out of range (0.0-1.0)")
+    if (args.trim_intron_fraction < 0) or (args.trim_intron_fraction > 1):
+        parser.error("trim_intron_fraction out of range (0.0-1.0)")
+    if (args.sensitivity_threshold < 0) or (args.sensitivity_threshold > 1):
+        parser.error("sensitivity_threshold out of range (0.0-1.0)")
+    if (args.fraction_major_isoform < 0) or (args.fraction_major_isoform > 1):
+        parser.error("fraction_major_isoform out of range (0.0-1.0)")
+    if (args.max_paths < 1):
+        parser.error("max_paths <= 0")
     # start algorithm
     run(args.gtf_input_file,
         args.name,
@@ -336,6 +385,7 @@ def main():
         args.overhang_threshold,
         args.trim_utr_fraction,
         args.trim_intron_fraction,
+        args.sensitivity_threshold,
         args.kmax,
         args.fraction_major_isoform,
         args.max_paths,

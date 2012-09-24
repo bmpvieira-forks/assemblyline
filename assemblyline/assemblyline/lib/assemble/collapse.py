@@ -97,21 +97,38 @@ def recalc_strand_specific_graph_attributes(G):
     for n,d in G.nodes_iter(data=True):
         chain_nodes = d[CHAIN_NODES]
         chain_data = d[CHAIN_DATA]
-        # calculate density of all nodes in chain
-        total_mass = 0.0
+        node_ids = set()
+        total_density = 0.0
+        min_density = None
         total_length = 0
-        ids = set()
         for cn in chain_nodes:
+            total_length += (cn.end - cn.start)
             cattrs = chain_data[cn]
-            ids.update(cattrs[TRANSCRIPT_IDS])
-            length = (cn.end - cn.start)
-            total_mass += length * cattrs[NODE_DENSITY]
-            total_length += length
-        density = total_mass / float(total_length)
+            node_ids.update(cattrs[TRANSCRIPT_IDS])
+            density = cattrs[NODE_DENSITY]
+            total_density += density
+            if (min_density is None) or (density < min_density):
+                min_density = density
         # set attributes
-        d[TRANSCRIPT_IDS] = ids
-        d[NODE_DENSITY] = density
+        d[TRANSCRIPT_IDS] = node_ids
+        d[NODE_DENSITY] = min_density
         d[NODE_LENGTH] = total_length
+#        d[NODE_DENSITY] = total_density / float(len(chain_nodes))
+#        # calculate density of all nodes in chain
+#        total_mass = 0.0
+#        total_length = 0
+#        ids = set()
+#        for cn in chain_nodes:
+#            cattrs = chain_data[cn]
+#            ids.update(cattrs[TRANSCRIPT_IDS])
+#            length = (cn.end - cn.start)
+#            total_mass += length * cattrs[NODE_DENSITY]
+#            total_length += length
+#        density = total_mass / float(total_length)
+#        # set attributes
+#        d[TRANSCRIPT_IDS] = ids
+#        d[NODE_DENSITY] = density
+#        d[NODE_LENGTH] = total_length
 
 def collapse_strand_specific_graph(G):
     """

@@ -5,15 +5,15 @@ Created on Nov 28, 2011
 '''
 
 class LaneInfo(object):
-    __slots__ = ('cohort', 'patient', 'sample', 'library', 'lane', 'qc',
-                 'use_juncs', 'use_transcripts',  'valid', 
-                 'aligned_reads', 'read_length', 'tophat_juncs_file',
-                 'cufflinks_gtf_file')
+    fields = ('cohort', 'patient', 'sample', 'library', 'lane', 'qc',
+              'use_juncs', 'use_transcripts',  'valid', 
+              'aligned_reads', 'read_length', 'tophat_juncs_file',
+              'cufflinks_gtf_file')
 
     @staticmethod
     def from_fields(fields, field_dict=None):
         if field_dict is None:
-            field_dict = dict((x,i) for i,x in enumerate(LaneInfo.__slots__))
+            field_dict = dict((x,i) for i,x in enumerate(LaneInfo.fields))
         l = LaneInfo()
         for attrname in LaneInfo.__slots__:
             setattr(l, attrname, fields[field_dict[attrname]])
@@ -56,19 +56,19 @@ class LaneInfo(object):
         fh.close()
  
 class LibInfo(object):
-    __slots__ = ('cohort', 'patient', 'sample', 'library', 'lanes',
-                 'library_type', 'frag_len_mean', 'frag_len_std_dev',
-                 'has_pe_lanes', 'valid', 'for_assembly', 
-                 'cufflinks_gtf_file', 'bam_file') 
+    fields = ('cohort', 'patient', 'sample', 'library', 'lanes',
+              'library_type', 'frag_len_mean', 'frag_len_std_dev',
+              'has_pe_lanes', 'valid', 'for_assembly', 
+              'cufflinks_gtf_file', 'bam_file') 
 
     @staticmethod
     def from_fields(fields, field_dict=None):
         if field_dict is None:
-            field_dict = dict((x,i) for i,x in enumerate(LibInfo.__slots__))
+            field_dict = dict((x,i) for i,x in enumerate(LibInfo.fields))
         l = LibInfo()
-        for attrname in LibInfo.__slots__:
+        for attrname in field_dict:
             setattr(l, attrname, fields[field_dict[attrname]])
-        # convert types        
+        # convert types
         if l.frag_len_mean == "NA":
             l.frag_len_mean = None
         else:
