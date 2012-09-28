@@ -1,0 +1,23 @@
+#summary How to install and setup AssemblyLine
+
+= Introduction =
+
+Add your content here.
+
+= System requirements =
+
+In order to run AssemblyLine you must have the following installed:
+
+  * [http://python.org python 2.7+]
+    * [http://http://numpy.scipy.org numpy]
+
+
+= Prerequisites =
+
+
+= Details =
+
+Add your content here.  Format your content with:
+  * Text in *bold* or _italic_
+  * Headings, paragraphs, and lists
+  * Automatic links to other wiki pages
