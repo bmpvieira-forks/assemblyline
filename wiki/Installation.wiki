@@ -6,7 +6,7 @@ Add your content here.
 
 = System requirements =
 
-In order to run AssemblyLine you must have the following installed:
+In order to run *assemblyline* you must have the following installed:
 
   * [http://python.org python 2.7+]
     * [http://http://numpy.scipy.org numpy]
