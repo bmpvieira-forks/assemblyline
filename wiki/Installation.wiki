@@ -11,7 +11,8 @@ In order to run *assemblyline* you must have the following installed:
   * [http://python.org python 2.7+]
     * [http://http://numpy.scipy.org numpy]
   * [http://www.r-project.org R]
-    * Packages `rpart` and [http://rocr.bioinf.mpi-sb.mpg.de ROCR]
+    * `rpart` package (classification trees)
+    * [http://rocr.bioinf.mpi-sb.mpg.de ROCR] package (classifier visualization)
 
 
 = Prerequisites =
