@@ -111,10 +111,10 @@ def recalc_strand_specific_graph_attributes(G):
                 min_score = score
         # set attributes
         d[TRANSCRIPT_IDS] = node_ids
-        d[NODE_SCORE] = min_score
-        d[NODE_LENGTH] = total_length
         # TODO: use average or minimum?
-        # d[NODE_SCORE] = total_score / float(len(chain_nodes))
+        d[NODE_SCORE] = total_score / float(len(chain_nodes))
+        #d[NODE_SCORE] = min_score
+        d[NODE_LENGTH] = total_length
 
 def collapse_strand_specific_graph(G):
     """

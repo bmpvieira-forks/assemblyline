@@ -25,27 +25,25 @@ cufflinks_attr_defs = {"FPKM": float_check_nan,
 def separate_transcripts(gtf_features):
     transcripts = collections.defaultdict(lambda: Transcript())
     for feature in gtf_features:
-        tx_id = feature.attrs["transcript_id"]
-        if feature.feature_type == "exon" and tx_id not in transcripts:            
+        t_id = feature.attrs["transcript_id"]
+        if feature.feature_type == "exon" and t_id not in transcripts:            
             logging.error("Feature type 'exon' has no transcript record: %s" % feature)
             assert False
-        transcript = transcripts[tx_id]
+        t = transcripts[t_id]
         if feature.feature_type == "transcript":
-            transcript.chrom = feature.seqid
-            transcript.start = feature.start
-            transcript.end = feature.end
+            t.chrom = feature.seqid
+            t.start = feature.start
+            t.end = feature.end
             # convert from string strand notation ("+", "-", ".") 
             # to integer (0, 1)
-            transcript.strand = strand_str_to_int(feature.strand)
-            transcript.exons = {}
-            transcript.attrs = feature.attrs
+            t.strand = strand_str_to_int(feature.strand)
+            t.exons = []
+            t.attrs = feature.attrs
         elif feature.feature_type == "exon":
-            exon_num = int(feature.attrs["exon_number"])
-            transcript.exons[exon_num] = Exon(feature.start, feature.end)
-    # convert transcript exons from dictionary to sorted list
-    for transcript in transcripts.itervalues():
-        # sort the exons in correct transcript order
-        transcript.exons = [transcript.exons[v] for v in sorted(transcript.exons.keys())]
+            t.exons.append(Exon(feature.start, feature.end))
+    # sort transcript exons by genomic position
+    for t in transcripts.itervalues():
+        t.exons.sort()
     # sort transcripts by position
     return sorted(transcripts.values(), key=operator.attrgetter('start'))
 

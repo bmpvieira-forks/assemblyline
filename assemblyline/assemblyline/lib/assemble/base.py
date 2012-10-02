@@ -6,8 +6,10 @@ Created on Dec 17, 2011
 from assemblyline.lib.transcript import Exon
 
 # transcript graph attributes
+TRANSCRIPT_IDS = 'tids'
+SAMPLE_IDS = 'sids'
+IS_REF = 'ref'
 STRAND_SCORE = 'strand_score'
-TRANSCRIPT_IDS = 'ids'
 
 # assembler graph attributes
 NODE_SCORE = 'score'
@@ -28,13 +30,3 @@ GLOBAL_GENE_ID = 1
 GLOBAL_TSS_ID = 1
 GLOBAL_TRANSCRIPT_ID = 1
 
-def init_directed_node_attrs(n):
-    """
-    each node in directed graph maintains attributes:
-    'ids': set() of transcript id strings
-    'score': node weight (float)
-    'length': size of node in nucleotides
-    """
-    return {TRANSCRIPT_IDS: set(),
-            NODE_LENGTH: (n.end - n.start), 
-            NODE_SCORE: 0.0}

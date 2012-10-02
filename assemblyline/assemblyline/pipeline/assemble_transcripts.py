@@ -273,7 +273,7 @@ def run(gtf_file,
     # run assembler on each locus
     for locus_transcripts in parse_gtf(open(gtf_file), cufflinks_attr_defs):
         # assign scores to each transcript
-        if scoring_mode == "recurrence":
+        if scoring_mode == "unweighted":
             for t in locus_transcripts:
                 t.score = 1.0
         elif scoring_mode == "gtf_attr":
@@ -307,7 +307,7 @@ def main():
     parser.add_argument("-v", "--verbose", action="store_true", 
                         dest="verbose", default=False)
     parser.add_argument("--scoring-mode", dest="scoring_mode", 
-                        choices=("recurrence", "gtf_attr"), 
+                        choices=("unweighted", "gtf_attr"), 
                         default="gtf_attr", metavar="MODE",
                         help="define how assembler weights nodes "
                         " [default=%(default)s]")

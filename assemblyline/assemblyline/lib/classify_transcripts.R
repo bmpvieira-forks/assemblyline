@@ -1,15 +1,24 @@
-# parse command line
-args <- commandArgs(trailingOnly=TRUE)
-infile <- args[1]
-outfile <- args[2]
-cutoff_file <- args[3]
-plotfile <- args[4]
-
 # load libraries
 library(rpart)
+library(ROCR)
+
+# parse command line
+args <- commandArgs(trailingOnly=TRUE)
+inputFile <- args[1]
+outputPrefix <- args[2]
+
+# output files
+resultFile <- paste(outputPrefix, ".classify.txt", sep="")
+cutoffFile <- paste(outputPrefix, ".cutoffs.txt", sep="")
+treePlotFile <- paste(outputPrefix, ".ctree.pdf", sep="")
+cpPlotFile <- paste(outputPrefix, ".cpplot.pdf", sep="")
+prPlotFile <- paste(outputPrefix, ".prcurve.pdf", sep="");
+cvfPlotFile <- paste(outputPrefix, ".cutoff_vs_f.pdf", sep="")
+rocPlotFile <- paste(outputPrefix, ".roc.pdf", sep="")
+aucFile <- paste(outputPrefix, ".auc.txt", sep="")
 
 # read input data
-t <- read.table(infile, header=TRUE, sep="\t", stringsAsFactors=FALSE)
+t <- read.table(inputFile, header=TRUE, sep="\t", stringsAsFactors=FALSE)
 
 # setup classification tree parameters
 minsplit <- max(30, 0.001 * nrow(t))
@@ -19,8 +28,17 @@ cp <- 0.0001
 xval <- 10
 control <- rpart.control(minsplit=minsplit,minbucket=minbucket,maxdepth=maxdepth,cp=cp,xval=xval,usesurrogate=2)
 
+# setup case weights to balance ratio of observations in each class
+total_obs <- nrow(t)
+case_weights <- rep(1.0, nrow(t))
+x <- table(t$annotated)
+if (x["0"] > 0) {
+	case_weights[which(t$annotated == 0)] <- (x["1"] / x["0"])
+}
+
 # run classification
-fit <- rpart(annotated ~ length + num_exons + cov + fpkm + recur + avgdensity, data=t, method="class", control=control)
+fit <- rpart(annotated ~ length + num_exons + score + mean_score + mean_recurrence, 
+		data=t, weights=case_weights, method="class", control=control)
 
 # check whether classification worked
 fit.ok <- !is.nan(fit$cptable[1,1])
@@ -35,41 +53,50 @@ if (dim(fit$cptable)[1] == 1) {
 }
 
 # get predicted probabilities
-result <- predict(fit.prune, data=t, type="prob")
-if (!("1" %in% colnames(result))) {
+pred <- predict(fit.prune, data=t, type="prob")
+if (!("1" %in% colnames(pred))) {
 	# there are no "1" in predicted probs so just
 	# set all results to zero
-	result <- rep(0.0, dim(t)[1])
+	pred <- rep(0.0, dim(t)[1])
 } else {
-	result <- result[,"1"]
+	pred <- pred[,"1"]
 }
 
-# determine an optimal cutoff value
+# compute statistics at different cutoff values
 cutoffs <- seq(0, 1, by=0.001)
-F <- NA
-i <- 1
-for (cutoff in cutoffs) {
-	tp <- length(which((result >= cutoff) & (t$annotated == 1)))
-	fn <- length(which((result < cutoff) & (t$annotated == 1)))
-	fp <- length(which((result >= cutoff) & (t$annotated == 0)))
-	tn <- length(which((result < cutoff) & (t$annotated == 0)))
-	if (tp == 0) {
-		F[i] <- 0.0
-	} else {
+cols <- c("cutoff", "tp", "fn", "fp", "tn", "prec", "rec", "spec", "F", "balacc")
+cutoffTable <- data.frame(matrix(nrow=length(cutoffs),ncol=length(cols), dimnames=list(NULL, cols)))
+for (i in 1:length(cutoffs)) {
+	cutoff <- cutoffs[i]
+	tp <- length(which((pred >= cutoff) & (t$annotated == 1)))
+	fn <- length(which((pred < cutoff) & (t$annotated == 1)))
+	fp <- length(which((pred >= cutoff) & (t$annotated == 0)))
+	tn <- length(which((pred < cutoff) & (t$annotated == 0)))
+	prec <- 0.0
+	rec <- 0.0
+	spec <- 0.0
+	F <- 0.0
+	if ((tp + fp) > 0) {
 		prec <- tp / (tp + fp)
+	} 
+	if ((tp + fn) > 0) {
 		rec <- tp / (tp + fn)
-		F[i] <- 2 * (prec * rec) / (prec + rec)
 	}
-	i <- i + 1
+	if ((tn + fp) > 0) {
+		spec <- tn / (tn + fp)
+	}
+	if ((prec + rec) > 0) {		
+		F <- 2 * (prec * rec) / (prec + rec)
+	}
+	balacc <- (rec + spec) / 2.0
+	cutoffTable[i,] <- c(cutoff, tp, fn, fp, tn, prec, rec, spec, F, balacc)
 }
 
-# find cutoff with best F-measure of performance	
-best_cutoff <- cutoffs[min(which(F == max(F)))]
-write(c(best_cutoff), file=cutoff_file, ncolumns=1)
-
-# write to output file
-m <- matrix(cbind(t$chrom, t$start, t$tx_id, t$annotated, t$recur, t$avgdensity, result), ncol=7)
-write.table(m, file=outfile, quote=FALSE, row.names=FALSE, col.names=FALSE, sep="\t")
+# write prediction output file
+resultTable <- cbind(t, pred)
+write.table(resultTable, file=resultFile, quote=FALSE, row.names=FALSE, col.names=FALSE, sep="\t")
+# write statistics output file
+write.table(cutoffTable, file=cutoffFile, quote=FALSE, row.names=FALSE, col.names=TRUE, sep="\t")
 
 # print statistics from classification
 if (fit.ok) {
@@ -80,15 +107,34 @@ if (fit.ok) {
 }
 
 # create plots
-pdf(file=plotfile)	
-# create attractive plot of tree
+# attractive plot of tree
+pdf(file=treePlotFile)	
 try(plot(fit.prune, uniform=TRUE))
 try(text(fit.prune, use.n=TRUE, all=TRUE, cex=0.7))
-# show CP plot
+dev.off()
+# CP plot
+pdf(file=cpPlotFile)	
 try(plotcp(fit))
-# plot histogram of distribution of the probabilities
-try(hist(result, breaks=50))	
-# plot overall cutoff
-try(plot(cutoffs, F, main="Cutoff vs. F-measure"))	
-# TODO: ROC curve
-dev.off()	
+dev.off()
+
+# ROCR plots
+pred.obj <- prediction(pred, t$annotated);
+# precision-recall curve         
+pdf(file=prPlotFile)
+perf.rp <- performance(pred.obj, "prec", "rec");
+try(plot(perf.rp, colorize=TRUE, main="Precision vs. Recall"));
+dev.off()
+# cutoff vs F measure
+pdf(file=cvfPlotFile) 
+perf.f <- performance(pred.obj, "f")
+try(plot(perf.f, main="Cutoff vs. F-measure"));
+dev.off()
+# ROC
+pdf(rocPlotFile)
+perf.roc <- performance(pred.obj, "tpr", "fpr")
+try(plot(perf.roc, colorize=TRUE, main="ROC"))
+dev.off()
+# AUC
+auc.tmp <- performance(pred.obj, "auc");
+auc <- as.numeric(auc.tmp@y.values)
+write.table(auc, file=aucFile, quote=FALSE, row.names=FALSE, col.names=FALSE)

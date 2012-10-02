@@ -16,3 +16,12 @@ def up_to_date(outfile, infile, nzsize=True):
 
 imax2 = lambda x,y: x if x>=y else y
 imin2 = lambda x,y: x if x<=y else y
+
+class GTFAttr:
+    GENE_ID = 'gene_id'
+    TRANSCRIPT_ID = 'transcript_id'
+    COHORT_ID = 'cohort_id'
+    SAMPLE_ID = 'sample_id'
+    LIBRARY_ID = 'library_id'
+    REF = 'ref'
+
