@@ -14,8 +14,12 @@ In order to run *assemblyline* you must have the following installed:
     * `rpart` package (classification trees)
     * [http://rocr.bioinf.mpi-sb.mpg.de ROCR] package (classifier visualization)
 
+= Installation =
 
-= Prerequisites =
+  # Download *assemblyline_vXX.tar.gz* tarball from Downloads page
+  # Uncompress tarball e.g. `tar -zxvf assemblyline_vXX.tar.gz`
+  # Change to the newly created directory  `cd assemblyline_vXX`
+  # Run setup.py program to install assemblyline
 
 
 = Details =
