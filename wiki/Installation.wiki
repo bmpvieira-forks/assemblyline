@@ -18,8 +18,12 @@ In order to run *assemblyline* you must have the following installed:
 
   # Download *assemblyline_vXX.tar.gz* tarball from Downloads page
   # Uncompress tarball e.g. `tar -zxvf assemblyline_vXX.tar.gz`
-  # Change to the newly created directory  `cd assemblyline_vXX`
-  # Run setup.py program to install assemblyline
+  # Change to the newly created directory e.g.  `cd assemblyline_vXX`
+  # Run setup.py program to install assemblyline as follows
+
+{{{
+$ python setup.py build_ext --inplace
+}}}
 
 
 = Details =
