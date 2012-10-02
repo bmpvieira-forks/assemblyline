@@ -12,8 +12,10 @@ import numpy as np
 
 from assemblyline.lib.bx.cluster import ClusterTree
 from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
-from base import NODE_SCORE, NODE_LENGTH, STRAND_SCORE, TRANSCRIPT_IDS, \
-    init_directed_node_attrs
+from assemblyline.lib.base import GTFAttr
+
+from base import NODE_SCORE, NODE_LENGTH, STRAND_SCORE, \
+    TRANSCRIPT_IDS, SAMPLE_IDS, IS_REF
 from trim import trim_graph
 from collapse import collapse_strand_specific_graph
 
@@ -63,25 +65,32 @@ def get_transcript_node_map(G):
         t_node_map[t_id] = sorted(nodes, key=operator.attrgetter('start'))
     return t_node_map
 
-def add_node_undirected(G, n, t_id, strand, score):
+def add_node_undirected(G, n, t_id, sample_id, is_ref, strand, score):
     """
     add node to undirected graph
     
     each node in graph maintains attributes:
-    'ids': set() of transcript id strings
+    'tids': set() of transcript id strings
+    'sids': set() of sample id strings
+    'ref': logical whether each strand is 'annotated'
     'strand_score': numpy array containing score on each strand
     'length': size of node in nucleotides
     """
     if n not in G: 
         attr_dict = {TRANSCRIPT_IDS: set(),
+                     SAMPLE_IDS: set(),
+                     IS_REF: np.zeros(3,bool),
                      NODE_LENGTH: (n.end - n.start),
                      STRAND_SCORE: np.zeros(3,float)} 
         G.add_node(n, attr_dict=attr_dict)
     nd = G.node[n]
     nd[TRANSCRIPT_IDS].add(t_id)
+    if sample_id is not None:
+        nd[SAMPLE_IDS].add(sample_id)
+    nd[IS_REF][strand] |= is_ref
     nd[STRAND_SCORE][strand] += score
 
-def create_undirected_transcript_graph(transcripts):
+def create_undirected_transcript_graph(transcripts, gtf_sample_attr):
     '''
     add all transcripts to a single undirected graph
     '''
@@ -91,6 +100,10 @@ def create_undirected_transcript_graph(transcripts):
     G = nx.Graph()
     # add transcripts
     for t in transcripts:
+        # get transcript attributes
+        t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
+        sample_id = t.attrs.get(gtf_sample_attr, None)
+        is_ref = bool(int(t.attrs[GTFAttr.REF]))
         # split exons that cross boundaries and to get the
         # nodes in the transcript path
         nodes = []
@@ -99,9 +112,11 @@ def create_undirected_transcript_graph(transcripts):
                 nodes.append(Exon(start, end))
         # add nodes/edges to graph
         u = nodes[0]
-        add_node_undirected(G, u, t.attrs["transcript_id"], t.strand, t.score)
+        add_node_undirected(G, u, t_id, sample_id, is_ref, 
+                            t.strand, t.score)
         for v in nodes[1:]:
-            add_node_undirected(G, v, t.attrs["transcript_id"], t.strand, t.score)
+            add_node_undirected(G, v, t_id, sample_id, is_ref, 
+                                t.strand, t.score)
             G.add_edge(u, v)
             u = v
     return G
@@ -123,7 +138,7 @@ def redistribute_unstranded_transcripts(G, transcripts, transcript_node_map):
         # ignore stranded transcripts
         if t.strand != NO_STRAND:
             continue
-        nodes = transcript_node_map[t.attrs["transcript_id"]]
+        nodes = transcript_node_map[t.attrs[GTFAttr.TRANSCRIPT_ID]]
         # sum the coverage score across the transcript
         score_arr = np.zeros(3,float)
         for n in nodes:
@@ -156,7 +171,7 @@ def redistribute_unstranded_node_clusters(G, transcripts, transcript_node_map):
     # find set of unresolved nodes
     unresolved_nodes = set()
     for t in transcripts:
-        unresolved_nodes.update(transcript_node_map[t.attrs["transcript_id"]])
+        unresolved_nodes.update(transcript_node_map[t.attrs[GTFAttr.TRANSCRIPT_ID]])
     unresolved_nodes = sorted(unresolved_nodes, key=operator.attrgetter('start'))
     # cluster unresolved nodes
     cluster_tree = ClusterTree(0,1)
@@ -238,7 +253,7 @@ def create_strand_transcript_maps(transcripts):
     for t in transcripts:
         for strand in xrange(0,3):
             if t.attrs[STRAND_SCORE][strand] > 1e-8:
-                transcript_maps[strand][t.attrs["transcript_id"]] = t
+                transcript_maps[strand][t.attrs[GTFAttr.TRANSCRIPT_ID]] = t
     # done with the undirected graph
     Gundir.clear()
     return transcript_maps
@@ -248,7 +263,9 @@ def add_node_directed(G, n, t_id, score):
     add node to directed (strand-specific) graph
     """
     if n not in G: 
-        G.add_node(n, attr_dict=init_directed_node_attrs(n))
+        G.add_node(n, attr_dict={TRANSCRIPT_IDS: set(),
+                                 NODE_LENGTH: (n.end - n.start), 
+                                 NODE_SCORE: 0.0})
     nd = G.node[n]
     nd[TRANSCRIPT_IDS].add(t_id)
     nd[NODE_SCORE] += score
@@ -266,9 +283,9 @@ def add_transcript_directed(G, strand, boundaries, transcript):
         nodes.reverse()
     # add nodes/edges to graph
     u = nodes[0]
-    add_node_directed(G, u, transcript.attrs["transcript_id"], score)
+    add_node_directed(G, u, transcript.attrs[GTFAttr.TRANSCRIPT_ID], score)
     for v in nodes[1:]:
-        add_node_directed(G, v, transcript.attrs["transcript_id"], score)
+        add_node_directed(G, v, transcript.attrs[GTFAttr.TRANSCRIPT_ID], score)
         G.add_edge(u,v)
         u = v
     
@@ -298,9 +315,6 @@ def create_strand_specific_graph(strand, transcripts):
 
 def create_transcript_graphs(transcripts):
     '''
-    min_length: minimum transcript length
-    
-    
     nodes have the following attributes:
     chain: list of children nodes
     score: node weight
@@ -339,8 +353,8 @@ def prune_transcript_graph(G, strand, strand_transcript_map,
     trim_graph(G, strand, min_trim_length, trim_utr_fraction, 
                trim_intron_fraction)
     # collapse consecutive nodes in graph
-    #H = collapse_strand_specific_graph(G)
-    H = G
+    H = collapse_strand_specific_graph(G)
+    #H = G
     # get connected components of graph which represent independent genes
     # unconnected components are considered different genes
     Gsubs = nx.weakly_connected_component_subgraphs(H)

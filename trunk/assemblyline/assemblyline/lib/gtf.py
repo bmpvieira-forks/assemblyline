@@ -3,18 +3,18 @@ Created on Nov 2, 2010
 
 @author: mkiyer
 '''
-import subprocess
 import os
-
-GTF_EMPTY_FIELD = '.'
-GTF_ATTR_SEP = ';'
-GTF_ATTR_TAGVALUE_SEP = ' '
+import subprocess
 
 def sort_gtf(filename, output_file):
     args = ["sort", "-k1,1", "-k4,4n", "-k3,3r", filename]
     myenv = os.environ.copy()
     myenv["LC_ALL"] = "C"
     subprocess.call(args, stdout=open(output_file, "w"), env=myenv)
+
+GTF_EMPTY_FIELD = '.'
+GTF_ATTR_SEP = ';'
+GTF_ATTR_TAGVALUE_SEP = ' '
 
 class GTFFeature(object):
     '''

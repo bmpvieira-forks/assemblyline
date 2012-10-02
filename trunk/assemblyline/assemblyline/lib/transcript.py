@@ -80,7 +80,7 @@ class Transcript(object):
         self.start = -1
         self.end = -1
         self.strand = NO_STRAND
-        self.score = 0
+        self.score = 0.0
         self.exons = None
         self.attrs = {}
 
@@ -94,8 +94,7 @@ class Transcript(object):
     def length(self):
         return sum((e.end - e.start) for e in self.exons)
 
-    @property
-    def introns(self):
+    def iterintrons(self):
         e1 = self.exons[0]
         for e2 in self.exons[1:]:
             yield (e1.end,e2.start)

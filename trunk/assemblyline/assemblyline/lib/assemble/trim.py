@@ -275,21 +275,35 @@ def trim_utr(G, nodes, min_trim_length, coverage_fraction):
         seed_score += G.node[nodes[seed_end]][NODE_SCORE]
         seed_length += (nodes[seed_end].end - nodes[seed_end].start)
         seed_end += 1
-    # extend seed until ratio between seed score and 
-    # utr score dips below coverage fraction
+    seed_avg_score = seed_score / float(seed_end)
+    # find point where trimmed nodes have low score relative to seed
     trim_score = sum(G.node[nodes[j]][NODE_SCORE] for j in xrange(seed_end, len(nodes)))
     i = seed_end
     while i < len(nodes):
-        seed_avg_score = seed_score / float(i)
         trim_avg_score = trim_score / float(len(nodes) - i)
         frac = trim_avg_score / seed_avg_score
         if frac < coverage_fraction:
             break
         score = G.node[nodes[i]][NODE_SCORE]        
-        seed_score += score
         trim_score -= score
         i += 1
     return nodes[i:]
+#    TODO: keeps a running average rather than using seed only
+#    # extend seed until ratio between seed score and 
+#    # utr score dips below coverage fraction
+#    trim_score = sum(G.node[nodes[j]][NODE_SCORE] for j in xrange(seed_end, len(nodes)))
+#    i = seed_end
+#    while i < len(nodes):
+#        seed_avg_score = seed_score / float(i)
+#        trim_avg_score = trim_score / float(len(nodes) - i)
+#        frac = trim_avg_score / seed_avg_score
+#        if frac < coverage_fraction:
+#            break
+#        score = G.node[nodes[i]][NODE_SCORE]        
+#        seed_score += score
+#        trim_score -= score
+#        i += 1
+#    return nodes[i:]
 
 def trim_bidirectional(G, nodes, min_trim_length, coverage_fraction):
     # find max node and use as seed
