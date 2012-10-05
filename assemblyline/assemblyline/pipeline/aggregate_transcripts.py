@@ -29,7 +29,7 @@ import operator
 
 import assemblyline
 from assemblyline.lib.sampletable import SampleInfo
-from assemblyline.lib.gtf import GTFFeature
+from assemblyline.lib.gtf import GTFFeature, sort_gtf
 from assemblyline.lib.base import GTFAttr
 
 def add_reference_gtf_file(ref_gtf_file, outfh):
@@ -93,9 +93,9 @@ def main():
                         "attributes to avoid mistaking transcripts from "
                         "different libraries as the same because of "
                         "redundant transcript ids")
-    parser.add_argument('-o', dest="output_file", default=None)
     parser.add_argument('ref_gtf_file')
     parser.add_argument('sample_table_file')
+    parser.add_argument('output_file')
     args = parser.parse_args()
     # check command line parameters
     if not os.path.exists(args.ref_gtf_file):
@@ -117,29 +117,26 @@ def main():
     if not valid:
         parser.error("Invalid samples in sample table file")
     # show parameters
+    logging.info("Parameters:")
     logging.info("Reference GTF file:   %s" % (args.ref_gtf_file))
     logging.info("Sample table file:    %s" % (args.sample_table_file))
-    if args.output_file is None:
-        logging.info("Output file:          <stdout>")
-    else:
-        logging.info("Output file:          %s" % (args.output_file))
-    # open output file
-    if args.output_file is not None:
-        outfh = open(args.output_file, "w")
-    else:
-        outfh = sys.stdout
+    logging.info("Output file:          %s" % (args.output_file))
+    # open tmp file
+    tmp_file = os.path.splitext(args.output_file)[0] + ".unsorted.gtf"
+    tmp_fh = open(tmp_file, "w")
     # read reference GTF file and bin by transcript id
     logging.info("Adding reference GTF file")
-    add_reference_gtf_file(args.ref_gtf_file, outfh)
+    add_reference_gtf_file(args.ref_gtf_file, tmp_fh)
     # parse sample table
     logging.info("Adding samples")
     for s in sampleinfos:
         logging.info("\tadding cohort=%s patient=%s sample=%s library=%s" % 
                      (s.cohort, s.patient, s.sample, s.library))
-        add_sample_gtf_file(s, outfh, args.rename_ids)
-    # cleanup
-    if args.output_file is not None:
-        outfh.close()
+        add_sample_gtf_file(s, tmp_fh, args.rename_ids)
+    tmp_fh.close()
+    logging.info("Sorting GTF")
+    sort_gtf(tmp_file, args.output_file)
+    os.remove(tmp_file)
     return 0
 
 if __name__ == '__main__':

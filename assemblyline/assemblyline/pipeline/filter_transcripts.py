@@ -341,7 +341,7 @@ def main():
     if args.verbose:
         level = logging.DEBUG
     else:
-        level = logging.WARNING
+        level = logging.INFO
     logging.basicConfig(level=level,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     logging.info("AssemblyLine %s" % (assemblyline.__version__))
