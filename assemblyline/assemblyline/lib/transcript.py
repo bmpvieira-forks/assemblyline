@@ -145,9 +145,7 @@ class Transcript(object):
             f.score = 1000.0
             f.strand = strand_int_to_str(self.strand)
             f.phase = '.'
-            f.attrs = {}
-            f.attrs["gene_id"] = self.attrs["gene_id"]
-            f.attrs["transcript_id"] = self.attrs["transcript_id"]
+            f.attrs = self.attrs.copy()
             f.attrs["exon_number"] = i
             features.append(f)
         return features
