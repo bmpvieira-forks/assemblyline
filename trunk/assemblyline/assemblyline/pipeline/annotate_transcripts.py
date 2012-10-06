@@ -57,13 +57,24 @@ category_int_to_str = {SENSE: "sense",
                        INTRONIC: "intronic",
                        INTERGENIC: "intergenic"}
 category_str_to_int = dict((v,k) for k,v in category_int_to_str.items())
+
+# decision codes
+ANN_EXPR = 0
+ANN_BKGD = 1
+UNANN_EXPR = 2
+UNANN_BKGD = 3
+SKIPPED = 4
+
 # output files
 LIB_COUNTS_FILE = "lib_counts.txt"
+
+
 
 class CategoryInfo():
     def __init__(self):
         self.category_key = None
         self.category_str = None
+        self.library_ids = set()
         self.output_dir = None
         self.ctree_dir = None
         self.result_file_dict = {}
@@ -76,7 +87,10 @@ class CategoryInfo():
         self.ann_expr_gtf_file = None
         self.unann_expr_gtf_file = None
         self.ann_bkgd_gtf_file = None
-        self.unann_expr_bkgd_file = None
+        self.unann_bkgd_gtf_file = None
+        self.skipped_gtf_file = None
+        self.decision_file_dict = {}
+        self.decision_fh_dict = {}
         self.pred_stats_file = None
 
     @staticmethod
@@ -85,6 +99,7 @@ class CategoryInfo():
         cinfo = CategoryInfo()
         cinfo.category_key = category_key
         cinfo.category_str = category_str
+        cinfo.library_ids = set(library_ids)
         category_dir = os.path.join(output_dir, category_str)
         if not os.path.exists(category_dir):
             logging.debug("Creating category directory '%s'" % 
@@ -114,6 +129,12 @@ class CategoryInfo():
         cinfo.unann_expr_gtf_file = os.path.join(category_dir, "unann_expr.gtf")
         cinfo.ann_bkgd_gtf_file = os.path.join(category_dir, "ann_bkgd.gtf")
         cinfo.unann_bkgd_gtf_file = os.path.join(category_dir, "unann_bkgd.gtf")
+        cinfo.skipped_gtf_file = os.path.join(category_dir, "skipped.gtf")
+        cinfo.decision_file_dict = {ANN_EXPR: cinfo.ann_expr_gtf_file,
+                                    ANN_BKGD: cinfo.ann_bkgd_gtf_file,
+                                    UNANN_EXPR: cinfo.unann_expr_gtf_file,
+                                    UNANN_BKGD: cinfo.unann_bkgd_gtf_file,
+                                    SKIPPED: cinfo.skipped_gtf_file}
         cinfo.pred_stats_file = os.path.join(category_dir, "pred_stats.txt") 
         return cinfo
 
@@ -346,12 +367,12 @@ def annotate_transcripts(gtf_file, sample_infos, output_dir, tmp_dir,
                 # update stats
                 lib_counts.category_counts[category] += 1
         # sort and output category GTF features
-        for category, features in category_features.iteritems():
+        for category_key, features in category_features.iteritems():
             # sort so that 'transcript' features appear before 'exon'
             features.sort(key=lambda f: f.feature_type, reverse=True)
             features.sort(key=lambda f: f.start)
             # output transcripts to gtf
-            output_gtf_fh = category_info_dict[category].output_gtf_fh
+            output_gtf_fh = category_info_dict[category_key].output_gtf_fh
             for f in features:
                 print >>output_gtf_fh, str(f) 
     # close open file handles

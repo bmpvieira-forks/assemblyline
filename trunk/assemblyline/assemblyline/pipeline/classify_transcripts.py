@@ -124,14 +124,13 @@ def classify_transcripts(classify_dir, num_processors, tmp_dir):
     lib_counts_list = list(LibCounts.from_file(lib_counts_file))
     library_ids = [x.library_id for x in lib_counts_list]
     category_info_dict = {}
-    logging.info("Writing classification input files")
     for category_key in CATEGORIES:
         category_str = category_int_to_str[category_key]
         cinfo = CategoryInfo.create(library_ids, category_key, 
                                     category_str, classify_dir)
         category_info_dict[category_key] = cinfo
         # write input files for classifier
-        logging.info("\tcategory='%s'" % (cinfo.category_str))
+        logging.info("Writing classification input files category='%s'" % (cinfo.category_str))
         for transcripts in parse_gtf(open(cinfo.output_gtf_file)):
             for t in transcripts:
                 library_id = t.attrs[GTFAttr.LIBRARY_ID]
@@ -145,16 +144,15 @@ def classify_transcripts(classify_dir, num_processors, tmp_dir):
         # close open file handles
         for fh in cinfo.result_fh_dict.itervalues():
             fh.close()
-    logging.info("Classifying transcripts")
     for category_key, cinfo in category_info_dict.iteritems():
         classify_tasks = []
         for lib_counts in lib_counts_list:
+            # see if can run classifier on this file
             if lib_counts.category_counts[category_key] > 0:
-                # can run classifier on this file
                 filename = cinfo.result_file_dict[lib_counts.library_id]
                 classify_tasks.append((lib_counts.library_id, filename))
         # run classification
-        logging.info("\tcategory='%s'" % (cinfo.category_str))
+        logging.info("Classifying transcripts category='%s'" % (cinfo.category_str))
         classify_category(cinfo, classify_tasks, num_processors, tmp_dir)
         # sort results
         sort_classification_results(cinfo.ctree_file, cinfo.sorted_ctree_file, tmp_dir)
