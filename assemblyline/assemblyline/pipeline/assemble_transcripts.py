@@ -2,16 +2,35 @@
 Created on Dec 2, 2011
 
 @author: mkiyer
+
+AssemblyLine: transcriptome meta-assembly from RNA-Seq
+
+Copyright (C) 2012 Matthew Iyer
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 import argparse
 import logging
 import sys
 import collections
+import operator
 
 from assemblyline.lib.bx.cluster import ClusterTree
 from assemblyline.lib.gtf import GTFFeature
 from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
 from assemblyline.lib.transcript import strand_int_to_str, NEG_STRAND
+
 from assemblyline.lib.assemble.base import GLOBAL_LOCUS_ID, GLOBAL_GENE_ID, \
     GLOBAL_TSS_ID, GLOBAL_TRANSCRIPT_ID, NODE_SCORE
 from assemblyline.lib.assemble.filter import filter_transcripts
@@ -44,12 +63,14 @@ def write_bed(chrom, name, strand, score, exons):
               ','.join(map(str,block_starts)) + ',']
     return fields
 
-def write_bedgraph(fileh, chrom, G):
+def get_bedgraph_lines(chrom, G):
+    lines = []
     for n in sorted(G.nodes()):
         if n.start < 0:
             continue
-        fields = map(str, (chrom, n.start, n.end, G.node[n][NODE_SCORE]))
-        print >>fileh, '\t'.join(fields)
+        fields = (chrom, n.start, n.end, G.node[n][NODE_SCORE]) 
+        lines.append(fields)
+    return lines
 
 def get_gtf_features(chrom, strand, exons, locus_id, gene_id, tss_id, 
                      transcript_id, score, frac):
@@ -162,8 +183,8 @@ def assemble_gene(locus_chrom, locus_id_str, G, strand, partial_paths,
             print >>bed_fileh, '\t'.join(fields)    
     return features
 
-def assemble_locus(transcripts, min_transcript_length, min_trim_length, 
-                   trim_utr_fraction, trim_intron_fraction, 
+def assemble_locus(transcripts, gtf_sample_attr, min_transcript_length, 
+                   min_trim_length, trim_utr_fraction, trim_intron_fraction, 
                    sensitivity_threshold, kmax, fraction_major_isoform, 
                    max_paths, bed_fileh, gtf_fileh=None, 
                    bedgraph_filehs=None):
@@ -182,11 +203,13 @@ def assemble_locus(transcripts, min_transcript_length, min_trim_length,
     transcripts = filter_transcripts(transcripts, min_transcript_length)    
     # build transcript graphs
     features = []
+    bedgraph_lines = ([], [], [])
     for G, strand, strand_transcript_map in \
-        create_transcript_graphs(transcripts):
-        # output bedgraph data
+        create_transcript_graphs(transcripts, gtf_sample_attr):
+        # get bedgraph data
         if bedgraph_filehs is not None:
-            write_bedgraph(bedgraph_filehs[strand], locus_chrom, G)
+            lines = get_bedgraph_lines(locus_chrom, G)            
+            bedgraph_lines[strand].extend(lines)
         # process transcript graphs
         for Gsub, strand, partial_paths in \
             prune_transcript_graph(G, strand, strand_transcript_map,
@@ -203,6 +226,12 @@ def assemble_locus(transcripts, min_transcript_length, min_trim_length,
                                           sensitivity_threshold, kmax,
                                           fraction_major_isoform, 
                                           max_paths, bed_fileh, gtf_fileh))
+    # output bedgraph
+    if bedgraph_filehs is not None:
+        for strand,lines in enumerate(bedgraph_lines):
+            lines.sort(key=operator.itemgetter(1))
+            for fields in lines:
+                print >>bedgraph_filehs[strand], '\t'.join(map(str,fields))
     # output GTF
     if gtf_fileh is not None:
         # in-place sort so that 'transcript' features appear before 'exon'
@@ -215,6 +244,7 @@ def assemble_locus(transcripts, min_transcript_length, min_trim_length,
 def run(gtf_file, 
         scoring_mode,
         gtf_score_attr,
+        gtf_sample_attr,
         min_transcript_length, 
         min_trim_length, 
         trim_utr_fraction, 
@@ -281,6 +311,7 @@ def run(gtf_file,
                 t.score = t.attrs[gtf_score_attr]
         # assemble
         assemble_locus(locus_transcripts, 
+                       gtf_sample_attr,                       
                        min_transcript_length, 
                        min_trim_length,
                        trim_utr_fraction, 
@@ -315,6 +346,10 @@ def main():
                         default="FPKM", metavar="ATTR",
                         help="GTF attribute field containing node weight "
                         " [default=%(default)s]")
+    parser.add_argument("--gtf-sample-attr", dest="gtf_sample_attr", 
+                        default="sample_id", metavar="ATTR",
+                        help="GTF attribute field used to distinguish "
+                        "independent samples [default=%(default)s]")
     parser.add_argument("--min-transcript-length", 
                         dest="min_transcript_length", type=int,  
                         default=100, metavar="N",
@@ -336,7 +371,7 @@ def main():
                         "equal to FRAC fraction of the downstream exon "
                         "[default=%(default)s]")
     parser.add_argument("--kmax", dest="kmax", 
-                        type=int, default=None, metavar="k",
+                        type=int, default=10, metavar="k",
                         help="Constrain de Bruijn graph parameter 'k' "
                         "to improve runtime performance "
                         "[default=%(default)s]")
@@ -377,7 +412,7 @@ def main():
     if args.verbose:
         level = logging.DEBUG
     else:
-        level = logging.WARNING
+        level = logging.INFO
     logging.basicConfig(level=level,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     logging.info("AssemblyLine")
@@ -386,6 +421,7 @@ def main():
     logging.info("input file:              %s" % (args.gtf_input_file))
     logging.info("scoring mode:            %s" % (args.scoring_mode))
     logging.info("gtf score attribute:     %s" % (args.gtf_score_attr))
+    logging.info("gtf sample attribute:    %s" % (args.gtf_sample_attr))
     logging.info("assembly name:           %s" % (args.name))
     logging.info("min transcript length:   %d" % (args.min_transcript_length))
     logging.info("min trim length:         %d" % (args.min_trim_length))
@@ -413,6 +449,7 @@ def main():
     run(args.gtf_input_file,
         args.scoring_mode,
         args.gtf_score_attr,
+        args.gtf_sample_attr,
         args.min_transcript_length,
         args.min_trim_length,
         args.trim_utr_fraction,

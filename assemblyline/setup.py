@@ -24,7 +24,7 @@ def main():
           ext_modules = get_extension_modules(),
           author = "Matthew Iyer",
           author_email = "mkiyer@umich.edu",
-          description = "Transcriptome assembly clustering tool",
+          description = "Transcriptome meta-assembly pipeline",
           url = "http://assemblyline.googlecode.com",
           cmdclass= {'build_ext': build_ext})
 

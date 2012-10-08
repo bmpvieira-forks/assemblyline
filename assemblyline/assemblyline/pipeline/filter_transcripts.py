@@ -207,11 +207,13 @@ def run_filter(cinfo, cutoff_dict):
                         decision = UNANN_EXPR
                     else:
                         decision = UNANN_BKGD
-        # push transcript end onto decision heap queue 
-        # (decision must stay valid until past the end)
-        heapq.heappush(decision_heapq, (feature.end, t_id))
-        # keep track of decision
-        t_id_decisions[t_id] = decision
+            # push transcript end onto decision heap queue 
+            # (decision must stay valid until past the end)
+            heapq.heappush(decision_heapq, (feature.end, t_id))                                
+            # keep track of decision to apply it to exon features
+            t_id_decisions[t_id] = decision
+        else:
+            decision = t_id_decisions[t_id]
         # keep track of stats
         decision_stats[decision] += 1
         # output to separate files
@@ -321,16 +323,14 @@ def filter_transcripts(classify_dir, min_prec, min_rec, min_spec,
         expr_gtf_files.append(cinfo.unann_expr_gtf_file)
         bkgd_gtf_files.append(cinfo.unann_bkgd_gtf_file)
     # only need one set of annotated gtf files
-    ann_gtf_files = [cinfo.ann_expr_gtf_file,
-                     cinfo.ann_bkgd_gtf_file]
+    expr_gtf_files.extend([cinfo.ann_expr_gtf_file,
+                           cinfo.ann_bkgd_gtf_file])
     # merge transcripts
     logging.info("Merging filtered transcripts")
     expr_gtf_file = os.path.join(classify_dir, EXPR_GTF_FILE)
     bkgd_gtf_file = os.path.join(classify_dir, BKGD_GTF_FILE)
-    ann_gtf_file = os.path.join(classify_dir, ANN_GTF_FILE)
     merge_sort_gtf_files(expr_gtf_files, expr_gtf_file)
     merge_sort_gtf_files(bkgd_gtf_files, bkgd_gtf_file)
-    merge_sort_gtf_files(ann_gtf_files, ann_gtf_file)
 
 def main():
     # parse command line
