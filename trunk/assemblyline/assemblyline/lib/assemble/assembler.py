@@ -2,6 +2,23 @@
 Created on Feb 20, 2011
 
 @author: mkiyer
+
+AssemblyLine: transcriptome meta-assembly from RNA-Seq
+
+Copyright (C) 2012 Matthew Iyer
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 import logging
 import collections
@@ -66,6 +83,7 @@ def optimize_k(G, partial_paths, kmax, sensitivity_threshold):
     total_paths = len(partial_paths)
     remaining_score = float(total_score)
     remaining_paths = list(partial_paths)
+    sensitivity = 1.0
     k = 2
     # get all leaf nodes
     start_nodes, end_nodes = get_start_end_nodes(G)
@@ -96,13 +114,13 @@ def optimize_k(G, partial_paths, kmax, sensitivity_threshold):
                 remaining_score -= score
                 continue
         sensitivity = (remaining_score / total_score)
-        logging.debug("\t\tk=%d sensitivity=%f (%d/%d paths) (%f/%f score)" %
-                      (k, sensitivity, len(new_remaining_paths), 
-                       total_paths, remaining_score, total_score))
         if sensitivity < sensitivity_threshold:
             break
         k += 1
         remaining_paths = new_remaining_paths
+    logging.debug("\t\tk=%d sensitivity=%f (%d/%d paths) (%f/%f score)" %
+                  (k, sensitivity, len(remaining_paths), 
+                   total_paths, remaining_score, total_score))
     return k
 
 def add_dummy_nodes(G, dummy_nodes):

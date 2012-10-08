@@ -2,6 +2,23 @@
 Created on Dec 7, 2011
 
 @author: mkiyer
+
+AssemblyLine: transcriptome meta-assembly from RNA-Seq
+
+Copyright (C) 2012 Matthew Iyer
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 import operator
 import networkx as nx
@@ -112,8 +129,8 @@ def recalc_strand_specific_graph_attributes(G):
         # set attributes
         d[TRANSCRIPT_IDS] = node_ids
         # TODO: use average or minimum?
-        d[NODE_SCORE] = total_score / float(len(chain_nodes))
-        #d[NODE_SCORE] = min_score
+        #d[NODE_SCORE] = total_score / float(len(chain_nodes))
+        d[NODE_SCORE] = min_score
         d[NODE_LENGTH] = total_length
 
 def collapse_strand_specific_graph(G):

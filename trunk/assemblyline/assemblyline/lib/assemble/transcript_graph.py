@@ -2,6 +2,23 @@
 Created on Dec 17, 2011
 
 @author: mkiyer
+
+AssemblyLine: transcriptome meta-assembly from RNA-Seq
+
+Copyright (C) 2012 Matthew Iyer
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 import networkx as nx
 import logging
@@ -233,7 +250,7 @@ def redistribute_score(G, transcripts):
         num_redist, unresolved = redistribute_unstranded_transcripts(G, unresolved, transcript_node_map)
         logging.debug("\t\tRescued another %d unstranded transcripts (%d unresolved)" % (num_redist, len(unresolved)))
 
-def create_strand_transcript_maps(transcripts):
+def create_strand_transcript_maps(transcripts, gtf_sample_attr):
     """
     builds an undirected graph of all transcripts in order to
     resolve strandedness for unstranded transcripts and reallocate
@@ -243,7 +260,7 @@ def create_strand_transcript_maps(transcripts):
     keyed by transcript id
     """
     # build the initial transcript graph
-    Gundir = create_undirected_transcript_graph(transcripts)
+    Gundir = create_undirected_transcript_graph(transcripts, gtf_sample_attr)
     # reallocate unstranded transcripts to fwd/rev strand according
     # fraction of fwd/rev score across transcript nodes
     redistribute_score(Gundir, transcripts)
@@ -313,7 +330,7 @@ def create_strand_specific_graph(strand, transcripts):
         add_transcript_directed(G, strand, boundaries, t)
     return G
 
-def create_transcript_graphs(transcripts):
+def create_transcript_graphs(transcripts, gtf_sample_attr):
     '''
     nodes have the following attributes:
     chain: list of children nodes
@@ -325,7 +342,7 @@ def create_transcript_graphs(transcripts):
     '''
     # redistribute transcript score by strand
     logging.debug("\tResolving unstranded transcripts")
-    transcript_maps = create_strand_transcript_maps(transcripts)
+    transcript_maps = create_strand_transcript_maps(transcripts, gtf_sample_attr)
     # create strand-specific graphs using redistributed score
     logging.debug("\tCreating transcript graphs")
     for strand, strand_transcript_map in enumerate(transcript_maps):
@@ -354,7 +371,6 @@ def prune_transcript_graph(G, strand, strand_transcript_map,
                trim_intron_fraction)
     # collapse consecutive nodes in graph
     H = collapse_strand_specific_graph(G)
-    #H = G
     # get connected components of graph which represent independent genes
     # unconnected components are considered different genes
     Gsubs = nx.weakly_connected_component_subgraphs(H)
