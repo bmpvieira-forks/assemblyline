@@ -22,12 +22,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 import os
 import subprocess
+import shutil
 
 def sort_gtf(filename, output_file):
     args = ["sort", "-k1,1", "-k4,4n", "-k3,3r", filename]
     myenv = os.environ.copy()
     myenv["LC_ALL"] = "C"
     subprocess.call(args, stdout=open(output_file, "w"), env=myenv)
+
+def merge_sort_gtf_files(gtf_files, output_file):
+    tmp_file = os.path.splitext(output_file)[0] + ".unsorted.gtf"
+    outfh = open(tmp_file, "w")
+    for filename in gtf_files:
+        shutil.copyfileobj(open(filename), outfh)
+    outfh.close()
+    sort_gtf(tmp_file, output_file)
+    os.remove(tmp_file)
 
 GTF_EMPTY_FIELD = '.'
 GTF_ATTR_SEP = ';'
