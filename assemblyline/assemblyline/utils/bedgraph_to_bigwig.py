@@ -29,6 +29,7 @@ from assemblyline.lib.base import check_executable
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--baseurl", dest="baseurl", default=None) 
     parser.add_argument("bedgraph_file")
     parser.add_argument("chrom_sizes_file")
     args = parser.parse_args()
@@ -40,17 +41,29 @@ def main():
     # check for executables
     if not check_executable("bedGraphToBigWig"):
         parser.error("'bedGraphToBigWig' executable not found in PATH")
-    if not check_executable("sed"):
-        parser.error("'sed' executable not found in PATH")
-    if not check_executable("sort"):
-        parser.error("'sort' executable not found in PATH")
     # convert bedgraph to bigwig
     prefix = os.path.splitext(args.bedgraph_file)[0]
     tmp_noheader_file = prefix + ".noheader.bedgraph"
     bigwig_file = prefix + ".bw"
+    # format bigwig track line
+    f = open(args.bedgraph_file)
+    header_fields = f.next().strip().split()
+    f.close()
+    track_options = ["track"]
+    for field in header_fields[1:]:
+        k,v = field.split("=")
+        if k == "type":
+            track_options.append("type=bigWig")
+        else:
+            track_options.append(field)
+    if args.baseurl is not None:
+        bigwig_file_abspath = os.path.abspath(bigwig_file)
+        track_options.append('bigDataUrl="http://%s%s"' % (args.baseurl, bigwig_file_abspath))
+    track_line = ' '.join(track_options)
+    print track_line
     # remove header line of file
     outf = open(tmp_noheader_file, "w")
-    retcode1 = subprocess.call(["sed", "1,1d", tmp_noheader_file], stdout=outf)
+    retcode1 = subprocess.call(["sed", "1,1d", args.bedgraph_file], stdout=outf)
     outf.close()
     # convert to bigwig
     retcode2 = subprocess.call(["bedGraphToBigWig", tmp_noheader_file, args.chrom_sizes_file, bigwig_file])

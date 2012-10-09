@@ -107,7 +107,7 @@ def add_node_undirected(G, n, t_id, sample_id, is_ref, strand, score):
     nd[IS_REF][strand] |= is_ref
     nd[STRAND_SCORE][strand] += score
 
-def create_undirected_transcript_graph(transcripts, gtf_sample_attr):
+def create_undirected_transcript_graph(transcripts, gtf_sample_attr=None):
     '''
     add all transcripts to a single undirected graph
     '''

@@ -29,7 +29,7 @@ import collections
 import shutil
 
 import assemblyline
-from assemblyline.lib.gtf import GTFFeature, sort_gtf
+from assemblyline.lib.gtf import GTFFeature, merge_sort_gtf_files
 from assemblyline.lib.base import GTFAttr
 
 from classify_transcripts import CategoryInfo, LibCounts, \
@@ -293,15 +293,6 @@ def filter_category(lib_counts_list, cinfo, min_prec, min_rec, min_spec,
     logging.info("\tAccuracy=%f" % (acc))
     logging.info("\tBalanced accuracy=%f" % (balacc))
     return 0
-
-def merge_sort_gtf_files(gtf_files, output_file):
-    tmp_file = os.path.splitext(output_file)[0] + ".unsorted.gtf"
-    outfh = open(tmp_file, "w")
-    for filename in gtf_files:
-        shutil.copyfileobj(open(filename), outfh)
-    outfh.close()
-    sort_gtf(tmp_file, output_file)
-    os.remove(tmp_file)
 
 def filter_transcripts(classify_dir, min_prec, min_rec, min_spec, 
                        opt_variable, tmp_dir):
