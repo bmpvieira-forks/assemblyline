@@ -12,7 +12,7 @@ import matplotlib
 matplotlib.use('Agg')
 
 # project imports
-from sam import parse_pe_reads
+from assemblyline.rnaseq.base import parse_pe_reads
 
 class FragmentSizeDistribution(object):
     def __init__(self):

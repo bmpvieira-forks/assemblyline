@@ -9,8 +9,8 @@ import argparse
 import logging
 import xml.etree.cElementTree as etree
 
-from libtable import read_library_table_xls
-from base import indent_xml
+from assemblyline.rnaseq.base import indent_xml
+from assemblyline.rnaseq.libtable import read_library_table_xls
 
 def main():
     logging.basicConfig(level=logging.DEBUG,

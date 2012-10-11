@@ -10,13 +10,10 @@ import os
 import subprocess
 
 # project imports
-import config
-from fragment_size_distribution import FragmentSizeDistribution
-
+from assemblyline.rnaseq.fragment_size_distribution import FragmentSizeDistribution
+import assemblyline.rnaseq.config as config
 import assemblyline.rnaseq
 _pipeline_dir = assemblyline.rnaseq.__path__[0]
-
-MIN_SAMPLES = 100
 
 def estimate_fragment_size_distribution(bowtie_index, 
                                         output_file,
@@ -71,11 +68,11 @@ def estimate_fragment_size_distribution(bowtie_index,
         # read the distribution
         frag_size_dist = FragmentSizeDistribution.from_file(open(output_file, "r"))
         # if the number of data points is too few, use a default distribution
-        if frag_size_dist.n < MIN_SAMPLES:
+        if frag_size_dist.n < config.MIN_FRAG_SIZE_SAMPLES:
             logging.warning("Found %d (<%d) samples found during profiling, "
                             "so cannot reliably estimate the fragment "
                             "size distribution.  Using defaults instead." % 
-                            (frag_size_dist.n, MIN_SAMPLES))
+                            (frag_size_dist.n, config.MIN_FRAG_SIZE_SAMPLES))
             frag_size_dist = FragmentSizeDistribution.from_random(frag_size_mean_default, 
                                                                   frag_size_stdev_default,
                                                                   min_fragment_size, 

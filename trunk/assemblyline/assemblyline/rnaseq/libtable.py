@@ -38,17 +38,6 @@ LIBRARY_TYPES = (FR_FIRSTSTRAND, FR_UNSTRANDED)
 class LibraryTableError(Exception):
     pass
 
-def _find_sequence_file(filename):
-    if os.path.isfile(filename):
-        return filename
-    newfile = filename + ".gz"
-    if os.path.isfile(newfile):
-        return newfile
-    newfile = os.path.splitext(filename)[0]
-    if os.path.isfile(newfile):
-        return newfile
-    return None
-
 class Library(object):
     fields = ('study_id', 'cohort_id', 'patient_id', 'sample_id', 'library_id',
               'description', 'species', 'library_type', 
