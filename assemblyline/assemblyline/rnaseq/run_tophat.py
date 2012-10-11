@@ -9,8 +9,8 @@ import subprocess
 import sys
 
 # project imports
-from fragment_size_distribution import FragmentSizeDistribution
-from seq import detect_read_length
+from assemblyline.rnaseq.fragment_size_distribution import FragmentSizeDistribution
+from assemblyline.rnaseq.base import detect_read_length
 
 def run_tophat(output_dir, fastq_files, frag_size_dist_file,
                bowtie_index, library_type, num_processors,

@@ -8,7 +8,7 @@ import logging
 import subprocess
 import sys
 
-from fragment_size_distribution import FragmentSizeDistribution
+from assemblyline.rnaseq.fragment_size_distribution import FragmentSizeDistribution
 
 def run_cufflinks(bam_file,
                   output_dir,

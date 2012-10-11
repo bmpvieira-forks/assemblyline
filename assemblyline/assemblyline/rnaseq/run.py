@@ -6,13 +6,13 @@ Created on Aug 7, 2011
 import sys
 import os
 import logging
-import xml.etree.cElementTree as etree
 import argparse
 import subprocess
 
-import config
-from base import many_up_to_date, indent_xml, detect_format
-from libtable import Library, FRAGMENT_LAYOUT_PAIRED
+# projects
+import assemblyline.rnaseq.config as config
+from assemblyline.rnaseq.base import many_up_to_date, detect_format
+from assemblyline.rnaseq.libtable import Library, FRAGMENT_LAYOUT_PAIRED
 
 import assemblyline.rnaseq
 _pipeline_dir = assemblyline.rnaseq.__path__[0]

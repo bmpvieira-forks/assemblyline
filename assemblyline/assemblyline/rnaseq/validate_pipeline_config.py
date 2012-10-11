@@ -7,7 +7,7 @@ import logging
 import argparse
 import sys
 
-import config
+import assemblyline.rnaseq.config as config
 
 def main():
     logging.basicConfig(level=logging.DEBUG,

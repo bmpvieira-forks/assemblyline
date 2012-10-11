@@ -12,11 +12,10 @@ import subprocess
 import pysam
 
 # project imports
-from sam import parse_reads_by_qname
-from seq import DNA_reverse_complement, BOWTIE2_QUAL_MAP
-from base import file_exists_and_nz_size
-import fastqc
-import config
+from assemblyline.rnaseq.base import parse_reads_by_qname, \
+    DNA_reverse_complement, BOWTIE2_QUAL_MAP, file_exists_and_nz_size, \
+    get_fastq_encoding, ENCODING_TO_QUAL_FORMAT
+import assemblyline.rnaseq.config as config
 
 def to_fastq(r, readnum, f):
     seq = DNA_reverse_complement(r.seq) if r.is_reverse else r.seq
@@ -28,11 +27,11 @@ def get_fastqc_encoding(fastqc_data_files):
     encodings = set()
     for f in fastqc_data_files:
         if file_exists_and_nz_size(f):
-            encoding = fastqc.get_fastq_encoding(f)
-            if encoding not in fastqc.ENCODING_TO_QUAL_FORMAT:
+            encoding = get_fastq_encoding(f)
+            if encoding not in ENCODING_TO_QUAL_FORMAT:
                 logging.error("Unrecognized FASTQ encoding %s" % (encoding))
                 return config.JOB_ERROR
-            encodings.add(fastqc.ENCODING_TO_QUAL_FORMAT[encoding])
+            encodings.add(ENCODING_TO_QUAL_FORMAT[encoding])
     if len(encodings) > 1:
         logging.error("Detected different FASTQ encodings in paired-end files")
         return config.JOB_ERROR, None

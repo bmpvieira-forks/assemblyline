@@ -7,10 +7,12 @@ import os
 import logging
 import xml.etree.cElementTree as etree
 
-from base import check_executable, indent_xml, file_exists_and_nz_size
-from libtable import FRAGMENT_LAYOUT_PAIRED
-from fragment_size_distribution import FragmentSizeDistribution
-from sam import check_sam_file
+from assemblyline.rnaseq.base import check_executable, check_sam_file, indent_xml, file_exists_and_nz_size
+from assemblyline.rnaseq.libtable import FRAGMENT_LAYOUT_PAIRED
+from assemblyline.rnaseq.fragment_size_distribution import FragmentSizeDistribution
+
+# default parameter values
+MIN_FRAG_SIZE_SAMPLES = 100
 
 # job return codes
 JOB_SUCCESS = 0

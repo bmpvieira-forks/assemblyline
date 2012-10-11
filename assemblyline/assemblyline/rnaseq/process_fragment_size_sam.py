@@ -11,8 +11,8 @@ import sys
 import pysam
 
 # project imports
-import config
-from fragment_size_distribution import FragmentSizeDistribution
+import assemblyline.rnaseq.config as config
+from assemblyline.rnaseq.fragment_size_distribution import FragmentSizeDistribution
 
 def process_fragment_size_sam(sam_file,
                               fastq_file,
