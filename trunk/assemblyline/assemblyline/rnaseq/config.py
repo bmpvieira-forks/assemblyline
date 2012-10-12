@@ -366,12 +366,6 @@ class PipelineConfig(object):
         c.cufflinks_bin = "cufflinks"
         c.bedtools_dir = ""
         c.ucsc_dir = ""
-        c.picard_dir = ""
-        c.varscan_dir = ""
-        c.bwa_bin = "bwa"
-        # check environment
-        if "PICARDPATH" in os.environ:
-            c.picard_dir = os.environ["PICARDPATH"]
         # default fragment size parameters
         c.fragment_size_mean_default = int(root.findtext("fragment_size_mean_default"))
         c.fragment_size_stdev_default = int(root.findtext("fragment_size_stdev_default"))

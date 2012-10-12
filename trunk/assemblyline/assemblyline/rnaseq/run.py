@@ -294,7 +294,6 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 ','.join(results.filtered_fastq_files),
                 results.sorted_abundant_bam_file,
                 os.path.join(server.references_dir, genome.get_path("abundant_bowtie2_index")),
-                pipeline.picard_dir,
                 results.tmp_dir]
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
@@ -373,7 +372,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.info(msg)
         args = ["java", "-jar", 
-                os.path.join(pipeline.picard_dir, "CollectMultipleMetrics.jar"),
+                "$PICARDPATH/CollectMultipleMetrics.jar",
                 "INPUT=%s" % (results.tophat_bam_file),
                 "REFERENCE_SEQUENCE=%s" % os.path.join(server.references_dir, genome.get_path("genome_lexicographical_fasta_file")),
                 "OUTPUT=%s" % (os.path.join(results.output_dir, "picard")),
@@ -396,7 +395,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.info(msg)
         args = ["java", "-jar", 
-                os.path.join(pipeline.picard_dir, "CollectRnaSeqMetrics.jar"),
+                "$PICARDPATH/CollectRnaSeqMetrics.jar",
                 "INPUT=%s" % (results.tophat_bam_file),
                 "REF_FLAT=%s" % (os.path.join(server.references_dir, genome.get_path("gene_annotation_refflat"))),
                 "RIBOSOMAL_INTERVALS=%s" % (os.path.join(server.references_dir, genome.get_path("picard_ribosomal_intervals"))),
@@ -513,7 +512,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     #
     if not dryrun:
         if server.pbs:
-            submit_pbs(shell_commands)
+            job_id = submit_pbs(shell_commands)
+            print job_id
         else:
             return submit_nopbs(shell_commands, stdout_file, stderr_file)
     return config.JOB_SUCCESS

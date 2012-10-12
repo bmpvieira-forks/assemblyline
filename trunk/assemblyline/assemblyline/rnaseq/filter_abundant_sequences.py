@@ -88,9 +88,11 @@ def filter_abundant_sequences(fastqc_data_files,
                               output_files,
                               sorted_abundant_bam_file,
                               abundant_index,
-                              picard_dir,
                               tmp_dir,
+                              picard_dir,
                               num_processors):
+    if "PICARDPATH" in os.environ:
+        picard_dir = os.environ["PICARDPATH"]
     #
     # get quality scores
     #
@@ -150,23 +152,31 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--num-processors", dest="num_processors", 
                         type=int, default=1)
+    parser.add_argument("--picard-dir", dest="picard_dir",
+                        default=None)
     parser.add_argument("fastqc_data_files")
     parser.add_argument("input_files")
     parser.add_argument("output_files")
     parser.add_argument("bam_file")
     parser.add_argument("abundant_index")
-    parser.add_argument("picard_dir")
     parser.add_argument("tmp_dir")
     args = parser.parse_args()
+    if args.picard_dir is None:
+        if "PICARDPATH" in os.environ:
+            picard_dir = os.environ["PICARDPATH"]
+        else:
+            parser.error("PICARDPATH not found in environment")
+    else:
+        picard_dir = args.picard_dir
     filter_abundant_sequences(args.fastqc_data_files.split(","),
                               args.input_files.split(","),
                               args.output_files.split(","),
                               args.bam_file,
                               args.abundant_index,
-                              args.picard_dir,
                               args.tmp_dir,
+                              picard_dir,
                               args.num_processors)
     return 0
-    
+
 if __name__ == '__main__':
     main()
