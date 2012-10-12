@@ -283,16 +283,20 @@ class ServerConfig(object):
         c.references_dir = elem.findtext("references_dir")
         c.node_mem = float(elem.findtext("node_mem"))
         c.node_processors = int(elem.findtext("node_processors"))
-        has_pbs = elem.findtext("pbs").lower()
-        if has_pbs == "yes":
-            c.pbs = True
-            c.max_user_jobs = int(elem.findtext("max_user_jobs"))
-        else:
-            c.pbs = False
-            c.max_user_jobs = None
+        # pbs support
+        pbs_elem = elem.find("pbs")
+        has_pbs = (pbs_elem.get("use") == "yes")
+        c.pbs = False
+        c.pbs_max_user_jobs = None
         c.pbs_script_lines = []
-        for line_elem in elem.findall("script_line"):
-            c.pbs_script_lines.append(line_elem.text)
+        if has_pbs:
+            c.pbs = True
+            c.pbs_max_user_jobs = 0
+            pbs_max_user_jobs = elem.findtext("max_user_jobs")
+            if pbs_max_user_jobs is not None:            
+                c.pbs_max_user_jobs = int(pbs_max_user_jobs) 
+            for line_elem in pbs_elem.findall("script_line"):
+                c.pbs_script_lines.append(line_elem.text)
         return c
     
     def to_xml(self, root):

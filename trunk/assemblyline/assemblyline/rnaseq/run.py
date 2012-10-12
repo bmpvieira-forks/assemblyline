@@ -499,14 +499,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     # cleanup intermediate files
     #
     msg = "Cleaning up tmp files"
-    skip = not os.path.exists(results.tmp_dir)
-    if skip:
-        logging.info("[SKIPPED] %s" % msg)
-    else:
-        logging.info(msg)
-        command = "rm -rf %s" % (results.tmp_dir)
-        shell_commands.append(command)    
-        shell_commands.append(bash_check_retcode())   
+    logging.info(msg)
+    command = "rm -rf %s" % (results.tmp_dir)
+    shell_commands.append(command)    
+    shell_commands.append(bash_check_retcode())   
     #
     # show commands
     # 
