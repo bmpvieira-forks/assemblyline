@@ -280,7 +280,6 @@ class ServerConfig(object):
         c.ssh_port = int(elem.get("ssh_port", "22"))
         c.modules_init_script = elem.findtext("modules_init_script")
         c.output_dir = elem.findtext("output_dir")
-        c.tmp_dir = elem.findtext("tmp_dir")
         c.references_dir = elem.findtext("references_dir")
         c.node_mem = float(elem.findtext("node_mem"))
         c.node_processors = int(elem.findtext("node_processors"))
@@ -302,7 +301,6 @@ class ServerConfig(object):
         root.set("ssh_port", str(self.ssh_port))
         for attrname in ("modules_init_script",
                          "output_dir",
-                         "tmp_dir",
                          "references_dir",
                          "node_mem",
                          "node_processors"):
@@ -325,11 +323,6 @@ class ServerConfig(object):
     def is_valid(self):
         valid = True
         # check directories
-        if os.path.isdir(self.tmp_dir):
-            logging.debug("Checking for 'tmp' directory '%s'... found" % (self.tmp_dir))
-        else:
-            logging.error("'tmp' directory '%s' not found" % (self.tmp_dir))
-            valid = False
         if os.path.isdir(self.output_dir):
             logging.debug("Checking for 'output' directory %s... found" % (self.output_dir))
         else:
