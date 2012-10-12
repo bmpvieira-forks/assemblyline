@@ -477,13 +477,17 @@ class PipelineConfig(object):
             logging.error("'%s' binary not found or not executable" % msg)
             valid = False
         # picard
-        picard_dir = os.environ["PICARDPATH"]
-        jarfile = os.path.join(picard_dir, "CollectMultipleMetrics.jar")
-        if os.path.exists(jarfile):
-            logging.debug("Checking for picard tools... found")
-        else:
-            logging.error("Picard jarfile '%s' not found" % (jarfile))
+        if "PICARDPATH" not in os.environ:
+            logging.debug("PICARDPATH environment variable not set")
             valid = False
+        else:
+            picard_dir = os.environ["PICARDPATH"]
+            jarfile = os.path.join(picard_dir, "CollectMultipleMetrics.jar")
+            if os.path.exists(jarfile):
+                logging.debug("Checking for picard tools... found")
+            else:
+                logging.error("Picard jarfile '%s' not found" % (jarfile))
+                valid = False
         # check R
         msg = 'R'
         if check_executable(self.r_bin):
