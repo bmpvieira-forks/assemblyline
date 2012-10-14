@@ -134,8 +134,9 @@ def filter_abundant_sequences(fastqc_data_files,
     args = ["java", "-jar", os.path.join(picard_dir, "SortSam.jar"),
             "INPUT=%s" % (abundant_bam_file),
             "OUTPUT=%s" % (sorted_abundant_bam_file),
-            "SO=coordinate",
+            "SO=coordinate",            
             "CREATE_INDEX=true",
+            "MAX_RECORDS_IN_RAM=2000000",
             "TMP_DIR=%s" % tmp_dir]
     command = ' '.join(map(str, args))
     logging.debug("Command string: %s" % (command))

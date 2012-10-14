@@ -40,8 +40,8 @@ class LibraryTableError(Exception):
 
 class Library(object):
     fields = ('study_id', 'cohort_id', 'patient_id', 'sample_id', 'library_id',
-              'description', 'species', 'library_type', 
-              'read1_files', 'read2_files', 'fragment_layout')       
+              'description', 'species', 'library_type', 'seq_repo',
+              'read1_files', 'read2_files', 'fragment_layout')  
 
     def __init__(self, **kwargs):
         for attrname in Library.fields:
@@ -65,7 +65,7 @@ class Library(object):
             field_dict = dict((x,i) for i,x in enumerate(Library.fields))
         kwargs = {"params": {}}
         for attrname,ind in field_dict.iteritems():
-            kwargs[attrname] = fields[ind]
+            kwargs[attrname] = fields[ind].strip()
         return Library(**kwargs)
 
     @staticmethod
@@ -122,12 +122,19 @@ class Library(object):
                 logging.error("Library %s read 1 file %s not found" % (self.library_id, filename))
                 is_valid = False
         if (self.fragment_layout == FRAGMENT_LAYOUT_PAIRED):
-            for filename in self.read2_files:
-                if not os.path.exists(filename):
-                    logging.error("Library %s read 2 file %s not found" % (self.library_id, filename))
-                    is_valid = False
+            if len(self.read2_files) == 0:
+                logging.error("Library %s read 2 files not found" % (self.library_id))
+                is_valid = False
             if len(self.read1_files) != len(self.read2_files):
                 logging.error("Library %s unequal number of read1 and read2 files" % (self.library_id))
+            for filename1 in self.read1_files:
+                for filename2 in self.read2_files:
+                    if not os.path.exists(filename2):
+                        logging.error("Library %s read 2 file %s not found" % (self.library_id, filename2))
+                        is_valid = False
+                    elif filename1 == filename2:
+                        logging.error("Library %s read 1 and read 2 point to same file %s" % (self.library_id, filename1))
+                        is_valid = False
         return is_valid
 
 def read_wksheet(wksheet):
