@@ -5,6 +5,7 @@ Created on Aug 3, 2011
 '''
 import os
 import logging
+import collections
 import xml.etree.cElementTree as etree
 
 from assemblyline.rnaseq.base import check_executable, check_sam_file, indent_xml, file_exists_and_nz_size
@@ -71,6 +72,9 @@ SANGER_FORMAT = "sanger"
 SOLEXA_FORMAT = "solexa"
 ILLUMINA_FORMAT = "illumina"
 FASTQ_QUAL_FORMATS = (SANGER_FORMAT, SOLEXA_FORMAT, ILLUMINA_FORMAT)
+
+class PipelineConfigError(Exception):
+    pass
 
 def get_tophat_library_type(library_type):
     if library_type == "dutp":
@@ -281,9 +285,17 @@ class ServerConfig(object):
         c.modules_init_script = elem.findtext("modules_init_script")
         c.output_dir = elem.findtext("output_dir")
         c.references_dir = elem.findtext("references_dir")
+        # seq repository
+        c.seq_dirs = collections.defaultdict(lambda: [])
+        seq_repos_elem = elem.find("seq_repos")
+        if seq_repos_elem is None:
+            raise PipelineConfigError("server %s missing 'seq_repo' element" % (c.name))
+        for dir_elem in seq_repos_elem.findall("dir"):
+            name = dir_elem.get("name")
+            c.seq_dirs[name].append(dir_elem.text)
+        # pbs support
         c.node_mem = float(elem.findtext("node_mem"))
         c.node_processors = int(elem.findtext("node_processors"))
-        # pbs support
         pbs_elem = elem.find("pbs")
         has_pbs = (pbs_elem.get("use") == "yes")
         c.pbs = False
