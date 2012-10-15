@@ -68,8 +68,6 @@ SKIPPED = 4
 # output files
 LIB_COUNTS_FILE = "lib_counts.txt"
 
-
-
 class CategoryInfo():
     def __init__(self):
         self.category_key = None
@@ -325,7 +323,7 @@ def annotate_transcripts(gtf_file, sample_infos, output_dir, tmp_dir,
                          gtf_sample_attr, gtf_score_attr,
                          annotation_frac_threshold):
     # setup output by category
-    library_ids = [s.library for s in sample_infos]
+    library_ids = [s.library_id for s in sample_infos]
     category_info_dict = {}
     for category_key, category_str in category_int_to_str.iteritems():
         cinfo = CategoryInfo.create(library_ids, category_key, 
@@ -451,7 +449,7 @@ def main():
         # exclude samples
         if not s.is_valid():
             logging.error("\tcohort=%s patient=%s sample=%s library=%s not valid" % 
-                          (s.cohort, s.patient, s.sample, s.library))
+                          (s.cohort_id, s.patient_id, s.sample_id, s.library_id))
             valid = False
         else:
             sample_infos.append(s)

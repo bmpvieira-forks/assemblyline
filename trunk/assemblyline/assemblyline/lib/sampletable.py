@@ -23,16 +23,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
 
 class SampleInfo(object):
-    fields = ('cohort', 'patient', 'sample', 'library',
+    fields = ('cohort_id', 'patient_id', 'sample_id', 'library_id',
               'gtf_file', 'bam_file')
 
     def __init__(self):
-        self.cohort = None
-        self.patient = None
-        self.sample = None
-        self.library = None
-        self.gtf_file = None
-        self.bam_file = None
+        for f in SampleInfo.fields:
+            setattr(self, f, None)
 
     @staticmethod
     def from_fields(fields, field_dict=None):
