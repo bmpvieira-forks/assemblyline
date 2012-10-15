@@ -39,7 +39,7 @@ from classify_transcripts import CategoryInfo, LibCounts, \
 # default parameters
 DEFAULT_MIN_PREC = 0.0
 DEFAULT_MIN_REC = 0.0
-DEFAULT_MIN_SPEC = 0.5
+DEFAULT_MIN_SPEC = 0.0
 
 # decision codes
 ANN_EXPR = 0

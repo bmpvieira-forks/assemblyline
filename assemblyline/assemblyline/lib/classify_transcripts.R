@@ -42,7 +42,7 @@ t <- read.table(inputFile, header=TRUE, sep="\t", stringsAsFactors=FALSE)
 minsplit <- max(30, 0.001 * nrow(t))
 minbucket <- minsplit / 3.0
 maxdepth <- 20
-cp <- 0.0001
+cp <- 0.001
 xval <- 10
 control <- rpart.control(minsplit=minsplit,minbucket=minbucket,maxdepth=maxdepth,cp=cp,xval=xval,usesurrogate=2)
 

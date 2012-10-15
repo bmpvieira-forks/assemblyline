@@ -66,15 +66,15 @@ def add_reference_gtf_file(ref_gtf_file, outfh):
 def add_sample_gtf_file(s, outfh, rename_ids):
     # parse and annotate GTF files
     for feature in GTFFeature.parse(open(s.gtf_file)):
-        feature.attrs[GTFAttr.COHORT_ID] = s.cohort
-        feature.attrs[GTFAttr.SAMPLE_ID] = s.sample
-        feature.attrs[GTFAttr.LIBRARY_ID] = s.library
+        feature.attrs[GTFAttr.COHORT_ID] = s.cohort_id
+        feature.attrs[GTFAttr.SAMPLE_ID] = s.sample_id
+        feature.attrs[GTFAttr.LIBRARY_ID] = s.library_id
         feature.attrs[GTFAttr.REF] = '0'
         if rename_ids:
             t_id = feature.attrs[GTFAttr.TRANSCRIPT_ID]
             g_id = feature.attrs[GTFAttr.GENE_ID]
-            new_t_id = "%s.%s" % (s.library, t_id)
-            new_g_id = "%s.%s" % (s.library, g_id)
+            new_t_id = "%s.%s" % (s.library_id, t_id)
+            new_g_id = "%s.%s" % (s.library_id, g_id)
             feature.attrs[GTFAttr.TRANSCRIPT_ID] = new_t_id
             feature.attrs[GTFAttr.GENE_ID] = new_g_id
         print >>outfh, str(feature)
@@ -110,7 +110,7 @@ def main():
         # exclude samples
         if not s.is_valid():
             logging.error("\tcohort=%s patient=%s sample=%s library=%s not valid" % 
-                          (s.cohort, s.patient, s.sample, s.library))
+                           (s.cohort_id, s.patient_id, s.sample_id, s.library_id))
             valid = False
         else:
             sampleinfos.append(s)
@@ -131,7 +131,7 @@ def main():
     logging.info("Adding samples")
     for s in sampleinfos:
         logging.info("\tadding cohort=%s patient=%s sample=%s library=%s" % 
-                     (s.cohort, s.patient, s.sample, s.library))
+                     (s.cohort_id, s.patient_id, s.sample_id, s.library_id))
         add_sample_gtf_file(s, tmp_fh, args.rename_ids)
     tmp_fh.close()
     logging.info("Sorting GTF")
