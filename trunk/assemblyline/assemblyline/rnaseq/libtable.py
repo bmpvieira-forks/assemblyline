@@ -163,17 +163,24 @@ def read_library_table_xls(filename):
     if not "parameters" in sheet_names:
         raise LibraryTableError("XLS file missing 'parameters' Sheet")
     # read parameters
-    params = collections.defaultdict(lambda: {})
+    params = {"patient": collections.defaultdict(lambda: {}),
+              "sample": collections.defaultdict(lambda: {}),
+              "library": collections.defaultdict(lambda: {})}
     for field_dict in read_wksheet(wkbook.sheet_by_name("parameters")):
-        library_id = field_dict["library_id"]
+        param_type = field_dict["parameter_type"]
+        param_id = field_dict["parameter_id"]
         k = field_dict["parameter_name"]
         v = field_dict["parameter_value"]
-        params[library_id][k] = v
+        params[param_type][param_id][k] = v
     # read libraries
     libraries = {}
     for field_dict in read_wksheet(wkbook.sheet_by_name("libraries")):
         # add params to field dict
-        field_dict["params"] = params[field_dict["library_id"]]
+        myparams = {}
+        myparams.update(params["patient"][field_dict["patient_id"]])
+        myparams.update(params["sample"][field_dict["sample_id"]])
+        myparams.update(params["library"][field_dict["library_id"]])        
+        field_dict["params"] = myparams
         # build object
         library = Library(**field_dict)
         # ensure unique ids
