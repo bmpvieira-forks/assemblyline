@@ -9,9 +9,9 @@ import argparse
 import logging
 import xml.etree.cElementTree as etree
 
-import assemblyline.rnaseq.config as config 
-from assemblyline.rnaseq.base import indent_xml
-from assemblyline.rnaseq.libtable import read_library_table_xls, FRAGMENT_LAYOUT_PAIRED
+import assemblyline.rnaseq.lib.config as config 
+from assemblyline.rnaseq.lib.base import indent_xml
+from assemblyline.rnaseq.lib.libtable import read_library_table_xls, FRAGMENT_LAYOUT_PAIRED
 
 def find_library_sequence_files(library, server):
     if library.seq_repo not in server.seq_dirs:
@@ -50,9 +50,7 @@ def main():
     parser.add_argument("library_xls_file")
     parser.add_argument("output_dir")
     args = parser.parse_args()
-    #
     # read configuration file
-    #
     logging.info("Reading pipeline configuration file '%s'" % (args.config_xml_file))
     pipeline = config.PipelineConfig.from_xml(args.config_xml_file)
     # get server information

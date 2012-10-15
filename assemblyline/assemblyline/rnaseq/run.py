@@ -10,12 +10,12 @@ import argparse
 import subprocess
 
 # projects
-import assemblyline.rnaseq.config as config
-from assemblyline.rnaseq.base import many_up_to_date, detect_format
-from assemblyline.rnaseq.libtable import Library, FRAGMENT_LAYOUT_PAIRED
+import assemblyline.rnaseq.lib.config as config
+from assemblyline.rnaseq.lib.base import many_up_to_date, detect_format
+from assemblyline.rnaseq.lib.libtable import Library, FRAGMENT_LAYOUT_PAIRED
 
-import assemblyline.rnaseq
-_pipeline_dir = assemblyline.rnaseq.__path__[0]
+import assemblyline.rnaseq.pipeline
+_pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
 
 def bash_check_retcode(msg="ERROR"):
     return 'if [ $? -gt 0 ]; then echo "%s"; exit $?; fi' % (msg)

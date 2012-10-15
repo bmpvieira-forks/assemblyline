@@ -8,9 +8,9 @@ import logging
 import collections
 import xml.etree.cElementTree as etree
 
-from assemblyline.rnaseq.base import check_executable, check_sam_file, indent_xml, file_exists_and_nz_size
-from assemblyline.rnaseq.libtable import FRAGMENT_LAYOUT_PAIRED
-from assemblyline.rnaseq.fragment_size_distribution import FragmentSizeDistribution
+from assemblyline.rnaseq.lib.base import check_executable, check_sam_file, indent_xml, file_exists_and_nz_size
+from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUT_PAIRED
+from assemblyline.rnaseq.lib.fragment_size_distribution import FragmentSizeDistribution
 
 # default parameter values
 MIN_FRAG_SIZE_SAMPLES = 100
