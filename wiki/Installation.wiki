@@ -9,7 +9,8 @@ Add your content here.
 In order to run *assemblyline* you must have the following installed:
 
   * [http://python.org python 2.7+]
-    * [http://http://numpy.scipy.org numpy]
+    * [http://numpy.scipy.org numpy]
+    * [http://networkx.lanl.gov networkx]
     * We *strongly* recommend the [http://www.enthought.com/products/epd.php Enthought Python Distribution (EPD)]
   * [http://www.r-project.org R]
     * `rpart` package (classification trees)
