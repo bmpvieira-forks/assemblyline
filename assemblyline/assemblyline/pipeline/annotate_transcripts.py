@@ -208,7 +208,7 @@ def get_recurrence_and_score(G, nodes, strand):
     for n in nodes:
         nd = G.node[n]
         length = float(n.end - n.start)
-        total_score += nd[STRAND_SCORE][strand] * length
+        total_score += (nd[STRAND_SCORE][strand] + nd[STRAND_SCORE][NO_STRAND]) * length
         total_recur += len(nd[SAMPLE_IDS]) * length
         total_length += length
     # calculate statistics
@@ -270,16 +270,19 @@ def annotate_locus(transcripts,
         nodes = transcript_node_map[t.attrs[GTFAttr.TRANSCRIPT_ID]]
         # resolve strand of unstranded transcripts 
         if t.strand == NO_STRAND:
-            t.strand = resolve_strand(G, nodes)
+            strand = resolve_strand(G, nodes)
+        else:
+            strand = t.strand
         # check if all introns are annotated
+        myintrons = set(t.iterintrons())
         introns_annotated = True
-        for intron in t.iterintrons():
-            if intron not in ref_introns[t.strand]:
+        for intron in myintrons:
+            if intron not in ref_introns[strand]:
                 introns_annotated = False
                 break
         # get length of annotated regions
         sense_ann_bp, asense_ann_bp, total_bp = \
-            get_annotated_length(G, nodes, t.strand)
+            get_annotated_length(G, nodes, strand)
         # calc fraction of transcript that is annotated
         sense_ann_frac = sense_ann_bp / float(total_bp)
         is_annotated = (introns_annotated and 
@@ -289,7 +292,13 @@ def annotate_locus(transcripts,
             category = SENSE
         elif (sense_ann_bp == 0) and (asense_ann_bp == 0):
             # search for introns overlapping transcript
-            if len(intron_tree.find(t.start, t.end)) > 0:
+            found_intron = False
+            for hit in intron_tree.find(t.start, t.end):
+                if (hit.start,hit.end) in myintrons:
+                    continue
+                found_intron = True
+                break
+            if found_intron:
                 category = INTRONIC
             else:
                 category = INTERGENIC
@@ -300,8 +309,8 @@ def annotate_locus(transcripts,
         # add attributes
         t.attrs[ANNOTATED] = 1 if is_annotated else 0                                    
         t.attrs[CATEGORY] = category
-        # update transcript strand and attributes and save to list
-        strand_transcripts_dict[t.strand].append(t)
+        # update transcript attributes and save to list
+        strand_transcripts_dict[strand].append(t)
     # annotate score and recurrence for transcripts
     for strand, strand_transcripts in strand_transcripts_dict.iteritems():
         # create undirected transcript graph for transcripts on 
