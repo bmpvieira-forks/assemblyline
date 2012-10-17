@@ -8,8 +8,7 @@ Add your content here.
 
 In order to run *assemblyline* you must have the following installed:
 
-  * [http://python.org python 2.7+]
-    * Note that we *strongly* recommend the [http://www.enthought.com/products/epd.php Enthought Python Distribution (EPD)] which contains all of the required python packages and much more!
+  * A [http://python.org python 2.7+] installation. We *strongly* recommend the [http://www.enthought.com/products/epd.php Enthought Python Distribution (EPD)]
     * [http://numpy.scipy.org numpy]
     * [http://networkx.lanl.gov networkx]
   * [http://www.r-project.org R]
