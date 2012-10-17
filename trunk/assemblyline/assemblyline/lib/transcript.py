@@ -116,6 +116,9 @@ class Transcript(object):
         for e2 in self.exons[1:]:
             yield (e1.end,e2.start)
             e1 = e2
+        
+    def introns(self):
+        return list(self.iterintrons())
 
     def to_bed12(self):
         block_sizes = []

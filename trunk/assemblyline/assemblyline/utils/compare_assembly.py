@@ -126,7 +126,7 @@ def measure_transcript_sensitivity(ref_transcripts, test_transcripts):
             score = G.node[n][STRAND_SCORE][t.strand]
             if score > 0.0:
                 found_length += length
-            total_score += score
+            total_score += (score * length)
             total_length += length
         ts = TranscriptStats()
         ts.transcript_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
@@ -139,12 +139,14 @@ def measure_transcript_sensitivity(ref_transcripts, test_transcripts):
         ts.found_pattern = found_pattern
         yield ts
 
-def compare_locus(transcripts, gtf_score_attr):
+def compare_locus(transcripts):
     # handle splicing related statistics
     strand_intron_dict = {POS_STRAND: collections.defaultdict(lambda: CompareData()),
-                          NEG_STRAND: collections.defaultdict(lambda: CompareData())}
+                          NEG_STRAND: collections.defaultdict(lambda: CompareData()),
+                          NO_STRAND: collections.defaultdict(lambda: CompareData())}
     strand_splicing_pattern_dict = {POS_STRAND: collections.defaultdict(lambda: CompareData()),
-                                    NEG_STRAND: collections.defaultdict(lambda: CompareData())}
+                                    NEG_STRAND: collections.defaultdict(lambda: CompareData()),
+                                    NO_STRAND: collections.defaultdict(lambda: CompareData())}                                    
     # score and divide into ref/test transcript lists
     for t in transcripts:
         is_ref = bool(int(t.attrs[GTFAttr.REF]))
@@ -292,17 +294,21 @@ def compare_assembly(ref_gtf_file, test_gtf_file, output_dir,
                 t.score = 0.0
                 ref_transcripts.append(t)
             else:
-                t.score = float(t.attrs[gtf_score_attr])
+                if gtf_score_attr is None:
+                    t.score = 1.0
+                else:
+                    t.score = float(t.attrs[gtf_score_attr])
                 test_transcripts.append(t)
         # measure sensitivity for detecting reference transcripts
         for ts in measure_transcript_sensitivity(ref_transcripts, 
                                                  test_transcripts):
             print >>ref_fh, str(ts)
         # measure overall stats
-        locus_stats_obj = compare_locus(locus_transcripts, gtf_score_attr)
+        locus_stats_obj = compare_locus(locus_transcripts)
         stats_obj = stats_obj + locus_stats_obj
     ref_fh.close()
     # print stats report
+    logging.info("Printing report")    
     introns_total = stats_obj.introns_both + stats_obj.introns_ref_only + stats_obj.introns_assembly_only
     patterns_total = stats_obj.patterns_both + stats_obj.patterns_ref_only + stats_obj.patterns_assembly_only
     cov_total = stats_obj.cov_both + stats_obj.cov_ref_only + stats_obj.cov_assembly_only
@@ -328,6 +334,7 @@ def compare_assembly(ref_gtf_file, test_gtf_file, output_dir,
     f.close()
     # cleanup
     os.remove(tmp_sorted_gtf_file)
+    logging.info("Done")    
 
 def main():
     # parse command line
@@ -337,7 +344,7 @@ def main():
     parser.add_argument("-o", "--output-dir", dest="output_dir", 
                         default="compare")
     parser.add_argument("--gtf-score-attr", dest="gtf_score_attr", 
-                        default="score")
+                        default=None)
     parser.add_argument("ref_gtf_file")
     parser.add_argument("test_gtf_file")
     args = parser.parse_args()

@@ -118,7 +118,8 @@ def sort_classification_results(input_file, output_file, tmp_dir):
                buffer_size=(1 << 21),
                tempdirs=[tmp_dir])
 
-def classify_transcripts(classify_dir, num_processors, tmp_dir):
+def classify_transcripts(classify_dir, num_processors, gtf_score_attr, 
+                         tmp_dir):
     # setup input and output files
     lib_counts_file = os.path.join(classify_dir, LIB_COUNTS_FILE)
     lib_counts_list = list(LibCounts.from_file(lib_counts_file))
@@ -133,6 +134,8 @@ def classify_transcripts(classify_dir, num_processors, tmp_dir):
         logging.info("Writing classification input files category='%s'" % (cinfo.category_str))
         for transcripts in parse_gtf(open(cinfo.output_gtf_file)):
             for t in transcripts:
+                # set transcript score
+                t.score = float(t.attrs.get(gtf_score_attr, 0.0))
                 library_id = t.attrs[GTFAttr.LIBRARY_ID]
                 fields = get_classification_fields(t)
                 # lookup file handle and open new file if necessary
@@ -166,6 +169,10 @@ def main():
                         dest="verbose", default=False)
     parser.add_argument("-p", "--num-processors", type=int, 
                         dest="num_processors", default=1)
+    parser.add_argument("--gtf-score-attr", dest="gtf_score_attr", 
+                        default="FPKM", metavar="ATTR",
+                        help="GTF attribute field containing node weight "
+                        " [default=%(default)s]")
     parser.add_argument("classify_dir")
     args = parser.parse_args()
     # check command line parameters
@@ -184,13 +191,15 @@ def main():
     logging.info("Parameters:")
     logging.info("verbose logging:         %s" % (args.verbose))
     logging.info("num processors:          %s" % (args.num_processors))
+    logging.info("gtf score attribute:   %s" % (args.gtf_score_attr))
     logging.info("classify directory:      %s" % (args.classify_dir))
     tmp_dir = os.path.join(args.classify_dir, "tmp")
     if not os.path.exists(tmp_dir):
         logging.info("Creating tmp directory '%s'" % (tmp_dir))
         os.makedirs(tmp_dir)
     # run classification procedure        
-    classify_transcripts(args.classify_dir, args.num_processors, tmp_dir)
+    classify_transcripts(args.classify_dir, args.num_processors, 
+                         args.gtf_score_attr, tmp_dir)
     # cleanup
     if os.path.exists(tmp_dir):
         shutil.rmtree(tmp_dir)
