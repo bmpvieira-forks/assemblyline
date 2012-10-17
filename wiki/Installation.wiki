@@ -30,8 +30,16 @@ $ cd assemblyline_vXX
 {{{
 $ python setup.py build_ext --inplace
 }}}
-  * 
-
+  * Add the assemblyline directory to your `PYTHONPATH` environment variable
+{{{
+$ export PYTHONPATH=<path_to_assemblyline>/assemblyline:$PYTHONPATH
+}}}
+  * Test that the *assemblyline* module can be imported in python
+{{{
+$ python
+>>> import assemblyline
+>>> 
+}}}
 
 
 = Details =
