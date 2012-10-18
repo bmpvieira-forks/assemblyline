@@ -73,41 +73,22 @@ def split_exon(exon, boundaries):
         start, end = exon_splits[j-1], exon_splits[j]
         yield start, end
 
-def get_transcript_node_map(G):
-    t_node_map = collections.defaultdict(lambda: set())
-    for n,d in G.nodes_iter(data=True):
-        for t_id in d[TRANSCRIPT_IDS]:
-            t_node_map[t_id].add(n)
-    for t_id,nodes in t_node_map.iteritems():
-        t_node_map[t_id] = sorted(nodes, key=operator.attrgetter('start'))
-    return t_node_map
-
-def add_node_undirected(G, n, t_id, sample_id, is_ref, strand, score):
+def add_node_undirected(G, n, t, **kwargs):
     """
     add node to undirected graph
-    
-    each node in graph maintains attributes:
-    'tids': set() of transcript id strings
-    'sids': set() of sample id strings
-    'ref': logical whether each strand is 'annotated'
-    'strand_score': numpy array containing score on each strand
-    'length': size of node in nucleotides
     """
     if n not in G: 
         attr_dict = {TRANSCRIPT_IDS: set(),
-                     SAMPLE_IDS: set(),
-                     IS_REF: np.zeros(3,bool),
                      NODE_LENGTH: (n.end - n.start),
                      STRAND_SCORE: np.zeros(3,float)} 
         G.add_node(n, attr_dict=attr_dict)
     nd = G.node[n]
-    nd[TRANSCRIPT_IDS].add(t_id)
-    if sample_id is not None:
-        nd[SAMPLE_IDS].add(sample_id)
-    nd[IS_REF][strand] |= is_ref
-    nd[STRAND_SCORE][strand] += score
+    nd[TRANSCRIPT_IDS].add(t.attrs[GTFAttr.TRANSCRIPT_ID])
+    nd[STRAND_SCORE][t.strand] += t.score
 
-def create_undirected_transcript_graph(transcripts, gtf_sample_attr=None):
+def create_undirected_transcript_graph(transcripts, 
+                                       add_node_func=add_node_undirected,
+                                       **kwargs):
     '''
     add all transcripts to a single undirected graph
     '''
@@ -117,10 +98,6 @@ def create_undirected_transcript_graph(transcripts, gtf_sample_attr=None):
     G = nx.Graph()
     # add transcripts
     for t in transcripts:
-        # get transcript attributes
-        t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
-        sample_id = t.attrs.get(gtf_sample_attr, None)
-        is_ref = bool(int(t.attrs[GTFAttr.REF]))
         # split exons that cross boundaries and to get the
         # nodes in the transcript path
         nodes = []
@@ -129,14 +106,21 @@ def create_undirected_transcript_graph(transcripts, gtf_sample_attr=None):
                 nodes.append(Exon(start, end))
         # add nodes/edges to graph
         u = nodes[0]
-        add_node_undirected(G, u, t_id, sample_id, is_ref, 
-                            t.strand, t.score)
+        add_node_func(G, u, t, **kwargs)
         for v in nodes[1:]:
-            add_node_undirected(G, v, t_id, sample_id, is_ref, 
-                                t.strand, t.score)
+            add_node_func(G, v, t, **kwargs)
             G.add_edge(u, v)
             u = v
     return G
+
+def get_transcript_node_map(G, node_attr=TRANSCRIPT_IDS):
+    t_node_map = collections.defaultdict(lambda: set())
+    for n,nd in G.nodes_iter(data=True):
+        for t_id in nd[node_attr]:
+            t_node_map[t_id].add(n)
+    for t_id,nodes in t_node_map.iteritems():
+        t_node_map[t_id] = sorted(nodes, key=operator.attrgetter('start'))
+    return t_node_map
 
 def redistribute_unstranded_transcripts(G, transcripts, transcript_node_map):
     """

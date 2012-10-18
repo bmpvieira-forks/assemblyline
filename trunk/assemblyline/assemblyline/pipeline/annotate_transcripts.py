@@ -235,6 +235,31 @@ def resolve_strand(G, nodes):
             strand = NEG_STRAND
     return strand
 
+def add_node_undirected(G, n, t_id, sample_id, is_ref, strand, score):
+    """
+    add node to undirected graph
+    
+    each node in graph maintains attributes:
+    'tids': set() of transcript id strings
+    'sids': set() of sample id strings
+    'ref': logical whether each strand is 'annotated'
+    'strand_score': numpy array containing score on each strand
+    'length': size of node in nucleotides
+    """
+    if n not in G: 
+        attr_dict = {TRANSCRIPT_IDS: set(),
+                     SAMPLE_IDS: set(),
+                     IS_REF: np.zeros(3,bool),
+                     NODE_LENGTH: (n.end - n.start),
+                     STRAND_SCORE: np.zeros(3,float)} 
+        G.add_node(n, attr_dict=attr_dict)
+    nd = G.node[n]
+    nd[TRANSCRIPT_IDS].add(t_id)
+    if sample_id is not None:
+        nd[SAMPLE_IDS].add(sample_id)
+    nd[IS_REF][strand] |= is_ref
+    nd[STRAND_SCORE][strand] += score
+
 def annotate_locus(transcripts, 
                    gtf_sample_attr, 
                    gtf_score_attr,
@@ -294,6 +319,10 @@ def annotate_locus(transcripts,
             # search for introns overlapping transcript
             found_intron = False
             for hit in intron_tree.find(t.start, t.end):
+                # ignore contained introns
+                if (hit.start > t.start) and (hit.end < t.end):
+                    continue
+                # ignore introns of this transcript
                 if (hit.start,hit.end) in myintrons:
                     continue
                 found_intron = True
