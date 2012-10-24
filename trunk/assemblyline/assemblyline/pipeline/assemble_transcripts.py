@@ -138,12 +138,12 @@ def annotate_gene_and_tss_ids(path_info_list, strand):
             path_info_list[i].gene_id = gene_id
 
 def assemble_gene(locus_chrom, locus_id_str, G, strand, partial_paths, 
-                  sensitivity_threshold, kmax, fraction_major_isoform, 
+                  kmax, ksensitivity, fraction_major_isoform, 
                   max_paths, bed_fileh, gtf_fileh):
     global GLOBAL_TRANSCRIPT_ID
     # run assembly algorithm
     path_info_list = assemble_transcript_graph(G, strand, partial_paths,
-                                               sensitivity_threshold, kmax,
+                                               kmax, ksensitivity,
                                                fraction_major_isoform, 
                                                max_paths)
     logging.debug("\tAssembled %d transcript(s)" % (len(path_info_list)))
@@ -183,9 +183,9 @@ def assemble_gene(locus_chrom, locus_id_str, G, strand, partial_paths,
             print >>bed_fileh, '\t'.join(fields)    
     return features
 
-def assemble_locus(transcripts, gtf_sample_attr, min_transcript_length, 
+def assemble_locus(transcripts, min_transcript_length, 
                    min_trim_length, trim_utr_fraction, trim_intron_fraction, 
-                   sensitivity_threshold, kmax, fraction_major_isoform, 
+                   kmax, ksensitivity, fraction_major_isoform, 
                    max_paths, bed_fileh, gtf_fileh=None, 
                    bedgraph_filehs=None):
     global GLOBAL_LOCUS_ID
@@ -205,7 +205,7 @@ def assemble_locus(transcripts, gtf_sample_attr, min_transcript_length,
     features = []
     bedgraph_lines = ([], [], [])
     for G, strand, strand_transcript_map in \
-        create_transcript_graphs(transcripts, gtf_sample_attr):
+        create_transcript_graphs(transcripts):
         # get bedgraph data
         if bedgraph_filehs is not None:
             lines = get_bedgraph_lines(locus_chrom, G)            
@@ -223,7 +223,7 @@ def assemble_locus(transcripts, gtf_sample_attr, min_transcript_length,
             # assemble subgraph
             features.extend(assemble_gene(locus_chrom, locus_id_str, 
                                           Gsub, strand, partial_paths, 
-                                          sensitivity_threshold, kmax,
+                                          kmax, ksensitivity,
                                           fraction_major_isoform, 
                                           max_paths, bed_fileh, gtf_fileh))
     # output bedgraph
@@ -244,13 +244,12 @@ def assemble_locus(transcripts, gtf_sample_attr, min_transcript_length,
 def run(gtf_file, 
         scoring_mode,
         gtf_score_attr,
-        gtf_sample_attr,
         min_transcript_length, 
         min_trim_length, 
         trim_utr_fraction, 
         trim_intron_fraction, 
-        sensitivity_threshold, 
         kmax,
+        ksensitivity,
         fraction_major_isoform, 
         max_paths, 
         name, 
@@ -311,13 +310,12 @@ def run(gtf_file,
                 t.score = t.attrs[gtf_score_attr]
         # assemble
         assemble_locus(locus_transcripts, 
-                       gtf_sample_attr,                       
                        min_transcript_length, 
                        min_trim_length,
                        trim_utr_fraction, 
                        trim_intron_fraction,  
-                       sensitivity_threshold, 
                        kmax, 
+                       ksensitivity,
                        fraction_major_isoform, 
                        max_paths, 
                        bed_fileh, 
@@ -346,10 +344,6 @@ def main():
                         default="FPKM", metavar="ATTR",
                         help="GTF attribute field containing node weight "
                         " [default=%(default)s]")
-    parser.add_argument("--gtf-sample-attr", dest="gtf_sample_attr", 
-                        default="sample_id", metavar="ATTR",
-                        help="GTF attribute field used to distinguish "
-                        "independent samples [default=%(default)s]")
     parser.add_argument("--min-transcript-length", 
                         dest="min_transcript_length", type=int,  
                         default=100, metavar="N",
@@ -371,15 +365,17 @@ def main():
                         "equal to FRAC fraction of the downstream exon "
                         "[default=%(default)s]")
     parser.add_argument("--kmax", dest="kmax", 
-                        type=int, default=10, metavar="k",
+                        type=int, default=2, metavar="k",
                         help="Constrain de Bruijn graph parameter 'k' "
                         "to improve runtime performance "
                         "[default=%(default)s]")
-    parser.add_argument("--sensitivity", dest="sensitivity_threshold", 
-                        type=float, default=0.9, metavar="X",
+    parser.add_argument("--ksensitivity", dest="ksensitivity", 
+                        type=float, default=0.0, metavar="X",
                         help="Constrain de Bruijn graph parameter 'k' "
                         "such that at least X fraction of total expression "
-                        "is retained in k-mer graphs [default=%(default)s]")
+                        "is retained in k-mer graphs. Setting to 0.0 "
+                        "disables the sensitivity calculation sets 'k' "
+                        "equal to 'kmax' [default=%(default)s]")
     parser.add_argument("--fraction-major-isoform", 
                         dest="fraction_major_isoform", type=float, 
                         default=0.001, metavar="FRAC",
@@ -421,13 +417,13 @@ def main():
     logging.info("input file:              %s" % (args.gtf_input_file))
     logging.info("scoring mode:            %s" % (args.scoring_mode))
     logging.info("gtf score attribute:     %s" % (args.gtf_score_attr))
-    logging.info("gtf sample attribute:    %s" % (args.gtf_sample_attr))
     logging.info("assembly name:           %s" % (args.name))
     logging.info("min transcript length:   %d" % (args.min_transcript_length))
     logging.info("min trim length:         %d" % (args.min_trim_length))
     logging.info("trim utr fraction:       %f" % (args.trim_utr_fraction))
     logging.info("trim intron fraction:    %f" % (args.trim_intron_fraction))
-    logging.info("assembler sensitivity:   %f" % (args.sensitivity_threshold))
+    logging.info("kmax:                    %d" % (args.kmax))
+    logging.info("ksensitivity:            %f" % (args.ksensitivity))
     logging.info("fraction major isoform:  %f" % (args.fraction_major_isoform))
     logging.info("max paths:               %d" % (args.max_paths))
     # constrain parameters
@@ -439,7 +435,7 @@ def main():
         parser.error("trim_utr_fraction out of range (0.0-1.0)")
     if (args.trim_intron_fraction < 0) or (args.trim_intron_fraction > 1):
         parser.error("trim_intron_fraction out of range (0.0-1.0)")
-    if (args.sensitivity_threshold < 0) or (args.sensitivity_threshold > 1):
+    if (args.ksensitivity < 0) or (args.ksensitivity > 1):
         parser.error("sensitivity_threshold out of range (0.0-1.0)")
     if (args.fraction_major_isoform < 0) or (args.fraction_major_isoform > 1):
         parser.error("fraction_major_isoform out of range (0.0-1.0)")
@@ -449,13 +445,12 @@ def main():
     run(args.gtf_input_file,
         args.scoring_mode,
         args.gtf_score_attr,
-        args.gtf_sample_attr,
         args.min_transcript_length,
         args.min_trim_length,
         args.trim_utr_fraction,
         args.trim_intron_fraction,
-        args.sensitivity_threshold,
         args.kmax,
+        args.ksensitivity,
         args.fraction_major_isoform,
         args.max_paths,
         args.name,

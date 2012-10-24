@@ -117,6 +117,7 @@ def recalc_strand_specific_graph_attributes(G):
         node_ids = set()
         total_score = 0.0
         min_score = None
+        max_score = None
         total_length = 0
         for cn in chain_nodes:
             total_length += (cn.end - cn.start)
@@ -126,12 +127,14 @@ def recalc_strand_specific_graph_attributes(G):
             total_score += score
             if (min_score is None) or (score < min_score):
                 min_score = score
+            if (max_score is None) or (score > max_score):
+                max_score = score
         # set attributes
         d[TRANSCRIPT_IDS] = node_ids
-        # TODO: use average or minimum?
-        #d[NODE_SCORE] = total_score / float(len(chain_nodes))
-        d[NODE_SCORE] = min_score
         d[NODE_LENGTH] = total_length
+        d[NODE_SCORE] = max_score
+        #d[NODE_SCORE] = min_score
+        #d[NODE_SCORE] = total_score / float(len(chain_nodes))
 
 def collapse_strand_specific_graph(G):
     """

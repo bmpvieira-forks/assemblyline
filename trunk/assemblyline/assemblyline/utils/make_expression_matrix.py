@@ -28,7 +28,7 @@ import numpy as np
 import collections
 
 from assemblyline.lib.bx.cluster import ClusterTree
-from assemblyline.lib.sampletable import LibInfo
+from assemblyline.lib.sampletable import SampleInfo
 from assemblyline.lib.gtf import GTFFeature
 
 chrom_names = [["chr1", "1"],
@@ -95,7 +95,9 @@ def get_gene_metadata(gtf_file, gene_id_attr="gene_id", feature_type="exon",
             transcript_length += (end - start)
         del cluster_tree
         num_exons = len(exon_clusters)
-        locus_string = "%s:%d-%d" % (chrom, start, end)
+        locus_start = min(e[0] for e in exon_clusters)
+        locus_end = max(e[1] for e in exon_clusters)
+        locus_string = "%s:%d-%d" % (chrom, locus_start, locus_end)
         description = "category=%s,strand=%s,exons=%s" % (features[0].source, strand, num_exons)
         yield (gene_id, locus_string, gene_name, description, transcript_length)
 
@@ -124,21 +126,21 @@ def main():
     args = parser.parse_args()
     # read library information
     logging.info("Reading library information")
-    libdict = collections.OrderedDict()
-    for libinfo in LibInfo.from_file(args.library_table):
-        if not libinfo.is_valid():
-            logging.warning("\tskipping cohort=%s patient=%s sample=%s lib=%s lanes=%s" % 
-                            (libinfo.cohort, libinfo.patient, libinfo.sample, 
-                             libinfo.library, libinfo.lanes))
+    sampledict = collections.OrderedDict()
+    for sinfo in SampleInfo.from_file(args.library_table):
+        if not sinfo.is_valid():
+            logging.warning("\tskipping cohort=%s patient=%s sample=%s lib=%s" %
+                            (sinfo.cohort_id, sinfo.patient_id, sinfo.sample_id, 
+                             sinfo.library_id))
             continue
-        lib_dir = os.path.join(args.quantify_dir, libinfo.sample, libinfo.library)
+        lib_dir = os.path.join(args.quantify_dir, sinfo.sample_id, sinfo.library_id)
         # check for output
         count_file = os.path.join(lib_dir, "htseq_count.txt")
         job_done_file = os.path.join(lib_dir, "job.done")
         if (os.path.exists(job_done_file) and os.path.exists(count_file)):
-            libdict[libinfo.library] = libinfo
+            sampledict[sinfo.library_id] = sinfo
         else:
-            logging.info("[SKIPPED] %s %s" % (libinfo.sample, libinfo.library))
+            logging.info("[SKIPPED] %s %s" % (sinfo.sample_id, sinfo.library_id))
     # get gene metadata
     logging.info("Reading gene features")
     gene_metadata_dict = {}
@@ -149,9 +151,9 @@ def main():
     logging.info("Building expression data matrix")
     count_vector_dict = {}
     special_vector_dict = {}
-    for libinfo in libdict.itervalues():
-        logging.debug("sample: %s lib: %s" % (libinfo.sample, libinfo.library))
-        lib_dir = os.path.join(args.quantify_dir, libinfo.sample, libinfo.library)
+    for sinfo in sampledict.itervalues():
+        logging.debug("sample: %s lib: %s" % (sinfo.sample_id, sinfo.library_id))
+        lib_dir = os.path.join(args.quantify_dir, sinfo.sample_id, sinfo.library_id)
         count_file = os.path.join(lib_dir, "htseq_count.txt")
         gene_count_map, special_count_map = read_htseq_count_file(count_file)
         counts = []
@@ -160,13 +162,13 @@ def main():
         specials = []
         for special_id in sorted(special_count_map):
             specials.append(special_count_map[special_id])
-        count_vector_dict[libinfo.library] = counts
-        special_vector_dict[libinfo.library] = specials
+        count_vector_dict[sinfo.library_id] = counts
+        special_vector_dict[sinfo.library_id] = specials
     # write phenotype file
     logging.info("Writing phenotype file")
     fh = open(args.library_table)
     header_fields = fh.next().strip().split('\t')
-    lib_id_col = header_fields.index("library")
+    lib_id_col = header_fields.index("library_id")
     header_fields.extend(sorted(htseq_special_fields))
     header_fields.append("total_counts")
     pheno_file = args.output_file_prefix + "_pheno_data.txt"
@@ -175,7 +177,7 @@ def main():
     for line in fh:
         fields = line.strip().split('\t')
         lib_id = fields[lib_id_col]
-        if lib_id not in libdict:
+        if lib_id not in sampledict:
             continue
         fields.extend(special_vector_dict[lib_id])
         fields.append(sum(count_vector_dict[lib_id]))
@@ -185,11 +187,11 @@ def main():
     # write matrix file
     logging.info("Writing output file")
     # combine frag count vectors to get expression matrix
-    mat = np.vstack(count_vector_dict[lib_id] for lib_id in libdict).T
+    mat = np.vstack(count_vector_dict[lib_id] for lib_id in sampledict).T
     matrix_file = args.output_file_prefix + "_count_data.txt"
     f = open(matrix_file, "w")
     header_fields = ["tracking_id", "locus", "nearest_ref_id", "class_code", "transcript_length"]
-    header_fields.extend([lib_id for lib_id in libdict])
+    header_fields.extend([lib_id for lib_id in sampledict])
     print >>f, '\t'.join(header_fields)
     for i,gene_id in enumerate(sorted(gene_metadata_dict)):
         fields = []

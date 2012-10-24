@@ -24,8 +24,6 @@ from assemblyline.lib.transcript import Exon
 
 # transcript graph attributes
 TRANSCRIPT_IDS = 'tids'
-SAMPLE_IDS = 'sids'
-IS_REF = 'ref'
 STRAND_SCORE = 'strand_score'
 
 # assembler graph attributes
