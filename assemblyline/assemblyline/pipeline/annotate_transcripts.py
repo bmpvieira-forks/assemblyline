@@ -35,17 +35,23 @@ from assemblyline.lib.sampletable import SampleInfo
 from assemblyline.lib.transcript_parser import parse_gtf
 from assemblyline.lib.transcript import NO_STRAND, POS_STRAND, NEG_STRAND
 
-from assemblyline.lib.assemble.base import STRAND_SCORE, IS_REF, SAMPLE_IDS
+from assemblyline.lib.assemble.base import STRAND_SCORE, TRANSCRIPT_IDS
 from assemblyline.lib.assemble.transcript_graph import \
     create_undirected_transcript_graph, get_transcript_node_map
 
+# graph attributes
+IS_REF = 'isref'
+SAMPLE_IDS = 'sids'
+
 # default parameters
 DEFAULT_ANNOTATION_FRAC_THRESHOLD = 0.9
+
 # transcript attributes
 ANNOTATED = 'ann'
 CATEGORY = 'cat'
 MEAN_SCORE = 'mean_score'
 MEAN_RECURRENCE = 'mean_recurrence'
+
 # constant attribute values
 SENSE = 0
 ANTISENSE = 1
@@ -235,30 +241,26 @@ def resolve_strand(G, nodes):
             strand = NEG_STRAND
     return strand
 
-def add_node_undirected(G, n, t_id, sample_id, is_ref, strand, score):
-    """
-    add node to undirected graph
-    
-    each node in graph maintains attributes:
-    'tids': set() of transcript id strings
-    'sids': set() of sample id strings
-    'ref': logical whether each strand is 'annotated'
-    'strand_score': numpy array containing score on each strand
-    'length': size of node in nucleotides
-    """
+def add_node_annotate(G, n, t, **kwargs):
     if n not in G: 
         attr_dict = {TRANSCRIPT_IDS: set(),
-                     SAMPLE_IDS: set(),
                      IS_REF: np.zeros(3,bool),
-                     NODE_LENGTH: (n.end - n.start),
+                     SAMPLE_IDS: set(),
                      STRAND_SCORE: np.zeros(3,float)} 
         G.add_node(n, attr_dict=attr_dict)
+    t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
+    is_ref = t.attrs[GTFAttr.REF]
+    sample_id = None
+    if "gtf_sample_attr" in kwargs:
+        sample_id_attr = kwargs["gtf_sample_attr"]
+        if sample_id_attr in t.attrs:
+            sample_id = t.attrs[sample_id_attr]
     nd = G.node[n]
     nd[TRANSCRIPT_IDS].add(t_id)
     if sample_id is not None:
         nd[SAMPLE_IDS].add(sample_id)
-    nd[IS_REF][strand] |= is_ref
-    nd[STRAND_SCORE][strand] += score
+    nd[IS_REF][t.strand] |= is_ref
+    nd[STRAND_SCORE][t.strand] += t.score
 
 def annotate_locus(transcripts, 
                    gtf_sample_attr, 
@@ -286,7 +288,9 @@ def annotate_locus(transcripts,
             for start,end in t.iterintrons():
                 intron_tree.insert_interval(Interval(start,end))
     # create undirected transcript graph from all transcripts
-    G = create_undirected_transcript_graph(transcripts, gtf_sample_attr)
+    G = create_undirected_transcript_graph(transcripts, 
+                                           add_node_func=add_node_annotate,
+                                           gtf_sample_attr=gtf_sample_attr)
     # build a mapping from transcripts to graph nodes using the 
     # transcript id attributes of the nodes
     transcript_node_map = get_transcript_node_map(G)
@@ -345,7 +349,8 @@ def annotate_locus(transcripts,
         # create undirected transcript graph for transcripts on 
         # specific strand
         G = create_undirected_transcript_graph(strand_transcripts,
-                                               gtf_sample_attr)
+                                               add_node_func=add_node_annotate,
+                                               gtf_sample_attr=gtf_sample_attr)
         # build a mapping from transcripts to graph nodes using the 
         # transcript id attributes of the nodes
         transcript_node_map = get_transcript_node_map(G)

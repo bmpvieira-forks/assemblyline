@@ -286,7 +286,7 @@ def expand_path_chains(G, strand, path):
     return newpath
 
 def assemble_transcript_graph(G, strand, partial_paths, 
-                              sensitivity_threshold, user_kmax,
+                              user_kmax, ksensitivity,
                               fraction_major_path, 
                               max_paths):
     """
@@ -299,15 +299,18 @@ def assemble_transcript_graph(G, strand, partial_paths,
     max_paths: do not enumerate more than max_paths isoforms     
     """
     # constrain sensitivity parameter
-    sensitivity_threshold = min(max(0.0, sensitivity_threshold), 1.0)
+    ksensitivity = min(max(0.0, ksensitivity), 1.0)
     # constrain fraction_major_path parameter
     fraction_major_path = min(max(0.0, fraction_major_path), 1.0)
     # determine parameter 'k' for de bruijn graph assembly
     kmax = max(len(x[0]) for x in partial_paths)
     if user_kmax is not None:
         kmax = min(kmax, user_kmax)
-    logging.debug("\tOptimizing k parameter (kmax=%d)" % (kmax))
-    k = optimize_k(G, partial_paths, kmax, sensitivity_threshold)
+    if ksensitivity > 0:
+        logging.debug("\tOptimizing k parameter (kmax=%d)" % (kmax))
+        k = optimize_k(G, partial_paths, kmax, ksensitivity)
+    else:
+        k = kmax
     logging.debug("\tConstructing k-mer graph with k=%d" % (k))
     # append/prepend dummy nodes to start/end nodes
     source_kmer, sink_kmer, partial_paths = \

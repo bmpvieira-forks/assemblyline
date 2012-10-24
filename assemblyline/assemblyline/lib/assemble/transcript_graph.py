@@ -30,9 +30,7 @@ import numpy as np
 from assemblyline.lib.bx.cluster import ClusterTree
 from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
 from assemblyline.lib.base import GTFAttr
-
-from base import NODE_SCORE, NODE_LENGTH, STRAND_SCORE, \
-    TRANSCRIPT_IDS, SAMPLE_IDS, IS_REF
+from base import NODE_SCORE, NODE_LENGTH, STRAND_SCORE, TRANSCRIPT_IDS 
 from trim import trim_graph
 from collapse import collapse_strand_specific_graph
 
@@ -234,7 +232,7 @@ def redistribute_score(G, transcripts):
         num_redist, unresolved = redistribute_unstranded_transcripts(G, unresolved, transcript_node_map)
         logging.debug("\t\tRescued another %d unstranded transcripts (%d unresolved)" % (num_redist, len(unresolved)))
 
-def create_strand_transcript_maps(transcripts, gtf_sample_attr):
+def create_strand_transcript_maps(transcripts):
     """
     builds an undirected graph of all transcripts in order to
     resolve strandedness for unstranded transcripts and reallocate
@@ -244,7 +242,7 @@ def create_strand_transcript_maps(transcripts, gtf_sample_attr):
     keyed by transcript id
     """
     # build the initial transcript graph
-    Gundir = create_undirected_transcript_graph(transcripts, gtf_sample_attr)
+    Gundir = create_undirected_transcript_graph(transcripts)
     # reallocate unstranded transcripts to fwd/rev strand according
     # fraction of fwd/rev score across transcript nodes
     redistribute_score(Gundir, transcripts)
@@ -314,7 +312,7 @@ def create_strand_specific_graph(strand, transcripts):
         add_transcript_directed(G, strand, boundaries, t)
     return G
 
-def create_transcript_graphs(transcripts, gtf_sample_attr):
+def create_transcript_graphs(transcripts):
     '''
     nodes have the following attributes:
     chain: list of children nodes
@@ -326,7 +324,7 @@ def create_transcript_graphs(transcripts, gtf_sample_attr):
     '''
     # redistribute transcript score by strand
     logging.debug("\tResolving unstranded transcripts")
-    transcript_maps = create_strand_transcript_maps(transcripts, gtf_sample_attr)
+    transcript_maps = create_strand_transcript_maps(transcripts)
     # create strand-specific graphs using redistributed score
     logging.debug("\tCreating transcript graphs")
     for strand, strand_transcript_map in enumerate(transcript_maps):

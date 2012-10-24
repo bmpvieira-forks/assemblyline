@@ -24,7 +24,6 @@ import argparse
 import logging
 import os
 import sys
-import tempfile
 import operator
 import collections
 
@@ -34,30 +33,14 @@ from assemblyline.lib.gtf import GTFFeature, sort_gtf
 from assemblyline.lib.transcript_parser import parse_gtf
 from assemblyline.lib.transcript import NO_STRAND, POS_STRAND, NEG_STRAND
 from assemblyline.lib.assemble.transcript_graph import create_undirected_transcript_graph, get_transcript_node_map
-from assemblyline.lib.assemble.base import STRAND_SCORE, IS_REF
 
 TEST_IDS = 'test_ids'
 REF_IDS = 'ref_ids'
 TEST_SCORE = 'test_score'
 REF_SCORE = 'ref_score'
 NODE_ID_ATTRS = [TEST_IDS, REF_IDS]
-
-def add_node_compare(G, n, t, **kwargs):
-    if n not in G: 
-        attr_dict = {TEST_IDS: set(),
-                     REF_IDS: set(),
-                     TEST_SCORE: 0.0,
-                     REF_SCORE: 0.0}
-        G.add_node(n, attr_dict=attr_dict)
-    is_ref = bool(int(t.attrs[GTFAttr.REF]))
-    t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
-    nd = G.node[n]
-    if is_ref:
-        nd[REF_IDS].add(t_id)
-        nd[REF_SCORE] += t.score
-    else:
-        nd[TEST_IDS].add(t_id)
-        nd[TEST_SCORE] += t.score
+STRAND_IS_REF = 'r'
+STRAND_IS_ASSEMBLY = 'a'
 
 class MatchInfo(object):
     def __init__(self):
@@ -77,7 +60,7 @@ class MatchStats(object):
         self.match_pattern = None
         self.match_introns = None
         self.match_overlap = None
-        
+
     @staticmethod
     def header_fields():
         return ["gene_id", "transcript_id", "is_ref", "score", "length",
@@ -90,6 +73,84 @@ class MatchStats(object):
                   self.match_t_id, self.match_pattern, 
                   self.match_introns, self.match_overlap]
         return '\t'.join(map(str,fields))
+
+
+class GlobalStats(object):
+    fields = ('introns_both', 'introns_ref_only', 'introns_assembly_only',
+              'patterns_both', 'patterns_ref_only', 'patterns_assembly_only', 
+              'strand_cov_both', 'strand_cov_ref_only', 
+              'strand_cov_assembly_only',
+              'unstranded_cov_assembly_only',
+              'cov_both', 'cov_ref_only', 'cov_assembly_only')
+    def __init__(self):
+        self.introns_both = 0
+        self.introns_ref_only = 0
+        self.introns_assembly_only = 0
+        self.patterns_both = 0
+        self.patterns_ref_only = 0
+        self.patterns_assembly_only = 0
+        self.strand_cov_both = 0
+        self.strand_cov_ref_only = 0
+        self.strand_cov_assembly_only = 0
+        self.unstranded_cov_assembly_only = 0
+        self.cov_both = 0
+        self.cov_ref_only = 0
+        self.cov_assembly_only = 0
+    def __add__(self, x):
+        z = GlobalStats()
+        for f in GlobalStats.fields:
+            val = getattr(self, f) + getattr(x, f)
+            setattr(z, f, val)
+        return z
+    def report(self):
+        # print stats report
+        introns_total = self.introns_both + self.introns_ref_only + self.introns_assembly_only
+        patterns_total = self.patterns_both + self.patterns_ref_only + self.patterns_assembly_only
+        strand_cov_total = self.strand_cov_both + self.strand_cov_ref_only + self.strand_cov_assembly_only
+        cov_total = self.cov_both + self.cov_ref_only + self.cov_assembly_only
+        lines = ["introns_total=%d" % (introns_total),
+                 "introns_both=%d" % (self.introns_both),
+                 "introns_ref_only=%d" % (self.introns_ref_only),
+                 "introns_assembly_only=%d" % (self.introns_assembly_only),
+                 "introns_precision=%f" % (self.introns_both / float(self.introns_both + self.introns_assembly_only)),
+                 "introns_recall=%f" % (self.introns_both / float(self.introns_both + self.introns_ref_only)),
+                 "patterns_total=%d" % (patterns_total),
+                 "patterns_both=%d" % (self.patterns_both),
+                 "patterns_ref_only=%d" % (self.patterns_ref_only),
+                 "patterns_assembly_only=%d" % (self.patterns_assembly_only),
+                 "patterns_precision=%f" % (self.patterns_both / float(self.patterns_both + self.patterns_assembly_only)),
+                 "patterns_recall=%f" % (self.patterns_both / float(self.patterns_both + self.patterns_ref_only)),
+                 "strand_cov_total=%d" % (strand_cov_total),
+                 "strand_cov_both=%d" % (self.strand_cov_both),
+                 "strand_cov_ref_only=%d" % (self.strand_cov_ref_only),
+                 "strand_cov_assembly_only=%d" % (self.strand_cov_assembly_only),
+                 "strand_cov_precision=%f" % (self.strand_cov_both / float(self.strand_cov_both + self.strand_cov_assembly_only)),
+                 "strand_cov_recall=%f" % (self.strand_cov_both / float(self.strand_cov_both + self.strand_cov_ref_only)),
+                 "unstranded_cov_assembly_only=%d" % (self.unstranded_cov_assembly_only),
+                 "cov_total=%d" % (cov_total),
+                 "cov_both=%d" % (self.cov_both),
+                 "cov_ref_only=%d" % (self.cov_ref_only),
+                 "cov_assembly_only=%d" % (self.cov_assembly_only),
+                 "cov_precision=%f" % (self.cov_both / float(self.cov_both + self.cov_assembly_only)),
+                 "cov_recall=%f" % (self.cov_both / float(self.cov_both + self.cov_ref_only))]
+        return '\n'.join(lines)
+
+def add_node_match(G, n, t, **kwargs):
+    if n not in G: 
+        attr_dict = {TEST_IDS: set(),
+                     REF_IDS: set(),
+                     TEST_SCORE: 0.0,
+                     REF_SCORE: 0.0}
+        G.add_node(n, attr_dict=attr_dict)
+    is_ref = bool(int(t.attrs[GTFAttr.REF]))
+    t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
+    nd = G.node[n]
+    if is_ref:
+        nd[REF_IDS].add(t_id)
+        nd[REF_SCORE] += t.score
+    else:
+        nd[TEST_IDS].add(t_id)
+        nd[TEST_SCORE] += t.score
 
 def find_best_match(nodes, introns, G, other_node_attr, other_introns, 
                     other_patterns):
@@ -122,7 +183,7 @@ def find_best_match(nodes, introns, G, other_node_attr, other_introns,
     best_match_tuple = sorted_match_keys[0]
     return (match_dict[best_match_tuple],) + best_match_tuple
 
-def compare_bubba(all_transcripts):
+def compare_locus(all_transcripts):
     # divide transcripts by strand
     strand_transcript_dicts = [{}, {}, {}]    
     for t in all_transcripts:
@@ -149,7 +210,7 @@ def compare_bubba(all_transcripts):
             patterns[ref][tuple(pattern)].add(t_id)
         # make transcript graph
         G = create_undirected_transcript_graph(strand_transcripts,
-                                               add_node_func=add_node_compare)
+                                               add_node_func=add_node_match)
         # map transcripts to graph nodes
         test_node_map = get_transcript_node_map(G, node_attr=TEST_IDS)
         ref_node_map = get_transcript_node_map(G, node_attr=REF_IDS)
@@ -184,150 +245,96 @@ def compare_bubba(all_transcripts):
                 m.match_overlap = match_overlap
                 yield m
 
-#def measure_transcript_sensitivity(ref_transcripts, test_transcripts):
-#    strand_introns = {POS_STRAND: set(),
-#                      NEG_STRAND: set()}
-#    strand_patterns = {POS_STRAND: set(),
-#                       NEG_STRAND: set()}
-#    for t in test_transcripts:
-#        if t.strand == NO_STRAND:
-#            continue
-#        pattern = []
-#        for start,end in t.iterintrons():
-#            strand_introns[t.strand].add((start,end))
-#            pattern.append((start,end))
-#        strand_patterns[t.strand].add(tuple(pattern))
-#    # add all transcripts to a graph
-#    all_transcripts = []
-#    all_transcripts.extend(ref_transcripts)
-#    all_transcripts.extend(test_transcripts)
-#    G = create_undirected_transcript_graph(all_transcripts)
-#    # build a mapping from transcripts to graph nodes using the 
-#    # transcript id attributes of the nodes
-#    transcript_node_map = get_transcript_node_map(G)
-#    # compile statistics
-#    for t in ref_transcripts:
-#        found_introns = 0
-#        total_introns = 0
-#        pattern = []
-#        for start,end in t.iterintrons():
-#            if (start,end) in strand_introns[t.strand]:
-#                found_introns += 1
-#            total_introns += 1
-#            pattern.append((start,end))
-#        found_pattern = tuple(pattern) in strand_patterns[t.strand]
-#        total_score = 0.0
-#        total_length = 0
-#        found_length = 0
-#        nodes = transcript_node_map[t.attrs[GTFAttr.TRANSCRIPT_ID]]
-#        for n in nodes:
-#            length = (n.end - n.start)
-#            score = G.node[n][STRAND_SCORE][t.strand]
-#            if score > 0.0:
-#                found_length += length
-#            total_score += (score * length)
-#            total_length += length
-#        ts = TranscriptStats()
-#        ts.transcript_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
-#        ts.gene_id = t.attrs[GTFAttr.GENE_ID]
-#        ts.score = total_score / float(total_length)
-#        ts.length = total_length
-#        ts.found_length = found_length
-#        ts.num_introns = total_introns
-#        ts.found_introns = found_introns
-#        ts.found_pattern = found_pattern
-#        yield ts
-#
-#class CompareData(object):
-#    __slots__ = ('is_ref', 'is_assembly')
-#    def __init__(self):
-#        self.is_ref = False
-#        self.is_assembly = False
-#
-#class CompareStats(object):
-#    fields = ('introns_both', 'introns_ref_only', 'introns_assembly_only',
-#              'patterns_both', 'patterns_ref_only', 'patterns_assembly_only', 
-#              'cov_both', 'cov_ref_only', 'cov_assembly_only')
-#    def __init__(self):
-#        self.introns_both = 0
-#        self.introns_ref_only = 0
-#        self.introns_assembly_only = 0
-#        self.patterns_both = 0
-#        self.patterns_ref_only = 0
-#        self.patterns_assembly_only = 0
-#        self.cov_both = 0
-#        self.cov_ref_only = 0
-#        self.cov_assembly_only = 0
-#    def __add__(self, x):
-#        z = CompareStats()
-#        for f in CompareStats.fields:
-#            val = getattr(self, f) + getattr(x, f)
-#            setattr(z, f, val)
-#        return z
-#    
-#def compare_locus(transcripts):
-#    # handle splicing related statistics
-#    strand_intron_dict = {POS_STRAND: collections.defaultdict(lambda: CompareData()),
-#                          NEG_STRAND: collections.defaultdict(lambda: CompareData()),
-#                          NO_STRAND: collections.defaultdict(lambda: CompareData())}
-#    strand_splicing_pattern_dict = {POS_STRAND: collections.defaultdict(lambda: CompareData()),
-#                                    NEG_STRAND: collections.defaultdict(lambda: CompareData()),
-#                                    NO_STRAND: collections.defaultdict(lambda: CompareData())}                                    
-#    # score and divide into ref/test transcript lists
-#    for t in transcripts:
-#        is_ref = bool(int(t.attrs[GTFAttr.REF]))
-#        intron_dict = strand_intron_dict[t.strand]
-#        pattern_dict = strand_splicing_pattern_dict[t.strand]
-#        pattern = []
-#        for start,end in t.iterintrons():
-#            k = (start,end)
-#            d = intron_dict[k]
-#            if is_ref:
-#                d.is_ref = True
-#            else:
-#                d.is_assembly = True
-#            pattern.append(k)
-#        d = pattern_dict[tuple(pattern)]
-#        if is_ref:
-#            d.is_ref = True
-#        else:
-#            d.is_assembly = True
-#    # compile statistics
-#    stats_obj = CompareStats()
-#    for strand, intron_dict in strand_intron_dict.iteritems():
-#        for d in intron_dict.itervalues():
-#            if d.is_ref and d.is_assembly:
-#                stats_obj.introns_both += 1
-#            elif d.is_ref:
-#                stats_obj.introns_ref_only += 1
-#            elif d.is_assembly:
-#                stats_obj.introns_assembly_only += 1
-#    for strand, splicing_pattern_dict in strand_splicing_pattern_dict.iteritems():
-#        for d in splicing_pattern_dict.itervalues():
-#            if d.is_ref and d.is_assembly:
-#                stats_obj.patterns_both += 1
-#            elif d.is_ref:
-#                stats_obj.patterns_ref_only += 1
-#            elif d.is_assembly:
-#                stats_obj.patterns_assembly_only += 1
-#    # coverage comparison
-#    # add all transcripts to a graph
-#    G = create_undirected_transcript_graph(transcripts)
-#    for n,nd in G.nodes_iter(data=True):
-#        length = (n.end - n.start)
-#        strand_is_ref = nd[IS_REF]
-#        strand_score = nd[STRAND_SCORE]
-#        for strand in xrange(0,3):
-#            is_ref = strand_is_ref[strand]
-#            score = strand_score[strand]
-#            is_assembly = (score > 0.0)
-#            if is_ref and is_assembly:
-#                stats_obj.cov_both += length
-#            elif is_ref:
-#                stats_obj.cov_ref_only += length
-#            elif is_assembly:
-#                stats_obj.cov_assembly_only += length
-#    return stats_obj
+def add_node_cov_compare(G, n, t, **kwargs):
+    if n not in G: 
+        attr_dict = {STRAND_IS_REF: [False, False, False],
+                     STRAND_IS_ASSEMBLY: [False, False, False]}
+        G.add_node(n, attr_dict=attr_dict)
+    nd = G.node[n]
+    is_ref = bool(int(t.attrs[GTFAttr.REF]))
+    if is_ref:
+        nd[STRAND_IS_REF][t.strand] = True
+    else:
+        nd[STRAND_IS_ASSEMBLY][t.strand] = True
+
+def gather_global_stats(transcripts):
+    class CompareData(object):
+        __slots__ = ('is_ref', 'is_assembly')
+        def __init__(self):
+            self.is_ref = False
+            self.is_assembly = False
+    # handle splicing related statistics
+    strand_intron_dict = {POS_STRAND: collections.defaultdict(lambda: CompareData()),
+                          NEG_STRAND: collections.defaultdict(lambda: CompareData()),
+                          NO_STRAND: collections.defaultdict(lambda: CompareData())}
+    strand_splicing_pattern_dict = {POS_STRAND: collections.defaultdict(lambda: CompareData()),
+                                    NEG_STRAND: collections.defaultdict(lambda: CompareData()),
+                                    NO_STRAND: collections.defaultdict(lambda: CompareData())}                                    
+    # score and divide into ref/test transcript lists
+    for t in transcripts:
+        is_ref = bool(int(t.attrs[GTFAttr.REF]))
+        intron_dict = strand_intron_dict[t.strand]
+        pattern_dict = strand_splicing_pattern_dict[t.strand]
+        pattern = []
+        for start,end in t.iterintrons():
+            k = (start,end)
+            d = intron_dict[k]
+            if is_ref:
+                d.is_ref = True
+            else:
+                d.is_assembly = True
+            pattern.append(k)
+        d = pattern_dict[tuple(pattern)]
+        if is_ref:
+            d.is_ref = True
+        else:
+            d.is_assembly = True
+    # compile statistics
+    stats_obj = GlobalStats()
+    for strand, intron_dict in strand_intron_dict.iteritems():
+        for d in intron_dict.itervalues():
+            if d.is_ref and d.is_assembly:
+                stats_obj.introns_both += 1
+            elif d.is_ref:
+                stats_obj.introns_ref_only += 1
+            elif d.is_assembly:
+                stats_obj.introns_assembly_only += 1
+    for strand, splicing_pattern_dict in strand_splicing_pattern_dict.iteritems():
+        for d in splicing_pattern_dict.itervalues():
+            if d.is_ref and d.is_assembly:
+                stats_obj.patterns_both += 1
+            elif d.is_ref:
+                stats_obj.patterns_ref_only += 1
+            elif d.is_assembly:
+                stats_obj.patterns_assembly_only += 1
+    # coverage comparison
+    # add all transcripts to a graph
+    G = create_undirected_transcript_graph(transcripts,
+                                           add_node_func=add_node_cov_compare)
+    for n,nd in G.nodes_iter(data=True):
+        length = (n.end - n.start)
+        strand_is_ref = nd[STRAND_IS_REF]
+        strand_is_assembly = nd[STRAND_IS_ASSEMBLY]
+        for strand in xrange(0,2):
+            is_ref = strand_is_ref[strand]
+            is_assembly = strand_is_assembly[strand]
+            if is_ref and is_assembly:
+                stats_obj.strand_cov_both += length
+            elif is_ref:
+                stats_obj.strand_cov_ref_only += length
+            elif is_assembly:
+                stats_obj.strand_cov_assembly_only += length
+        if strand_is_assembly[NO_STRAND]:
+            stats_obj.unstranded_cov_assembly_only += length
+        any_is_ref = any(strand_is_ref)
+        any_is_assembly = any(strand_is_assembly)
+        if any_is_ref and any_is_assembly:
+            stats_obj.cov_both += length
+        elif any_is_ref:
+            stats_obj.cov_ref_only += length
+        elif any_is_assembly:
+            stats_obj.cov_assembly_only += length
+    return stats_obj
 
 def _parse_gtf_by_chrom(gtf_file):
     current_chrom = None
@@ -384,24 +391,27 @@ def add_gtf_file(gtf_file, outfh, is_ref, sample_id=None):
 def compare_assembly(ref_gtf_file, test_gtf_file, output_dir, 
                      gtf_score_attr):
     # output files
-    ref_output_file = os.path.join(output_dir, "ref_transcripts.txt")
-    stats_file = os.path.join(output_dir, "stats.txt")
+    compare_file = os.path.join(output_dir, "compare_transcripts.txt")
+    global_stats_file = os.path.join(output_dir, "global_stats.txt")
     tmp_gtf_file = os.path.join(output_dir, "tmp.gtf")
     tmp_sorted_gtf_file = os.path.splitext(tmp_gtf_file)[0] + ".srt.gtf"
     # merge and sort ref/test gtf files
     logging.info("Merging reference and test GTF files")
     # make temporary file to store merged ref/test gtf files
-#    outfh = open(tmp_gtf_file, "w")
-#    logging.info("Adding reference GTF file")
-#    add_gtf_file(ref_gtf_file, outfh, is_ref=True, sample_id=None)
-#    logging.info("Adding test GTF file")
-#    add_gtf_file(test_gtf_file, outfh, is_ref=False, sample_id='assembly')
-#    outfh.close()
-#    logging.info("Sorting merged GTF file")
-#    sort_gtf(tmp_gtf_file, tmp_sorted_gtf_file)
-#    os.remove(tmp_gtf_file)
+    outfh = open(tmp_gtf_file, "w")
+    logging.info("Adding reference GTF file")
+    add_gtf_file(ref_gtf_file, outfh, is_ref=True, sample_id=None)
+    logging.info("Adding test GTF file")
+    add_gtf_file(test_gtf_file, outfh, is_ref=False, sample_id='assembly')
+    outfh.close()
+    logging.info("Sorting merged GTF file")
+    sort_gtf(tmp_gtf_file, tmp_sorted_gtf_file)
+    os.remove(tmp_gtf_file)
     # compare assemblies
     logging.info("Comparing assemblies")
+    cmp_fh = open(compare_file, "w")
+    print >>cmp_fh, '\t'.join(map(str, MatchStats.header_fields()))
+    stats_obj = GlobalStats()
     for locus_transcripts in parse_gtf(open(tmp_sorted_gtf_file)):
         locus_chrom = locus_transcripts[0].chrom
         locus_start = locus_transcripts[0].start
@@ -416,71 +426,19 @@ def compare_assembly(ref_gtf_file, test_gtf_file, output_dir,
             else:
                 t.score = float(t.attrs.get(gtf_score_attr, 0.0))
         # run comparison
-        for mobj in compare_bubba(locus_transcripts):
-            print str(mobj)
+        for mobj in compare_locus(locus_transcripts):
+            print >>cmp_fh, str(mobj)
+        # measure global stats
+        locus_stats_obj = gather_global_stats(locus_transcripts)
+        stats_obj = stats_obj + locus_stats_obj        
     # cleanup
-#    os.remove(tmp_sorted_gtf_file)
+    cmp_fh.close()
+    logging.info("Printing report")    
+    f = open(global_stats_file, "w")
+    print >>f, stats_obj.report()
+    os.remove(tmp_sorted_gtf_file)
     logging.info("Done")    
 
-#        
-#    logging.info("Comparing assemblies")
-#    ref_fh = open(ref_output_file, "w")
-#    print >>ref_fh, '\t'.join(map(str, TranscriptStats.header_fields()))
-#    stats_obj = CompareStats()
-#    for locus_transcripts in parse_gtf(open(tmp_sorted_gtf_file)):
-#        locus_chrom = locus_transcripts[0].chrom
-#        locus_start = locus_transcripts[0].start
-#        locus_end = max(t.end for t in locus_transcripts)
-#        logging.debug("[LOCUS] %s:%d-%d %d transcripts" % 
-#                      (locus_chrom, locus_start, locus_end, 
-#                       len(locus_transcripts)))
-#        # score and divide into ref/test transcript lists
-#        ref_transcripts = []
-#        test_transcripts = []
-#        for t in locus_transcripts:
-#            is_ref = bool(int(t.attrs[GTFAttr.REF]))
-#            if is_ref:
-#                t.score = 0.0
-#                ref_transcripts.append(t)
-#            else:
-#                if gtf_score_attr is None:
-#                    t.score = 1.0
-#                else:
-#                    t.score = float(t.attrs[gtf_score_attr])
-#                test_transcripts.append(t)
-#        # measure sensitivity for detecting reference transcripts
-#        for ts in measure_transcript_sensitivity(ref_transcripts, 
-#                                                 test_transcripts):
-#            print >>ref_fh, str(ts)
-#        # measure overall stats
-#        locus_stats_obj = compare_locus(locus_transcripts)
-#        stats_obj = stats_obj + locus_stats_obj
-#    ref_fh.close()
-#    # print stats report
-#    logging.info("Printing report")    
-#    introns_total = stats_obj.introns_both + stats_obj.introns_ref_only + stats_obj.introns_assembly_only
-#    patterns_total = stats_obj.patterns_both + stats_obj.patterns_ref_only + stats_obj.patterns_assembly_only
-#    cov_total = stats_obj.cov_both + stats_obj.cov_ref_only + stats_obj.cov_assembly_only
-#    f = open(stats_file, "w")
-#    print >>f, "introns_total=%d" % (introns_total)
-#    print >>f, "introns_both=%d" % (stats_obj.introns_both)
-#    print >>f, "introns_ref_only=%d" % (stats_obj.introns_ref_only)
-#    print >>f, "introns_assembly_only=%d" % (stats_obj.introns_assembly_only)
-#    print >>f, "introns_precision=%f" % (stats_obj.introns_both / float(stats_obj.introns_both + stats_obj.introns_assembly_only))
-#    print >>f, "introns_recall=%f" % (stats_obj.introns_both / float(stats_obj.introns_both + stats_obj.introns_ref_only))
-#    print >>f, "patterns_total=%d" % (patterns_total)
-#    print >>f, "patterns_both=%d" % (stats_obj.patterns_both)
-#    print >>f, "patterns_ref_only=%d" % (stats_obj.patterns_ref_only)
-#    print >>f, "patterns_assembly_only=%d" % (stats_obj.patterns_assembly_only)
-#    print >>f, "patterns_precision=%f" % (stats_obj.patterns_both / float(stats_obj.patterns_both + stats_obj.patterns_assembly_only))
-#    print >>f, "patterns_recall=%f" % (stats_obj.patterns_both / float(stats_obj.patterns_both + stats_obj.patterns_ref_only))
-#    print >>f, "cov_total=%d" % (cov_total)
-#    print >>f, "cov_both=%d" % (stats_obj.cov_both)
-#    print >>f, "cov_ref_only=%d" % (stats_obj.cov_ref_only)
-#    print >>f, "cov_assembly_only=%d" % (stats_obj.cov_assembly_only)
-#    print >>f, "cov_precision=%f" % (stats_obj.cov_both / float(stats_obj.cov_both + stats_obj.cov_assembly_only))
-#    print >>f, "cov_recall=%f" % (stats_obj.cov_both / float(stats_obj.cov_both + stats_obj.cov_ref_only))
-#    f.close()
 
 def main():
     # parse command line

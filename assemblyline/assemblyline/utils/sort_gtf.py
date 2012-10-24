@@ -30,6 +30,7 @@ def main():
     logging.info("output gtf file: %s" % (args.output_gtf_file))
     logging.info("Sorting")
     sort_gtf(args.input_gtf_file, args.output_gtf_file)    
+    logging.info("Done")
     return 0
 
 if __name__ == '__main__':
