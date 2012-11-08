@@ -350,8 +350,10 @@ def prune_transcript_graph(G, strand, strand_transcript_map,
     intron coverage below which intronic nodes will be removed
     '''
     # trim utrs and intron retentions
-    trim_graph(G, strand, min_trim_length, trim_utr_fraction, 
-               trim_intron_fraction)
+    trim_nodes = trim_graph(G, strand, min_trim_length, 
+                            trim_utr_fraction, 
+                            trim_intron_fraction)
+    G.remove_nodes_from(trim_nodes)
     # collapse consecutive nodes in graph
     H = collapse_strand_specific_graph(G)
     # get connected components of graph which represent independent genes
