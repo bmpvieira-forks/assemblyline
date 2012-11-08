@@ -1,14 +1,10 @@
-
-chr1	Cufflinks	transcript	0	1000	1000	+	.	gene_id "A.1"; transcript_id "A.1.1"; FPKM "1.0"
-chr1	Cufflinks	exon	0	100	1000	+	.	gene_id "A.1"; transcript_id "A.1.1"; exon_number "1"; FPKM "1.0"
-chr1	Cufflinks	exon	900	1000	1000	+	.	gene_id "A.1"; transcript_id "A.1.1"; exon_number "2"; FPKM "1.0"
-
-chr1	Cufflinks	transcript	500	895	1000	+	.	gene_id "A.4"; transcript_id "A.4.1"; FPKM "1.0"
-chr1	Cufflinks	exon	500	895	1000	+	.	gene_id "A.4"; transcript_id "A.4.1"; exon_number "1"; FPKM "1.0"
-
-chr1	Cufflinks	transcript	890	1100	1000	+	.	gene_id "A.2"; transcript_id "A.2.1"; FPKM "1.0"
-chr1	Cufflinks	exon	890	1100	1000	+	.	gene_id "A.2"; transcript_id "A.2.1"; exon_number "1"; FPKM "1.0"
-
-chr1	Cufflinks	transcript	1050	2000	1000	+	.	gene_id "A.3"; transcript_id "A.3.1"; FPKM "1.0"
-chr1	Cufflinks	exon	1050	1095	1000	+	.	gene_id "A.3"; transcript_id "A.3.1"; exon_number "1"; FPKM "1.0"
-chr1	Cufflinks	exon	1200	2000	1000	+	.	gene_id "A.3"; transcript_id "A.3.1"; exon_number "2"; FPKM "1.0"
+chr1	Cufflinks	transcript	1	1000	1000	+	.	gene_id "G1"; transcript_id "T1"; FPKM "1.0"
+chr1	Cufflinks	exon	1	1000	1000	+	.	gene_id "G1"; transcript_id "T1"; exon_number "1"; FPKM "1.0"
+chr1	Cufflinks	transcript	101	900	1000	+	.	gene_id "G2"; transcript_id "T2"; FPKM "1.0"
+chr1	Cufflinks	exon	101	900	1000	+	.	gene_id "G2"; transcript_id "T2"; exon_number "1"; FPKM "1.0"
+chr1	Cufflinks	transcript	201	800	1000	+	.	gene_id "G3"; transcript_id "T3"; FPKM "1.0"
+chr1	Cufflinks	exon	201	800	1000	+	.	gene_id "G3"; transcript_id "T3"; exon_number "1"; FPKM "1.0"
+chr1	Cufflinks	transcript	501	700	1000	+	.	gene_id "G4"; transcript_id "T4"; FPKM "20.0"
+chr1	Cufflinks	exon	501	700	1000	+	.	gene_id "G4"; transcript_id "T4"; exon_number "1"; FPKM "20.0"
+chr1	Cufflinks	transcript	601	650	1000	+	.	gene_id "G5"; transcript_id "T5"; FPKM "1.0"
+chr1	Cufflinks	exon	601	650	1000	+	.	gene_id "G5"; transcript_id "T5"; exon_number "1"; FPKM "2.0"
