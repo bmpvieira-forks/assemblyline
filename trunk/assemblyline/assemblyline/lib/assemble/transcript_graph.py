@@ -269,22 +269,23 @@ def add_node_directed(G, n, t_id, score):
     nd[TRANSCRIPT_IDS].add(t_id)
     nd[NODE_SCORE] += score
 
-def add_transcript_directed(G, strand, boundaries, transcript):
+def add_transcript_directed(G, strand, boundaries, t):
+    t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
     # get strand-specific score
-    score = transcript.attrs[STRAND_SCORE][strand]
+    score = t.attrs[STRAND_SCORE][strand]
     # split exons that cross boundaries and to get the
     # nodes in the transcript path
     nodes = []
-    for exon in transcript.exons:
+    for exon in t.exons:
         for start, end in split_exon(exon, boundaries):
             nodes.append(Exon(start,end))
     if strand == NEG_STRAND:
         nodes.reverse()
     # add nodes/edges to graph
     u = nodes[0]
-    add_node_directed(G, u, transcript.attrs[GTFAttr.TRANSCRIPT_ID], score)
+    add_node_directed(G, u, t_id, score)
     for v in nodes[1:]:
-        add_node_directed(G, v, transcript.attrs[GTFAttr.TRANSCRIPT_ID], score)
+        add_node_directed(G, v, t_id, score)
         G.add_edge(u,v)
         u = v
     
