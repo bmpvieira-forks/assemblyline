@@ -28,25 +28,6 @@ from assemblyline.lib.transcript import NEG_STRAND, strand_int_to_str
 from base import NODE_SCORE
 from collapse import get_chains
 
-def get_introns(G, reverse=False):
-    '''
-    input: DiGraph G
-    output: introns as (start,end) tuples
-    '''
-    if reverse:
-        G.reverse(copy=False)
-    introns = set()
-    intron_tree = IntervalTree()
-    for u,nbrdict in G.adjacency_iter():
-        for v in nbrdict:
-            if u.end == v.start:
-                continue
-            introns.add((u.end,v.start))
-            intron_tree.insert_interval(Interval(u.end,v.start))
-    if reverse:
-        G.reverse(copy=False)
-    return introns, intron_tree
-
 def trim_intron(G, nodes, cutoff_score):
     '''
     remove intron nodes with score less than the bordering exons
@@ -270,6 +251,7 @@ def trim_graph(G, strand,
                     trim_nodes.update(trim_intronic_utr(G, nodes, cutoff_score))
                 trim_nodes.update(trim_utr(G, nodes, min_trim_length, trim_utr_fraction))
         all_trim_nodes.update(trim_nodes)
-    G.remove_nodes_from(all_trim_nodes)
     if len(all_trim_nodes) > 0:
         logging.debug("\t\t(%s) trimmed %d nodes from graph" % (strand_int_to_str(strand), len(all_trim_nodes)))
+    return all_trim_nodes
+
