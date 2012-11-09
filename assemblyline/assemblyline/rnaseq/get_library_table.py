@@ -43,7 +43,9 @@ def main():
     for library in libraries.itervalues():
         results = config.RnaseqResults(library, server.output_dir)
         if not results.validate():
-            continue
+            setattr(library, 'description', 'invalid')
+        else:
+            setattr(library, 'description', 'valid')
         library.read1_files = ','.join(library.read1_files)
         library.read2_files = ','.join(library.read2_files)
         fields = []
