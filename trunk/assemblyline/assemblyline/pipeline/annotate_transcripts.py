@@ -249,7 +249,7 @@ def add_node_annotate(G, n, t, **kwargs):
                      STRAND_SCORE: np.zeros(3,float)} 
         G.add_node(n, attr_dict=attr_dict)
     t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
-    is_ref = t.attrs[GTFAttr.REF]
+    is_ref = bool(int(t.attrs[GTFAttr.REF]))
     sample_id = None
     if "gtf_sample_attr" in kwargs:
         sample_id_attr = kwargs["gtf_sample_attr"]
@@ -452,7 +452,8 @@ def main():
                         "to be considered 'annotated' "
                         "[default=%(default)s]")
     parser.add_argument("-o", "--output-dir", dest="output_dir", 
-                        default="transcripts")
+                        default="transcripts",
+                        help="output directory [default=%(default)s]")
     parser.add_argument("gtf_file")
     parser.add_argument("sample_table_file")
     args = parser.parse_args()
