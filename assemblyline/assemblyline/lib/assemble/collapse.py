@@ -32,13 +32,29 @@ def can_collapse(G,u,v):
         return False
     return True
 
-def get_chains(G):
+def can_collapse_contiguous(G,u,v):
+    '''
+    same as can_collapse but does not allow introns to be collapsed
+    '''
+    # see if edge nodes have degree larger than '1'
+    if ((G.out_degree(u) > 1) or (G.in_degree(v) > 1)):
+        return False
+    # collapse non-intron edges    
+    if (u.end == v.start) or (v.end == u.start):
+        return True
+    return False
+
+def get_chains(G, introns=True):
     """
     group nodes into chains
     
     returns a dict mapping node -> chain, as well as a 
     dict mapping chains to nodes
     """
+    if introns:
+        can_collapse_func = can_collapse
+    else:
+        can_collapse_func = can_collapse_contiguous
     imin2 = lambda x,y: x if x<=y else y 
     imax2 = lambda x,y: x if x>=y else y 
     node_chain_map = {}
@@ -48,7 +64,7 @@ def get_chains(G):
         node_chain_map[n] = n
         chains[n] = set((n,))
     for u,v in G.edges_iter():
-        if not can_collapse(G,u,v):
+        if not can_collapse_func(G,u,v):
             continue
         # get chains containing these nodes
         u_new = node_chain_map[u]
