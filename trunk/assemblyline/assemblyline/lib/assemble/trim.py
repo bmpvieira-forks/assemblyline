@@ -47,44 +47,6 @@ def trim_intronic_utr(G, nodes, cutoff_score):
         trim_nodes.add(n)
     return trim_nodes
 
-#def trim_intron(G, chains, node_chain_map, 
-#                predecessor_dict, successor_dict, 
-#                parent, nodes, coverage_fraction):
-#    # find the nodes immediately upstream of the intron
-#    pred = None
-#    for pred in predecessor_dict[nodes[0]]:
-#        if (parent.end == pred.start) or (parent.start == pred.end):
-#            break
-#    if pred is None:
-#        logging.debug("%s %s" % (str(nodes[-1]), str(successor_dict[nodes[-1]])))
-#    assert pred is not None
-#    # calculate the average score of the nodes bordering the intron
-#    pred_chain_node = node_chain_map[pred]
-#    pred_nodes = chains[pred_chain_node]
-#    pred_total_score = sum(G.node[n][NODE_SCORE] for n in pred_nodes)
-#    pred_avg_score = pred_total_score / len(pred_nodes)
-#    # find the nodes immediately downstream of the intron
-#    succ = None
-#    for succ in successor_dict[nodes[-1]]:
-#        if (parent.end == succ.start) or (parent.start == succ.end):
-#            break
-#    if succ is None:
-#        logging.debug("%s %s" % (str(nodes[-1]), str(successor_dict[nodes[-1]])))
-#    assert succ is not None
-#    # calculate the average score of the nodes bordering the intron
-#    succ_chain_node = node_chain_map[succ]
-#    succ_nodes = chains[succ_chain_node]
-#    succ_total_score = sum(G.node[n][NODE_SCORE] for n in succ_nodes)
-#    succ_avg_score = succ_total_score / len(succ_nodes)    
-#    # remove intron nodes with score less than the bordering exons
-#    cutoff_score = coverage_fraction * max(pred_avg_score, succ_avg_score)
-#    trim_nodes = set()
-#    for n in nodes:
-#        score = G.node[n][NODE_SCORE]
-#        if score < cutoff_score:
-#            trim_nodes.add(n)
-#    return trim_nodes
-
 def trim_bidirectional(G, nodes, min_trim_length, coverage_fraction):
     # find max node and use as seed
     seed_index = None
@@ -171,8 +133,9 @@ def trim_graph(G, strand,
                min_trim_length, 
                trim_utr_fraction,
                trim_intron_fraction):
-    # get 'chains' of contiguous nodes with edge degree of one or less
-    node_chain_map, chains = get_chains(G)
+    # get 'chains' of contiguous non-intron nodes with edge degree of 
+    # one or less
+    node_chain_map, chains = get_chains(G, introns=False)
     # setup dictionaries of predecessors and successors
     successor_dict = {}
     for n,nbrdict in G.adjacency_iter():
@@ -188,17 +151,19 @@ def trim_graph(G, strand,
     reverse = (strand == NEG_STRAND)
     for u,nbrdict in G.adjacency_iter():
         for v in nbrdict:
-            if u.end == v.start:
+            if reverse:
+                left, right = v, u
+            else:
+                left, right = u, v
+            # skip contiguous nodes
+            if left.end == right.start:
                 continue
             # calculate score of the chains
             u_chain_nodes = chains[node_chain_map[u]]
             u_score = max(G.node[n][NODE_SCORE] for n in u_chain_nodes)
             v_chain_nodes = chains[node_chain_map[v]]
             v_score = max(G.node[n][NODE_SCORE] for n in v_chain_nodes)
-            if reverse:
-                left, right = v, u
-            else:
-                left, right = u, v
+            # store scores in intron data structures
             introns[(left.end,right.start)] = (u_score, v_score)
             intron_tree.insert_interval(Interval(left.end, right.start, 
                                                  value=(u_score,v_score)))
@@ -243,12 +208,12 @@ def trim_graph(G, strand,
             elif in_degree == 0:
                 if found_intron:
                     cutoff_score = trim_intron_fraction * max_succ_score
-                    trim_nodes.update(trim_intronic_utr(G, nodes[::-1], cutoff_score))
+                    trim_nodes.update(trim_intronic_utr(G, nodes, cutoff_score))
                 trim_nodes.update(trim_utr(G, nodes[::-1], min_trim_length, trim_utr_fraction))
             elif out_degree == 0:
                 if found_intron:
                     cutoff_score = trim_intron_fraction * max_pred_score
-                    trim_nodes.update(trim_intronic_utr(G, nodes, cutoff_score))
+                    trim_nodes.update(trim_intronic_utr(G, nodes[::-1], cutoff_score))
                 trim_nodes.update(trim_utr(G, nodes, min_trim_length, trim_utr_fraction))
         all_trim_nodes.update(trim_nodes)
     if len(all_trim_nodes) > 0:
