@@ -37,7 +37,7 @@ def main():
     if not os.path.exists(args.bedgraph_file):
         parser.error("bedgraph file %s not found" % (args.bedgraph_file))
     if not os.path.exists(args.chrom_sizes_file):
-        parser.error("chrome sizes file %s not found" % (args.chrom_sizes_file))
+        parser.error("chrom sizes file %s not found" % (args.chrom_sizes_file))
     # check for executables
     if not check_executable("bedGraphToBigWig"):
         parser.error("'bedGraphToBigWig' executable not found in PATH")
