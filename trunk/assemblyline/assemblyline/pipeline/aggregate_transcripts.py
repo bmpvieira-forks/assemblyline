@@ -28,7 +28,7 @@ import collections
 import operator
 
 import assemblyline
-from assemblyline.lib.sampletable import SampleInfo
+from assemblyline.lib.librarytable import LibraryInfo
 from assemblyline.lib.gtf import GTFFeature, sort_gtf
 from assemblyline.lib.base import GTFAttr
 
@@ -104,16 +104,16 @@ def main():
         parser.error("Sample table file %s not found" % (args.sample_table_file))
     # parse sample table
     logging.info("Parsing sample table")
-    sampleinfos = []
+    libinfos = []
     valid = True
-    for s in SampleInfo.from_file(args.sample_table_file):
+    for lib in LibraryInfo.from_file(args.sample_table_file):
         # exclude samples
-        if not s.is_valid():
+        if not lib.is_valid():
             logging.error("\tcohort=%s patient=%s sample=%s library=%s not valid" % 
-                           (s.cohort_id, s.patient_id, s.sample_id, s.library_id))
+                           (lib.cohort_id, lib.patient_id, lib.sample_id, lib.library_id))
             valid = False
         else:
-            sampleinfos.append(s)
+            libinfos.append(lib)
     if not valid:
         parser.error("Invalid samples in sample table file")
     # show parameters
@@ -129,10 +129,10 @@ def main():
     add_reference_gtf_file(args.ref_gtf_file, tmp_fh)
     # parse sample table
     logging.info("Adding samples")
-    for s in sampleinfos:
+    for lib in libinfos:
         logging.info("\tadding cohort=%s patient=%s sample=%s library=%s" % 
-                     (s.cohort_id, s.patient_id, s.sample_id, s.library_id))
-        add_sample_gtf_file(s, tmp_fh, args.rename_ids)
+                     (lib.cohort_id, lib.patient_id, lib.sample_id, lib.library_id))
+        add_sample_gtf_file(lib, tmp_fh, args.rename_ids)
     tmp_fh.close()
     logging.info("Sorting GTF")
     sort_gtf(tmp_file, args.output_file)

@@ -27,55 +27,62 @@ import logging
 import argparse
 from multiprocessing import Pool
 
-from assemblyline.lib.sampletable import LibInfo
-import assemblyline.utils
-utils_dir = assemblyline.utils.__path__[0]
-bam_to_sam_sr_script = os.path.join(utils_dir, "bam_to_sam_sr.py")
-
-# test imports
 import HTSeq
-import pysam
 
-def run_htseq_count(bam_file, gtf_file, output_dir, library_type, 
-                    sample_id, library_id):
-    # bam -> sam (converts PE reads to SR)
-    args = ["python", bam_to_sam_sr_script, bam_file]
-    bam2sam_p = subprocess.Popen(args, stdout=subprocess.PIPE)
-    # need to quantify as unstranded to remove bias
-    stranded = "no"
-    #if library_type == "fr-unstranded":
-    #    stranded = "no"
-    #else:
-    #    stranded = "yes"    
-    # htseq-count
-    args = ["htseq-count", "-m", "union", "-s", stranded, "-", gtf_file]
+import assemblyline
+from assemblyline.lib.librarytable import LibraryInfo
+
+def run_htseq_count(bam_file, gtf_file, output_dir, library_id, stranded):
+    # sort bam by read name
+    prefix = os.path.join(output_dir, os.path.splitext(os.path.basename(bam_file))[0])
+    sorted_bam_prefix = prefix + ".srt"
+    sorted_bam_file = sorted_bam_prefix + ".bam"
+    args = ["samtools", "sort", "-n", bam_file, sorted_bam_prefix]
+    logging.debug("samtools sort args: %s" % (map(str, args)))
+    retcode = subprocess.call(args)
+    if retcode != 0:
+        if os.path.exists(sorted_bam_file):
+            os.remove(sorted_bam_file)
+        return 1, library_id
+    logging.info("sorted library: %s" % (library_id))
+    # convert to sam for htseq-count
+    args = ["samtools", "view", sorted_bam_file]
+    sam_p = subprocess.Popen(args, stdout=subprocess.PIPE)
+    # run htseq-count
+    args = ["htseq-count", "-m", "union", "-s", "no", "-", gtf_file]
     output_file = os.path.join(output_dir, "htseq_count.txt")
     outfh = open(output_file, "w")
     logging.debug("htseq-count args: %s" % (map(str, args)))
-    retcode = subprocess.call(args, stdin=bam2sam_p.stdout, stdout=outfh)
+    retcode1 = subprocess.call(args, stdin=sam_p.stdout, stdout=outfh)
+    retcode2 = sam_p.wait()
+    retcode = retcode1 + retcode2
+    logging.info("counted library: %s" % (library_id))
+    # clean up
     outfh.close()
+    if os.path.exists(sorted_bam_file):
+        os.remove(sorted_bam_file)
     if retcode != 0:
-        bam2sam_p.kill()
         if os.path.exists(output_file):
             os.remove(output_file)
-        return 1, sample_id, library_id
-    retcode = bam2sam_p.wait()
-    if retcode != 0:
-        return 1, sample_id, library_id
+        return 1, library_id
     # create job.done file
-    open(os.path.join(output_dir, "job.done"), "w").close()
-    return 0, sample_id, library_id
+    open(os.path.join(output_dir, "job.done"), "w").close()    
+    return 0, library_id
 
 def run_htseq_count_task(args):
     return run_htseq_count(**args)
 
 def main():
-    # Command line parsing
+    # setup logging
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logging.info("AssemblyLine %s" % (assemblyline.__version__))
+    logging.info("----------------------------------")
+    # command line parsing
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--output-dir', dest="output_dir", default=".")
     parser.add_argument('-p', '--num-processors', dest="num_processors", type=int, default=1)
+    parser.add_argument('--stranded', dest="stranded", action="store_true", default=False) 
     parser.add_argument('gtf_file')
     parser.add_argument('library_table')
     args = parser.parse_args()
@@ -86,39 +93,36 @@ def main():
     logging.info("Parsing library table")
     tasks = []
     libinfos = []
-    for libinfo in LibInfo.from_file(args.library_table):
-        if not libinfo.is_valid():
-            logging.warning("\tskipping cohort=%s patient=%s sample=%s lib=%s lanes=%s" % 
-                            (libinfo.cohort, libinfo.patient, libinfo.sample, 
-                             libinfo.library, libinfo.lanes))
+    for lib in LibraryInfo.from_file(args.library_table):
+        if not lib.is_valid():
+            logging.warning("\tskipping lib=%s" % (lib.library_id)) 
             continue
-        libinfos.append(libinfo)
-        lib_dir = os.path.join(args.output_dir, libinfo.sample, libinfo.library)
+        libinfos.append(lib)
+        lib_dir = os.path.join(args.output_dir, lib.library_id)
         if not os.path.exists(lib_dir):
             logging.debug("Creating directory %s" % (lib_dir))
             os.makedirs(lib_dir)
         # check for output
         job_done_file = os.path.join(lib_dir, "job.done")
-        msg = "Adding task for sample=%s library=%s" % (libinfo.sample, libinfo.library)
+        msg = "Adding task for library=%s" % (lib.library_id)
         if os.path.exists(job_done_file):
             logging.info("[SKIPPED] %s" % msg)
         else:
             logging.info(msg)
-            arg_dict = {'bam_file': libinfo.bam_file,
+            arg_dict = {'bam_file': lib.bam_file,
                         'gtf_file': gtf_file,
                         'output_dir': lib_dir,
-                        'library_type': libinfo.library_type,
-                        'library_id': libinfo.library,
-                        'sample_id': libinfo.sample}
+                        'library_id': lib.library_id,
+                        'stranded': args.stranded}
             tasks.append(arg_dict)
     # use multiprocessing to parallelize
     logging.info("Running tasks")
     pool = Pool(processes=num_processes)
     result_iter = pool.imap_unordered(run_htseq_count_task, tasks)
-    for retcode,sample_id,library_id in result_iter:        
-        logging.debug("\tfinished sample %s library %s with return code %d" % (sample_id, library_id, retcode))
+    for retcode,library_id in result_iter:        
+        logging.debug("\tfinished library %s with return code %d" % (library_id, retcode))
+    pool.join()
     pool.close()
 
-    
 if __name__ == '__main__':
     sys.exit(main())

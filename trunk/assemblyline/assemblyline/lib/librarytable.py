@@ -22,19 +22,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 import os
 
-class SampleInfo(object):
+class LibraryInfo(object):
     fields = ('cohort_id', 'patient_id', 'sample_id', 'library_id',
               'gtf_file', 'bam_file')
 
     def __init__(self):
-        for f in SampleInfo.fields:
+        for f in LibraryInfo.fields:
             setattr(self, f, None)
 
     @staticmethod
     def from_fields(fields, field_dict=None):
         if field_dict is None:
-            field_dict = dict((x,i) for i,x in enumerate(SampleInfo.fields))
-        tbl = SampleInfo()
+            field_dict = dict((x,i) for i,x in enumerate(LibraryInfo.fields))
+        tbl = LibraryInfo()
         for attrname in field_dict:
             setattr(tbl, attrname, fields[field_dict[attrname]])
         return tbl
@@ -48,7 +48,7 @@ class SampleInfo(object):
         # table rows
         for line in fh:
             fields = line.strip().split('\t')
-            yield SampleInfo.from_fields(fields, field_dict)
+            yield LibraryInfo.from_fields(fields, field_dict)
         fh.close()
         
     def is_valid(self):
