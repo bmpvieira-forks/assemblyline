@@ -124,8 +124,8 @@ def main():
     result_iter = pool.imap_unordered(run_htseq_count_task, tasks)
     for retcode,library_id in result_iter:        
         logging.debug("\tfinished library %s with return code %d" % (library_id, retcode))
-    pool.join()
     pool.close()
+    pool.join()
     logging.info("Done")
 
 if __name__ == '__main__':
