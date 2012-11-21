@@ -51,14 +51,17 @@ def run_htseq_count(bam_file, gtf_file, output_dir, library_id, stranded):
     # run htseq-count
     args = ["htseq-count", "-m", "union", "-s", "no", "-", gtf_file]
     output_file = os.path.join(output_dir, "htseq_count.txt")
+    err_file = os.path.join(output_dir, "htseq_count.stderr.txt")
     outfh = open(output_file, "w")
+    errfh = open(err_file, "w")
     logging.debug("htseq-count args: %s" % (map(str, args)))
-    retcode1 = subprocess.call(args, stdin=sam_p.stdout, stdout=outfh)
+    retcode1 = subprocess.call(args, stdin=sam_p.stdout, stdout=outfh, stderr=errfh)
     retcode2 = sam_p.wait()
     retcode = retcode1 + retcode2
     logging.info("counted library: %s" % (library_id))
     # clean up
     outfh.close()
+    errfh.close()
     if os.path.exists(sorted_bam_file):
         os.remove(sorted_bam_file)
     if retcode != 0:
@@ -123,6 +126,7 @@ def main():
         logging.debug("\tfinished library %s with return code %d" % (library_id, retcode))
     pool.join()
     pool.close()
+    logging.info("Done")
 
 if __name__ == '__main__':
     sys.exit(main())
