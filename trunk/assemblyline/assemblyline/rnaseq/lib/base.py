@@ -250,8 +250,11 @@ def file_exists_and_nz_size(filename):
         return False
     return True
 
-def parse_bool(s):    
-    return True if s[0].lower() == "t" else False
+def parse_bool(s):
+    firstchar = s[0].lower()
+    if (firstchar == "t") or (firstchar == "y"):
+        return True
+    return False
 
 def parse_string_none(s):
     return None if s == "None" else s

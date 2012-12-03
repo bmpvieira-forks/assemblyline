@@ -151,7 +151,7 @@ def submit_nopbs(shell_commands,
     return retcode
 
 def run(library_xml_file, config_xml_file, server_name, num_processors,
-        stdout_file, stderr_file, dryrun):
+        stdout_file, stderr_file, dryrun, keep_tmp):
     #
     # read and validate configuration file
     #
@@ -159,7 +159,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     pipeline = config.PipelineConfig.from_xml(config_xml_file)
     if server_name not in pipeline.servers:
         logging.error("Server %s not found" % (server_name))
-    server = pipeline.servers[server_name]
+    server = pipeline.servers[server_name]    
     #
     # read library file and attach to results
     #
@@ -175,8 +175,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         return config.JOB_ERROR
     # get genome
     genome = pipeline.species[library.species]
+    genome_dir = os.path.join(server.references_dir, genome.root_dir)
     # setup results    
-    results = config.RnaseqResults(library, server.output_dir)
+    output_dir = os.path.join(server.output_dir, library.library_id)
+    results = config.RnaseqResults(library, output_dir)
     #
     # build up sequence of commands
     #
@@ -229,7 +231,15 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     if not os.path.exists(results.log_dir):
         logging.info("Creating directory: %s" % (results.log_dir))
         shell_commands.append("mkdir -p %s" % (results.log_dir))
-        shell_commands.append(bash_check_retcode())   
+        shell_commands.append(bash_check_retcode())
+    #
+    # copy xml files
+    #
+    logging.info("Copying configuration files")
+    shell_commands.append("cp %s %s" % (library_xml_file, results.library_xml_file))
+    shell_commands.append(bash_check_retcode())
+    shell_commands.append("cp %s %s" % (config_xml_file, results.config_xml_file))
+    shell_commands.append(bash_check_retcode())
     #
     # copy/concatenate sequences read1
     #
@@ -326,7 +336,82 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
         shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())   
+        shell_commands.append(bash_check_retcode())
+    #
+    # align reads with tophat fusion
+    #
+    input_files = results.filtered_fastq_files + [results.frag_size_dist_file]
+    output_files = [results.tophat_fusion_bam_file]
+    msg = "Aligning reads with Tophat-Fusion"
+    skip = (pipeline.tophat_fusion_run and 
+            many_up_to_date(output_files, input_files))
+    if skip:
+        logging.info("[SKIPPED] %s" % (msg))
+    else:
+        logging.info("%s" % (msg))
+        args = [sys.executable, os.path.join(_pipeline_dir, "run_tophat.py"),
+                "-p", num_processors,
+                "--library-type", library.library_type, 
+                '--rg-id', library.library_id,
+                '--rg-sample="%s"' % library.sample_id,
+                '--rg-library="%s"' % library.library_id,
+                '--rg-description="%s"' % library.description,
+                '--rg-center="%s"' % library.study_id]
+        for arg in pipeline.tophat_fusion_args:
+            # substitute species-specific root directory
+            species_arg = arg.replace("${SPECIES}", genome_dir)
+            args.extend(['--tophat-arg="%s"' % species_arg])
+        args.extend([results.tophat_fusion_dir,
+                     os.path.join(server.references_dir, genome.get_path("genome_bowtie_index")),
+                     results.frag_size_dist_file])
+        args.extend(results.filtered_fastq_files)
+        logging.debug("\targs: %s" % (' '.join(map(str, args))))
+        command = ' '.join(map(str, args))
+        shell_commands.append(command)        
+        shell_commands.append(bash_check_retcode())
+    #
+    # index tophat fusion bam file
+    #
+    input_files = [results.tophat_fusion_bam_file]
+    output_files = [results.tophat_fusion_bam_index_file]
+    msg = "Indexing Tophat-Fusion BAM file"
+    skip = (pipeline.tophat_fusion_run and 
+            many_up_to_date(output_files, input_files))
+    if skip:
+        logging.info("[SKIPPED] %s" % (msg))
+    else:
+        logging.info("%s" % (msg))
+        args = ["samtools", "index", results.tophat_fusion_bam_file]
+        logging.debug("\targs: %s" % (' '.join(map(str, args))))
+        command = ' '.join(map(str, args))
+        shell_commands.append(command)        
+        shell_commands.append(bash_check_retcode())        
+    #
+    # tophat fusion post processing script
+    #
+    input_files = [results.tophat_fusion_file]
+    output_files = [results.tophat_fusion_post_result_file]
+    msg = "Post-processing Tophat-Fusion results"
+    skip = (pipeline.tophat_fusion_run and
+            pipeline.tophat_fusion_post_run and 
+            many_up_to_date(output_files, input_files))
+    if skip:
+        logging.info("[SKIPPED] %s" % (msg))
+    else:
+        logging.info("%s" % (msg))
+        args = [sys.executable, os.path.join(_pipeline_dir, "tophat_fusion_post.py"),
+                "-p", num_processors,
+                "-o", results.tophat_fusion_dir]
+        args.extend(pipeline.tophat_fusion_post_args)
+        args.extend([os.path.join(server.references_dir, genome.get_path("genome_bowtie_index")),
+                     os.path.join(server.references_dir, genome.get_path("gene_annotation_refgene")),
+                     os.path.join(server.references_dir, genome.get_path("gene_annotation_ensgene")),
+                     results.tophat_fusion_dir,
+                     results.library_id])
+        logging.debug("\targs: %s" % (' '.join(map(str, args))))
+        command = ' '.join(map(str, args))
+        shell_commands.append(command)        
+        shell_commands.append(bash_check_retcode())
     #
     # align reads with tophat
     #
@@ -348,7 +433,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 '--rg-center="%s"' % library.study_id]
         for arg in pipeline.tophat_args:
             # substitute species-specific root directory
-            species_arg = arg.replace("${SPECIES}", os.path.join(server.references_dir, genome.root_dir)) 
+            species_arg = arg.replace("${SPECIES}", genome_dir)
             args.extend(['--tophat-arg="%s"' % species_arg])
         args.extend([results.tophat_dir,
                      os.path.join(server.references_dir, genome.get_path("genome_bowtie2_index")),
@@ -357,7 +442,23 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
         shell_commands.append(command)        
-        shell_commands.append(bash_check_retcode())   
+        shell_commands.append(bash_check_retcode())
+    #
+    # index tophat bam file
+    #
+    input_files = [results.tophat_bam_file]
+    output_files = [results.tophat_bam_index_file]
+    msg = "Indexing Tophat BAM file"
+    skip = many_up_to_date(output_files, input_files)
+    if skip:
+        logging.info("[SKIPPED] %s" % (msg))
+    else:
+        logging.info("%s" % (msg))
+        args = ["samtools", "index", results.tophat_bam_file]
+        logging.debug("\targs: %s" % (' '.join(map(str, args))))
+        command = ' '.join(map(str, args))
+        shell_commands.append(command)        
+        shell_commands.append(bash_check_retcode())
     #
     # run picard diagnostics for alignment results
     #
@@ -447,12 +548,14 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())   
     #
-    # run cufflinks to assembly transcriptome
+    # run cufflinks to assemble transcriptome
     #
-    msg = "Estimating known transcript abundances with Cufflinks"
+    msg = "Assembling transcriptome with Cufflinks"
+    input_files = [results.frag_size_dist_file, 
+                   results.tophat_bam_file]
     output_files = [results.cufflinks_gtf_file]
-    input_files = [results.frag_size_dist_file, results.tophat_bam_file]
-    skip = many_up_to_date(output_files, input_files)
+    skip = (pipeline.cufflinks_run and
+            many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % msg)
     else:
@@ -469,7 +572,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
             args.append("--learn-frag-size")
         for arg in pipeline.cufflinks_args:
             # substitute species-specific root directory
-            species_arg = arg.replace("${SPECIES}", os.path.join(server.references_dir, genome.root_dir)),
+            species_arg = arg.replace("${SPECIES}", genome_dir)
             args.append('--cufflinks-arg="%s"' % (species_arg))
         args.extend([results.tophat_bam_file,
                      results.cufflinks_dir,
@@ -477,31 +580,111 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
         shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())
+    #
+    # run htseq-count for gene expression
+    #
+    msg = "Counting reads across genes with htseq-count"
+    output_files = [results.htseq_count_known_file]
+    input_files = [results.tophat_bam_file]
+    skip = (pipeline.htseq_run and
+            many_up_to_date(output_files, input_files))
+    if skip:
+        logging.info("[SKIPPED] %s" % msg)
+    else:
+        logging.info(msg)
+        args = [sys.executable, os.path.join(_pipeline_dir, "run_htseq_count.py"),
+                "--stranded", pipeline.htseq_count_stranded,
+                os.path.join(server.references_dir, genome.get_path("known_genes_gtf")),
+                results.tophat_bam_file,
+                results.htseq_count_known_file,
+                results.tmp_dir]                
+        logging.debug("\targs: %s" % (' '.join(map(str, args))))
+        command = ' '.join(map(str, args))
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())    
+    #
+    # run picard to remove duplicates
+    #
+    msg = "Removing duplicate reads with Picard"
+    input_files = [results.tophat_bam_file]
+    output_files = [results.tophat_rmdup_bam_file]
+    skip = (pipeline.varscan_run and
+            many_up_to_date(output_files, input_files))
+    if skip:
+        logging.info("[SKIPPED] %s" % msg)
+    else:
+        logging.info(msg)
+        #args = [sys.executable, os.path.join(_pipeline_dir, "fix_pe_qname.py"),
+        #        results.tophat_bam_file, results.tophat_fixpe_bam_file]
+        #logging.debug("\targs: %s" % (' '.join(map(str, args))))
+        #command = ' '.join(map(str, args))
+        #shell_commands.append(command)
+        #shell_commands.append(bash_check_retcode())
+        args = ["java", "-jar", 
+                "$PICARDPATH/MarkDuplicates.jar",
+                "INPUT=%s" % (results.tophat_fixpe_bam_file),
+                "OUTPUT=%s" % (results.tophat_rmdup_bam_file),
+                "METRICS_FILE=%s" % (results.duplicate_metrics),
+                "REMOVE_DUPLICATES=true",
+                "TMP_DIR=%s" % results.tmp_dir]
+        logging.debug("\targs: %s" % (' '.join(map(str, args))))
+        command = ' '.join(map(str, args))
+        shell_commands.append(command)
         shell_commands.append(bash_check_retcode())   
+    #
+    # run varscan for variant/indel calling
+    #
+    msg = "Calling variants with VarScan"
+    output_files = [results.varscan_snv_file, results.varscan_indel_file]
+    input_files = [results.tophat_rmdup_bam_file]
+    skip = (pipeline.varscan_run and
+            many_up_to_date(output_files, input_files))
+    if skip:
+        logging.info("[SKIPPED] %s" % msg)
+    else:
+        logging.info(msg)
+        args = [sys.executable, os.path.join(_pipeline_dir, "run_varscan.py")]
+        for arg in pipeline.varscan_args:
+            args.append('--varscan-arg="%s"' % (arg))
+        args.extend(["$VARSCANPATH/VarScan.jar",
+                     os.path.join(server.references_dir, genome.get_path("genome_lexicographical_fasta_file")),
+                     results.tophat_rmdup_bam_file,
+                     results.varscan_snv_file,
+                     results.varscan_indel_file])
+        logging.debug("\targs: %s" % (' '.join(map(str, args))))
+        command = ' '.join(map(str, args))
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())
     #
     # write job finished file
     #
-    msg = "Writing job complete file"
+    msg = "Validating results"
     output_files = [results.job_done_file]
-    input_files = [results.coverage_bigwig_file,
-                   results.tophat_bam_file, 
-                   results.cufflinks_gtf_file]
+    input_files = [results.library_xml_file, results.config_xml_file]
     skip = many_up_to_date(output_files, input_files)
     if skip:
         logging.info("[SKIPPED] %s" % msg)
     else:
         logging.info(msg)
-        command = "touch %s" % (results.job_done_file)
+        args = [sys.executable, 
+                os.path.join(_pipeline_dir, "validate_results.py"),
+                results.output_dir]
+        logging.debug("\targs: %s" % (' '.join(map(str, args))))
+        command = ' '.join(map(str, args))
         shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())   
+        shell_commands.append(bash_check_retcode()) 
     #
     # cleanup intermediate files
     #
     msg = "Cleaning up tmp files"
-    logging.info(msg)
-    command = "rm -rf %s" % (results.tmp_dir)
-    shell_commands.append(command)    
-    shell_commands.append(bash_check_retcode())   
+    if keep_tmp:
+        logging.info("[SKIPPED] %s because '--keep-tmp' flag set" % msg)
+    else:
+        logging.info(msg)
+        command = "rm -rf %s" % (results.tmp_dir)
+        shell_commands.append(command)    
+        shell_commands.append(bash_check_retcode())   
     #
     # show commands
     # 
@@ -529,6 +712,8 @@ def main():
     parser.add_argument("--stderr", dest="stderr_file", default=None)
     parser.add_argument("--dryrun", dest="dryrun", action="store_true", 
                         default=False)
+    parser.add_argument("--keep-tmp", dest="keep_tmp", action="store_true", 
+                        default=False)
     parser.add_argument("library_xml_file")
     parser.add_argument("config_xml_file")
     parser.add_argument("server_name")
@@ -536,7 +721,7 @@ def main():
     return run(args.library_xml_file, args.config_xml_file, 
                args.server_name, args.num_processors,
                args.stdout_file, args.stderr_file,
-               args.dryrun)
+               args.dryrun, args.keep_tmp)
 
 if __name__ == '__main__': 
     sys.exit(main())

@@ -29,6 +29,7 @@ import collections
 # fragment layouts
 FRAGMENT_LAYOUT_SINGLE = "single"
 FRAGMENT_LAYOUT_PAIRED = "paired"
+FRAGMENT_LAYOUT_UNKNOWN = "unknown"
 
 # strand protocols
 FR_FIRSTSTRAND = 'fr-firststrand'
@@ -41,21 +42,33 @@ class LibraryTableError(Exception):
 class Library(object):
     fields = ('study_id', 'cohort_id', 'patient_id', 'sample_id', 'library_id',
               'description', 'species', 'library_type', 'seq_repo',
-              'read1_files', 'read2_files', 'fragment_layout')  
+              'read1_files', 'read2_files', 'bam_files', 
+              'fragment_layout')  
 
     def __init__(self, **kwargs):
         for attrname in Library.fields:
             if attrname in kwargs:
                 setattr(self, attrname, kwargs[attrname])
-        self.read1_files = kwargs['read1_files'].split(",")  
+        if not kwargs['read1_files']:
+            self.read1_files = []
+        else:
+            self.read1_files = kwargs['read1_files'].split(",")              
         if not kwargs['read2_files']:
             self.read2_files = []
         else:        
-            self.read2_files = kwargs['read2_files'].split(",")  
-        if len(self.read2_files) > 0:
-            self.fragment_layout = FRAGMENT_LAYOUT_PAIRED
+            self.read2_files = kwargs['read2_files'].split(",")
+        if not kwargs['bam_files']:
+            self.bam_files = []
         else:
+            self.bam_files = kwargs['bam_files'].split(",")
+        if (len(self.read1_files) == 0 and
+            len(self.read2_files) == 0):
+            self.fragment_layout = FRAGMENT_LAYOUT_UNKNOWN
+        elif (len(self.read1_files) > 0 and
+              len(self.read2_files) == 0):
             self.fragment_layout = FRAGMENT_LAYOUT_SINGLE
+        else:
+            self.fragment_layout = FRAGMENT_LAYOUT_PAIRED
         # custom parameters
         self.params = kwargs["params"]
 
@@ -135,6 +148,10 @@ class Library(object):
                     elif filename1 == filename2:
                         logging.error("Library %s read 1 and read 2 point to same file %s" % (self.library_id, filename1))
                         is_valid = False
+        for filename in self.bam_files:
+            if not os.path.exists(filename):
+                logging.error("Library %s bam file %s not found" % (self.library_id, filename))
+                is_valid = False
         return is_valid
 
 def read_wksheet(wksheet):

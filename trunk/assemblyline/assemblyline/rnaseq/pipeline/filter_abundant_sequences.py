@@ -17,10 +17,10 @@ from assemblyline.rnaseq.lib.base import parse_reads_by_qname, \
     get_fastq_encoding, ENCODING_TO_QUAL_FORMAT
 import assemblyline.rnaseq.lib.config as config
 
-def to_fastq(r, readnum, f):
+def to_fastq(r, f):
     seq = DNA_reverse_complement(r.seq) if r.is_reverse else r.seq
     qual = r.qual[::-1] if r.is_reverse else r.qual 
-    print >>f, "@%s/%d\n%s\n+\n%s" % (r.qname, readnum, seq, qual)
+    print >>f, "@%s\n%s\n+\n%s" % (r.qname, seq, qual)
 
 def get_fastqc_encoding(fastqc_data_files):
     # get fastq format from fastqc output
@@ -67,7 +67,7 @@ def filter_reads(input_files, fastq_files, bam_file):
                 pe_mapped_reads.append(mapped_reads)
             if all((len(mapped_reads) == 0) for mapped_reads in pe_mapped_reads):
                 for readnum, reads in enumerate(pe_reads):
-                    to_fastq(reads[0], readnum+1, fastq_fhs[readnum])            
+                    to_fastq(reads[0], fastq_fhs[readnum])            
             else:
                 for readnum,mapped_reads in enumerate(pe_mapped_reads):
                     if len(mapped_reads) == 0:
@@ -108,7 +108,7 @@ def filter_abundant_sequences(fastqc_data_files,
         abundant_sam_file = os.path.join(tmp_dir, config.ABUNDANT_SAM_FILES[readnum])
         abundant_sam_files.append(abundant_sam_file)
         args = ["bowtie2", "-p", num_processors, bowtie2_qual_arg,
-                "--end-to-end", "--sensitive", "--reorder", "-M", 200,
+                "--end-to-end", "--sensitive", "--reorder", 
                 "-x", abundant_index,
                 "-U", input_files[readnum],
                 "-S", abundant_sam_file]
