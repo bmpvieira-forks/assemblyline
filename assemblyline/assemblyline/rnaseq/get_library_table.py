@@ -6,6 +6,7 @@ Created on Oct 15, 2012
 import logging
 import argparse
 import sys
+import os
 
 import assemblyline.rnaseq.lib.config as config
 from assemblyline.rnaseq.lib.libtable import Library, read_library_table_xls
@@ -41,7 +42,8 @@ def main():
     header_fields.extend(["bam_file", "gtf_file"])
     print '\t'.join(header_fields)
     for library in libraries.itervalues():
-        results = config.RnaseqResults(library, server.output_dir)
+        output_dir = os.path.join(server.output_dir, library.library_id)
+        results = config.RnaseqResults(library, output_dir)
         if not results.validate():
             setattr(library, 'description', 'invalid')
         else:

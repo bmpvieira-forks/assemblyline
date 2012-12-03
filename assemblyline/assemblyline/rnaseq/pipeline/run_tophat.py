@@ -7,6 +7,7 @@ import argparse
 import logging
 import subprocess
 import sys
+import os
 
 # project imports
 from assemblyline.rnaseq.lib.fragment_size_distribution import FragmentSizeDistribution
@@ -16,7 +17,8 @@ def run_tophat(output_dir, fastq_files, frag_size_dist_file,
                bowtie_index, library_type, num_processors,
                rg_id, rg_sample, rg_library, rg_description, 
                rg_platform_unit, rg_center, rg_platform,
-               tophat_args, tophat_bin="tophat"):
+               tophat_args, tophat_bin="tophat", 
+               samtools_bin="samtools"):
     #
     # get fragment size parameters for tophat
     #
@@ -47,7 +49,8 @@ def run_tophat(output_dir, fastq_files, frag_size_dist_file,
     args.extend(fastq_files)
     logging.debug("\targs: %s" % (map(str, args)))
     retcode = subprocess.call(map(str, args))
-    return retcode
+    if retcode != 0:
+        return retcode
 
 def main():
     logging.basicConfig(level=logging.DEBUG,

@@ -8,7 +8,7 @@ import logging
 import collections
 import xml.etree.cElementTree as etree
 
-from assemblyline.rnaseq.lib.base import check_executable, check_sam_file, indent_xml, file_exists_and_nz_size
+from assemblyline.rnaseq.lib.base import check_executable, check_sam_file, indent_xml, file_exists_and_nz_size, parse_bool
 from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUT_PAIRED
 from assemblyline.rnaseq.lib.fragment_size_distribution import FragmentSizeDistribution
 
@@ -22,6 +22,7 @@ JOB_ERROR = 1
 DEFAULT_COMPRESS_LEVEL = 5
 # XML files
 LIBRARY_XML_FILE = "library.xml"
+CONFIG_XML_FILE = "config.xml"
 # fastq file names
 FASTQ_PREFIXES = ("read1", "read2")
 FASTQ_FILES = [("%s.fq" % x) for x in FASTQ_PREFIXES] 
@@ -42,7 +43,14 @@ FRAG_SIZE_DIST_PLOT_FILE = "frag_size_dist_plot.pdf"
 # tophat alignment results
 TOPHAT_DIR = 'tophat'
 TOPHAT_BAM_FILE = os.path.join(TOPHAT_DIR, "accepted_hits.bam")
+TOPHAT_BAM_INDEX_FILE = TOPHAT_BAM_FILE + ".bai"
 TOPHAT_JUNCTIONS_FILE = os.path.join(TOPHAT_DIR, "junctions.bed")
+# tophat fusion results
+TOPHAT_FUSION_DIR = 'tophatfusion'
+TOPHAT_FUSION_BAM_FILE = os.path.join(TOPHAT_DIR, "accepted_hits.bam")
+TOPHAT_FUSION_BAM_INDEX_FILE = TOPHAT_FUSION_BAM_FILE + ".bai"
+TOPHAT_FUSION_FILE = os.path.join(TOPHAT_DIR, "fusions.out")
+TOPHAT_FUSION_POST_RESULT_FILE = os.path.join(TOPHAT_FUSION_DIR, 'result.txt')
 # picard metrics files
 PICARD_ALIGNMENT_SUMMARY_METRICS = "picard.alignment_summary_metrics"
 PICARD_INSERT_SIZE_HISTOGRAM_PDF = "picard.insert_size_histogram.pdf"
@@ -61,12 +69,20 @@ CUFFLINKS_DIR = "cufflinks"
 CUFFLINKS_TRANSCRIPTS_GTF_FILE = os.path.join(CUFFLINKS_DIR, "transcripts.gtf")
 CUFFLINKS_GENES_FILE = os.path.join(CUFFLINKS_DIR, "genes.fpkm_tracking")
 CUFFLINKS_ISOFORMS_FILE = os.path.join(CUFFLINKS_DIR, "isoforms.fpkm_tracking")
+# htseq count output
+HTSEQ_COUNT_KNOWN_OUTPUT_FILE = "htseq_count_known_genes.txt"
+# picard mark duplicates output
+TOPHAT_FIXPE_BAM_FILE = "accepted_hits.fixpe.bam"
+TOPHAT_RMDUP_BAM_FILE = "accepted_hits.rmdup.bam"
+PICARD_DUPLICATE_METRICS = "picard.duplicate_metrics"
+# varscan output
+VARSCAN_SNV_FILE = "varscan_snvs.vcf"
+VARSCAN_INDEL_FILE = "varscan_indels.vcf"
 # job complete
 JOB_DONE_FILE = "job.done"
 # job memory and runtime
 PBS_JOB_MEM = 24000
-PBS_JOB_WALLTIME = "80:00:00"
-
+PBS_JOB_WALLTIME = "120:00:00"
 # quality score formats
 SANGER_FORMAT = "sanger"
 SOLEXA_FORMAT = "solexa"
@@ -112,11 +128,14 @@ def check_frag_size_dist_file(filename):
     return is_valid
 
 class RnaseqResults(object):
-    def __init__(self, library, root_dir):
+    def __init__(self, library, output_dir):
         self.library_id = library.library_id
-        self.output_dir = os.path.join(root_dir, library.library_id)
+        self.output_dir = output_dir
         self.tmp_dir = os.path.join(self.output_dir, "tmp")
         self.log_dir = os.path.join(self.output_dir, "log")
+        # pipeline config used to run
+        self.library_xml_file = os.path.join(self.output_dir, LIBRARY_XML_FILE)
+        self.config_xml_file = os.path.join(self.output_dir, CONFIG_XML_FILE)
         # FASTQ files
         self.copied_fastq_files = []
         if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
@@ -139,9 +158,10 @@ class RnaseqResults(object):
         # Fragment size distribution
         self.frag_size_dist_file = os.path.join(self.output_dir, FRAG_SIZE_DIST_FILE)
         self.frag_size_dist_plot_file = os.path.join(self.output_dir, FRAG_SIZE_DIST_PLOT_FILE)
-        # Align reads with tophat
+        # tophat results
         self.tophat_dir = os.path.join(self.output_dir, TOPHAT_DIR)
         self.tophat_bam_file = os.path.join(self.output_dir, TOPHAT_BAM_FILE)
+        self.tophat_bam_index_file = os.path.join(self.output_dir, TOPHAT_BAM_INDEX_FILE)
         self.tophat_juncs_file = os.path.join(self.output_dir, TOPHAT_JUNCTIONS_FILE)
         # Picard metrics
         self.alignment_summary_metrics = os.path.join(self.output_dir, PICARD_ALIGNMENT_SUMMARY_METRICS)
@@ -157,16 +177,35 @@ class RnaseqResults(object):
         self.coverage_bedgraph_file = os.path.join(self.tmp_dir, COVERAGE_BEDGRAPH_FILE)
         # Bigwig file
         self.coverage_bigwig_file = os.path.join(self.output_dir, COVERAGE_BIGWIG_FILE)
+        # tophat fusion results
+        self.tophat_fusion_dir = os.path.join(self.output_dir, TOPHAT_FUSION_DIR)
+        self.tophat_fusion_bam_file = os.path.join(self.output_dir, TOPHAT_FUSION_BAM_FILE)        
+        self.tophat_fusion_bam_index_file = os.path.join(self.output_dir, TOPHAT_FUSION_BAM_INDEX_FILE)
+        self.tophat_fusion_file = os.path.join(self.output_dir, TOPHAT_FUSION_FILE)
+        self.tophat_fusion_post_result_file = os.path.join(self.output_dir, TOPHAT_FUSION_POST_RESULT_FILE)
         # cufflinks output files
         self.cufflinks_dir = os.path.join(self.output_dir, CUFFLINKS_DIR)
         self.cufflinks_gtf_file = os.path.join(self.output_dir, CUFFLINKS_TRANSCRIPTS_GTF_FILE)
         self.cufflinks_genes_fpkm_file = os.path.join(self.output_dir, CUFFLINKS_GENES_FILE)
-        self.cufflinks_isoforms_fpkm_file = os.path.join(self.output_dir, CUFFLINKS_ISOFORMS_FILE)  
+        self.cufflinks_isoforms_fpkm_file = os.path.join(self.output_dir, CUFFLINKS_ISOFORMS_FILE)
+        # htseq-count output files
+        self.htseq_count_known_file = os.path.join(self.output_dir, HTSEQ_COUNT_KNOWN_OUTPUT_FILE)
+        # variant calling output
+        self.tophat_fixpe_bam_file = os.path.join(self.tmp_dir, TOPHAT_FIXPE_BAM_FILE)
+        self.tophat_rmdup_bam_file = os.path.join(self.tmp_dir, TOPHAT_RMDUP_BAM_FILE)
+        self.duplicate_metrics = os.path.join(self.output_dir, PICARD_DUPLICATE_METRICS)
+        self.varscan_snv_file = os.path.join(self.output_dir, VARSCAN_SNV_FILE)
+        self.varscan_indel_file = os.path.join(self.output_dir, VARSCAN_INDEL_FILE)        
         # job finished file
         self.job_done_file = os.path.join(self.output_dir, JOB_DONE_FILE)
 
     def validate(self):
         is_valid = True
+        # read config xml file
+        if not os.path.exists(self.config_xml_file):
+            logging.error("Library %s missing config xml file" % (self.library_id))
+            return False
+        config = PipelineConfig.from_xml(self.config_xml_file)
         # check FASTQC results
         for f in self.fastqc_data_files:
             if not file_exists_and_nz_size(f):
@@ -192,6 +231,10 @@ class RnaseqResults(object):
         if not check_sam_file(self.tophat_bam_file, isbam=True):
             logging.error("Library %s missing/corrupt tophat BAM file" % (self.library_id))
             is_valid = False
+        # check bam index
+        if not file_exists_and_nz_size(self.tophat_bam_index_file):
+            logging.error("Library %s missing tophat BAM index" % (self.library_id))
+            is_valid = False
         # check picard summary metrics
         if not file_exists_and_nz_size(self.alignment_summary_metrics):
             logging.error("Library %s missing picard alignment summary metrics" % (self.library_id))
@@ -213,14 +256,47 @@ class RnaseqResults(object):
         if not file_exists_and_nz_size(self.coverage_bigwig_file):
             logging.error("Library %s missing coverage bigwig file" % (self.library_id))
             is_valid = False
-        # check cufflinks files
-        if not file_exists_and_nz_size(self.cufflinks_gtf_file):
-            logging.error("Library %s missing cufflinks gtf file" % (self.library_id))
-            is_valid = False
         # check job done file
         if not os.path.exists(self.job_done_file):
             logging.error("Library %s missing job done file" % (self.library_id))
-            is_valid = False
+            is_valid = False            
+        # check tophat fusion (optional)
+        if config.tophat_fusion_run:
+            # check tophat fusion bam file
+            if not check_sam_file(self.tophat_fusion_bam_file, isbam=True):
+                logging.error("Library %s missing/corrupt tophat fusion BAM file" % (self.library_id))
+                is_valid = False
+            # check tophat fusion bam file
+            if not file_exists_and_nz_size(self.tophat_fusion_file):
+                logging.error("Library %s missing/corrupt tophat fusion file" % (self.library_id))
+                is_valid = False
+            # check tophat fusion post result file
+            if config.tophat_fusion_post_run:
+                if not file_exists_and_nz_size(self.tophat_fusion_post_result_file):
+                    logging.error("Library %s missing/corrupt tophat fusion post result file" % (self.library_id))
+                    is_valid = False
+        # check cufflinks files
+        if config.cufflinks_run:
+            if not file_exists_and_nz_size(self.cufflinks_gtf_file):
+                logging.error("Library %s missing cufflinks gtf file" % (self.library_id))
+                is_valid = False
+        # check htseq files
+        if config.htseq_run:
+            if not file_exists_and_nz_size(self.htseq_count_known_file):
+                logging.error("Library %s missing htseq-count output file" % (self.library_id))
+                is_valid = False
+        # check variant calling files
+        if config.varscan_run:
+            if not file_exists_and_nz_size(self.duplicate_metrics):
+                logging.error("Library %s missing picard duplicate metrics file" % (self.library_id))
+                is_valid = False
+            # check varscan files
+            if not file_exists_and_nz_size(self.varscan_snv_file):
+                logging.error("Library %s missing varscan snv file" % (self.library_id))
+                is_valid = False
+            if not file_exists_and_nz_size(self.varscan_indel_file):
+                logging.error("Library %s missing varscan indel file" % (self.library_id))
+                is_valid = False
         return is_valid
 
 class GenomeConfig(object):
@@ -228,11 +304,15 @@ class GenomeConfig(object):
               "abundant_bowtie2_index",
               "genome_fasta_file",
               "genome_lexicographical_fasta_file",
+              "genome_bowtie_index",
               "genome_bowtie2_index",
               "fragment_size_bowtie_index",
               "gene_annotation_refflat",
+              "gene_annotation_refgene",
+              "gene_annotation_ensgene",
               "picard_ribosomal_intervals",
-              "chrom_sizes")
+              "chrom_sizes",
+              "known_genes_gtf")
     
     @staticmethod
     def from_xml_elem(elem):
@@ -263,6 +343,9 @@ class GenomeConfig(object):
         if not os.path.exists(os.path.join(abs_root_dir, self.abundant_bowtie2_index + ".fa")):
             logging.error("Abundant sequences fasta file %s not found" % (self.abundant_bowtie2_index))
             valid = False
+        if not os.path.exists(os.path.join(abs_root_dir, self.genome_bowtie_index + ".1.ebwt")):
+            logging.error("Genome bowtie index %s not found" % (self.genome_bowtie_index))
+            valid = False
         if not os.path.exists(os.path.join(abs_root_dir, self.genome_bowtie2_index + ".1.bt2")):
             logging.error("Genome bowtie2 index %s not found" % (self.genome_bowtie2_index))
             valid = False
@@ -272,8 +355,11 @@ class GenomeConfig(object):
         for attrname in ("genome_fasta_file",
                          "genome_lexicographical_fasta_file",
                          "gene_annotation_refflat",
+                         "gene_annotation_refgene",
+                         "gene_annotation_ensgene",
                          "picard_ribosomal_intervals",
-                         "chrom_sizes"):
+                         "chrom_sizes",
+                         "known_genes_gtf"):
             if not os.path.exists(os.path.join(abs_root_dir, getattr(self, attrname))):
                 logging.error("Annotation file %s not found" % (getattr(self, attrname)))
                 valid = False
@@ -392,11 +478,34 @@ class PipelineConfig(object):
         elem = root.find("tophat")
         for arg_elem in elem.findall("arg"):
             c.tophat_args.append(arg_elem.text)
+        # tophat fusion parameters
+        c.tophat_fusion_args = []
+        elem = root.find("tophatfusion")
+        c.tophat_fusion_run = parse_bool(elem.get("run", "no"))
+        for arg_elem in elem.findall("arg"):
+            c.tophat_fusion_args.append(arg_elem.text)
+        # tophat-fusion-post parameters
+        c.tophat_fusion_post_args = []
+        elem = root.find("tophatfusionpost")
+        c.tophat_fusion_post_run = parse_bool(elem.get("run", "no"))
+        for arg_elem in elem.findall("arg"):
+            c.tophat_fusion_post_args.append(arg_elem.text)
         # cufflinks parameters
         c.cufflinks_args = []
         elem = root.find("cufflinks")
+        c.cufflinks_run = parse_bool(elem.get("run", "no"))
         for arg_elem in elem.findall("arg"):
             c.cufflinks_args.append(arg_elem.text)
+        # htseq parameters
+        elem = root.find("htseq")
+        c.htseq_run = parse_bool(elem.get("run", "no"))
+        c.htseq_count_stranded = elem.findtext("stranded")
+        # varscan parameters
+        c.varscan_args = []
+        elem = root.find("varscan")
+        c.varscan_run = parse_bool(elem.get("run", "no"))
+        for arg_elem in elem.findall("arg"):
+            c.varscan_args.append(arg_elem.text)
         # server setup
         c.servers = {}
         for elem in root.findall("server"):
@@ -428,11 +537,35 @@ class PipelineConfig(object):
         tophat_elem = etree.SubElement(root, "tophat")
         for arg in self.tophat_args:
             elem = etree.SubElement(tophat_elem, "arg")
+            elem.text = arg            
+        # tophat fusion parameters
+        tophat_fusion_elem = etree.SubElement(root, "tophatfusion")
+        tophat_fusion_elem.set("run", self.tophat_fusion_run)
+        for arg in self.tophat_fusion_args:
+            elem = etree.SubElement(tophat_fusion_elem, "arg")
+            elem.text = arg
+        # tophat fusion post parameters
+        tophat_fusion_post_elem = etree.SubElement(root, "tophatfusionpost")
+        tophat_fusion_post_elem.set("run", self.tophat_fusion_post_run)
+        for arg in self.tophat_fusion_post_args:
+            elem = etree.SubElement(tophat_fusion_post_elem, "arg")
             elem.text = arg
         # cufflinks parameters
         cufflinks_elem = etree.SubElement(root, "cufflinks")
+        cufflinks_elem.set("run", self.cufflinks_run)
         for arg in self.cufflinks_args:
             elem = etree.SubElement(cufflinks_elem, "arg")
+            elem.text = arg
+        # htseq parameters
+        htseq_elem = etree.SubElement(root, "htseq")
+        htseq_elem.set("run", self.htseq_run)
+        elem = etree.SubElement(htseq_elem, "stranded")
+        elem.text = self.htseq_count_stranded
+        # varscan parameters
+        varscan_elem = etree.SubElement(root, "varscan")
+        varscan_elem.set("run", self.varscan_run)
+        for arg in self.varscan_args:
+            elem = etree.SubElement(varscan_elem, "arg")
             elem.text = arg
         # servers
         for server in self.servers.itervalues():            
@@ -504,6 +637,18 @@ class PipelineConfig(object):
             else:
                 logging.error("Picard jarfile '%s' not found" % (jarfile))
                 valid = False
+        # varscan
+        if "VARSCANPATH" not in os.environ:
+            logging.debug("VARSCANPATH environment variable not set")
+            valid = False
+        else:
+            varscan_dir = os.environ["VARSCANPATH"]
+            jarfile = os.path.join(varscan_dir, "VarScan.jar")
+            if os.path.exists(jarfile):
+                logging.debug("Checking for varscan... found")
+            else:
+                logging.error("VarScan jarfile '%s' not found" % (jarfile))
+                valid = False
         # check R
         msg = 'R'
         if check_executable(self.r_bin):
@@ -566,6 +711,13 @@ class PipelineConfig(object):
             logging.debug("Checking for '%s' binaries... found" % msg)
         else:
             logging.error("'%s' binaries not found or not executable" % msg)
+            valid = False
+        # check htseq-count
+        msg = 'htseq-count'
+        if check_executable("htseq-count"):
+            logging.debug("Checking for '%s' binary... found" % msg)
+        else:
+            logging.error("'%s' binary not found or not executable" % msg)
             valid = False
         # check for bx python library
         try:
