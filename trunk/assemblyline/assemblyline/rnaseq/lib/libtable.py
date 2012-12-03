@@ -30,6 +30,7 @@ import collections
 FRAGMENT_LAYOUT_SINGLE = "single"
 FRAGMENT_LAYOUT_PAIRED = "paired"
 FRAGMENT_LAYOUT_UNKNOWN = "unknown"
+FRAGMENT_LAYOUTS = (FRAGMENT_LAYOUT_SINGLE, FRAGMENT_LAYOUT_PAIRED)
 
 # strand protocols
 FR_FIRSTSTRAND = 'fr-firststrand'
@@ -61,14 +62,16 @@ class Library(object):
             self.bam_files = []
         else:
             self.bam_files = kwargs['bam_files'].split(",")
-        if (len(self.read1_files) == 0 and
-            len(self.read2_files) == 0):
-            self.fragment_layout = FRAGMENT_LAYOUT_UNKNOWN
-        elif (len(self.read1_files) > 0 and
-              len(self.read2_files) == 0):
-            self.fragment_layout = FRAGMENT_LAYOUT_SINGLE
-        else:
-            self.fragment_layout = FRAGMENT_LAYOUT_PAIRED
+        # determine fragment layout
+        if self.fragment_layout not in FRAGMENT_LAYOUTS:        
+            if (len(self.read1_files) > 0 and
+                len(self.read2_files) > 0):
+                self.fragment_layout = FRAGMENT_LAYOUT_PAIRED
+            elif (len(self.read1_files) > 0 and
+                  len(self.read2_files) == 0):
+                self.fragment_layout = FRAGMENT_LAYOUT_SINGLE
+            else:
+                self.fragment_layout = FRAGMENT_LAYOUT_UNKNOWN
         # custom parameters
         self.params = kwargs["params"]
 
@@ -126,6 +129,9 @@ class Library(object):
         # check that RNA samples have valid strand protocol
         if (self.library_type not in LIBRARY_TYPES):
             logging.error("Invalid library type %s" % (self.library_type))
+            is_valid = False
+        if self.fragment_layout not in FRAGMENT_LAYOUTS:
+            logging.error("Unknown fragment layout")
             is_valid = False
         if len(self.read1_files) == 0:
             logging.error("Library %s read 1 files not found" % (self.library_id))

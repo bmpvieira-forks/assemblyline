@@ -241,9 +241,30 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     shell_commands.append("cp %s %s" % (config_xml_file, results.config_xml_file))
     shell_commands.append(bash_check_retcode())
     #
+    # extract fastq from bam input files
+    #
+    input_files = library.bam_files
+    output_files = results.bam_read1_files + results.bam_read2_files
+    skip = many_up_to_date(output_files, input_files)
+    msg = "Converting BAM input files to FASTQ"
+    if skip:
+        logging.info("[SKIPPED] %s" % msg)
+    else:
+        logging.info(msg)
+        # convert bam to fastq
+        for i,prefix in enumerate(results.bam_fastq_prefixes):
+            args = [sys.executable,
+                    os.path.join(_pipeline_dir, "bam_to_fastq.py"),
+                    "--fragment-layout", library.fragment_layout,
+                    library.bam_files[i], prefix, 
+                    "$PICARDPATH", results.tmp_dir]
+            command = ' '.join(map(str, args))
+            shell_commands.append(command)
+            shell_commands.append(bash_check_retcode()) 
+    #
     # copy/concatenate sequences read1
     #
-    input_files = library.read1_files
+    input_files = library.read1_files + results.bam_read1_files
     output_files = [results.copied_fastq_files[0]]
     skip = many_up_to_date(output_files, input_files)
     msg = "Concatenating/copying read1 sequence files"
@@ -251,13 +272,14 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.info("[SKIPPED] %s" % msg)
     else:
         logging.info(msg)
-        commands = concatenate_sequences(library.read1_files, results.copied_fastq_files[0])
+        commands = concatenate_sequences(library.read1_files + results.bam_read1_files, 
+                                         results.copied_fastq_files[0])
         shell_commands.extend(commands)
     #
     # copy/concatenate sequences read2
     #
     if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:    
-        input_files = library.read2_files
+        input_files = library.read2_files + results.bam_read2_files
         output_files = [results.copied_fastq_files[1]]
         skip = many_up_to_date(output_files, input_files)
         msg = "Concatenating/copying read2 sequence files"
@@ -265,7 +287,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
             logging.info("[SKIPPED] %s" % msg)
         else:
             logging.info(msg)
-            commands = concatenate_sequences(library.read2_files, results.copied_fastq_files[1])
+            commands = concatenate_sequences(library.read2_files + results.bam_read2_files, 
+                                             results.copied_fastq_files[1])
             shell_commands.extend(commands)
     #
     # Run FASTQC quality assessment
@@ -283,6 +306,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         args.extend(results.copied_fastq_files)
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'fastqc.log')
+        command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())   
     #
@@ -307,6 +332,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 results.tmp_dir]
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'filter_abundant_sequences.log')
+        command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())   
     #
@@ -335,6 +362,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         args.extend(results.filtered_fastq_files)
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'estimate_fragment_size_distribution.log')
+        command += ' > %s 2>&1' % (log_file)        
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())
     #
@@ -343,7 +372,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     input_files = results.filtered_fastq_files + [results.frag_size_dist_file]
     output_files = [results.tophat_fusion_bam_file]
     msg = "Aligning reads with Tophat-Fusion"
-    skip = (pipeline.tophat_fusion_run and 
+    skip = ((not pipeline.tophat_fusion_run) or 
             many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % (msg))
@@ -367,6 +396,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         args.extend(results.filtered_fastq_files)
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'tophat_fusion.log')
+        command += ' > %s 2>&1' % (log_file)        
         shell_commands.append(command)        
         shell_commands.append(bash_check_retcode())
     #
@@ -375,7 +406,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     input_files = [results.tophat_fusion_bam_file]
     output_files = [results.tophat_fusion_bam_index_file]
     msg = "Indexing Tophat-Fusion BAM file"
-    skip = (pipeline.tophat_fusion_run and 
+    skip = ((not pipeline.tophat_fusion_run) or
             many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % (msg))
@@ -392,8 +423,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     input_files = [results.tophat_fusion_file]
     output_files = [results.tophat_fusion_post_result_file]
     msg = "Post-processing Tophat-Fusion results"
-    skip = (pipeline.tophat_fusion_run and
-            pipeline.tophat_fusion_post_run and 
+    skip = (((not pipeline.tophat_fusion_run) and
+             (not pipeline.tophat_fusion_post_run)) or 
             many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % (msg))
@@ -410,6 +441,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                      results.library_id])
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'tophat_fusion_post.log')
+        command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)        
         shell_commands.append(bash_check_retcode())
     #
@@ -441,6 +474,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         args.extend(results.filtered_fastq_files)
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'tophat.log')
+        command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)        
         shell_commands.append(bash_check_retcode())
     #
@@ -482,6 +517,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 "VALIDATION_STRINGENCY=SILENT"]
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'picard_collect_multiple_metrics.log')
+        command += ' > %s 2>&1' % (log_file)        
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())   
     #
@@ -509,6 +546,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 #"VALIDATION_STRINGENCY=SILENT"]
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'picard_collect_rnaseq_metrics.log')
+        command += ' > %s 2>&1' % (log_file)                
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())   
     #
@@ -553,8 +592,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Assembling transcriptome with Cufflinks"
     input_files = [results.frag_size_dist_file, 
                    results.tophat_bam_file]
-    output_files = [results.cufflinks_gtf_file]
-    skip = (pipeline.cufflinks_run and
+    output_files = [results.cufflinks_gtf_file]    
+    skip = ((not pipeline.cufflinks_run) or
             many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % msg)
@@ -579,6 +618,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                      results.frag_size_dist_file])
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'cufflinks.log')
+        command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())
     #
@@ -587,7 +628,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Counting reads across genes with htseq-count"
     output_files = [results.htseq_count_known_file]
     input_files = [results.tophat_bam_file]
-    skip = (pipeline.htseq_run and
+    skip = ((not pipeline.htseq_run) or
             many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % msg)
@@ -601,6 +642,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 results.tmp_dir]                
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'htseq_count_known.log')
+        command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())    
     #
@@ -609,27 +652,23 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Removing duplicate reads with Picard"
     input_files = [results.tophat_bam_file]
     output_files = [results.tophat_rmdup_bam_file]
-    skip = (pipeline.varscan_run and
+    skip = ((not pipeline.varscan_run) or
             many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % msg)
     else:
         logging.info(msg)
-        #args = [sys.executable, os.path.join(_pipeline_dir, "fix_pe_qname.py"),
-        #        results.tophat_bam_file, results.tophat_fixpe_bam_file]
-        #logging.debug("\targs: %s" % (' '.join(map(str, args))))
-        #command = ' '.join(map(str, args))
-        #shell_commands.append(command)
-        #shell_commands.append(bash_check_retcode())
         args = ["java", "-jar", 
                 "$PICARDPATH/MarkDuplicates.jar",
-                "INPUT=%s" % (results.tophat_fixpe_bam_file),
+                "INPUT=%s" % (results.tophat_bam_file),
                 "OUTPUT=%s" % (results.tophat_rmdup_bam_file),
                 "METRICS_FILE=%s" % (results.duplicate_metrics),
                 "REMOVE_DUPLICATES=true",
                 "TMP_DIR=%s" % results.tmp_dir]
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'picard_mark_duplicates.log')
+        command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())   
     #
@@ -638,7 +677,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Calling variants with VarScan"
     output_files = [results.varscan_snv_file, results.varscan_indel_file]
     input_files = [results.tophat_rmdup_bam_file]
-    skip = (pipeline.varscan_run and
+    skip = ((not pipeline.varscan_run) or
             many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % msg)
@@ -654,6 +693,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                      results.varscan_indel_file])
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'varscan.log')
+        command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())
     #
