@@ -47,9 +47,9 @@ TOPHAT_BAM_INDEX_FILE = TOPHAT_BAM_FILE + ".bai"
 TOPHAT_JUNCTIONS_FILE = os.path.join(TOPHAT_DIR, "junctions.bed")
 # tophat fusion results
 TOPHAT_FUSION_DIR = 'tophatfusion'
-TOPHAT_FUSION_BAM_FILE = os.path.join(TOPHAT_DIR, "accepted_hits.bam")
+TOPHAT_FUSION_BAM_FILE = os.path.join(TOPHAT_FUSION_DIR, "accepted_hits.bam")
 TOPHAT_FUSION_BAM_INDEX_FILE = TOPHAT_FUSION_BAM_FILE + ".bai"
-TOPHAT_FUSION_FILE = os.path.join(TOPHAT_DIR, "fusions.out")
+TOPHAT_FUSION_FILE = os.path.join(TOPHAT_FUSION_DIR, "fusions.out")
 TOPHAT_FUSION_POST_RESULT_FILE = os.path.join(TOPHAT_FUSION_DIR, 'result.txt')
 # picard metrics files
 PICARD_ALIGNMENT_SUMMARY_METRICS = "picard.alignment_summary_metrics"
@@ -72,7 +72,6 @@ CUFFLINKS_ISOFORMS_FILE = os.path.join(CUFFLINKS_DIR, "isoforms.fpkm_tracking")
 # htseq count output
 HTSEQ_COUNT_KNOWN_OUTPUT_FILE = "htseq_count_known_genes.txt"
 # picard mark duplicates output
-TOPHAT_FIXPE_BAM_FILE = "accepted_hits.fixpe.bam"
 TOPHAT_RMDUP_BAM_FILE = "accepted_hits.rmdup.bam"
 PICARD_DUPLICATE_METRICS = "picard.duplicate_metrics"
 # varscan output
@@ -136,6 +135,16 @@ class RnaseqResults(object):
         # pipeline config used to run
         self.library_xml_file = os.path.join(self.output_dir, LIBRARY_XML_FILE)
         self.config_xml_file = os.path.join(self.output_dir, CONFIG_XML_FILE)
+        # BAM FASTQ files
+        self.bam_fastq_prefixes = []
+        self.bam_read1_files = []
+        self.bam_read2_files = []
+        for i in xrange(len(library.bam_files)):
+            prefix = os.path.join(self.tmp_dir, "bam_file%03d" % (i))
+            self.bam_fastq_prefixes.append(prefix)
+            self.bam_read1_files.append(prefix + "_1.fq")
+            if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
+                self.bam_read2_files.append(prefix + "_2.fq")
         # FASTQ files
         self.copied_fastq_files = []
         if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
@@ -191,7 +200,6 @@ class RnaseqResults(object):
         # htseq-count output files
         self.htseq_count_known_file = os.path.join(self.output_dir, HTSEQ_COUNT_KNOWN_OUTPUT_FILE)
         # variant calling output
-        self.tophat_fixpe_bam_file = os.path.join(self.tmp_dir, TOPHAT_FIXPE_BAM_FILE)
         self.tophat_rmdup_bam_file = os.path.join(self.tmp_dir, TOPHAT_RMDUP_BAM_FILE)
         self.duplicate_metrics = os.path.join(self.output_dir, PICARD_DUPLICATE_METRICS)
         self.varscan_snv_file = os.path.join(self.output_dir, VARSCAN_SNV_FILE)

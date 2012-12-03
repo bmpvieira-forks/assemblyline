@@ -15,11 +15,11 @@ def run_varscan(ref_fa,
                 indel_file,
                 varscan_jar,
                 varscan_args):
-    # create mpileup file to pipe into varscan
+    # run varscan snv
     args = ["samtools", "mpileup", "-f", ref_fa, bam_file]
     samtools_p = subprocess.Popen(args, stdout=subprocess.PIPE)
-    # run varscan snv
     args = ["java", "-jar", varscan_jar, "mpileup2snp"]
+    args.extend(varscan_args)
     outfh = open(snv_file, "w")
     retcode1 = subprocess.call(args, stdin=samtools_p.stdout, stdout=outfh)
     retcode2 = samtools_p.wait()
@@ -33,6 +33,7 @@ def run_varscan(ref_fa,
     args = ["samtools", "mpileup", "-f", ref_fa, bam_file]
     samtools_p = subprocess.Popen(args, stdout=subprocess.PIPE)    
     args = ["java", "-jar", varscan_jar, "mpileup2indel"]
+    args.extend(varscan_args)
     outfh = open(indel_file, "w")
     retcode1 = subprocess.call(args, stdin=samtools_p.stdout, stdout=outfh)
     retcode2 = samtools_p.wait()
