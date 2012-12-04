@@ -9,6 +9,8 @@ import logging
 import argparse
 import xml.etree.cElementTree as etree
 
+from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUT_SINGLE, FRAGMENT_LAYOUT_PAIRED
+
 def main():
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -24,7 +26,8 @@ def main():
     # print file headers
     header_fields = ["study_id", "cohort_id", "patient_id", "sample_id", 
                      "library_id", "description", "species", "library_type",
-                     "seq_repo", "read1_files", "read2_files", "bam_files"]
+                     "fragment_layout", "seq_repo", 
+                     "read1_files", "read2_files", "bam_files"]
     print '\t'.join(header_fields)
     print '\t'.join(header_fields)
     for elem in root.findall("Result"):
@@ -35,6 +38,11 @@ def main():
         analysis_id = elem.findtext("analysis_id")
         disease_abbr = elem.findtext("disease_abbr")
         description = elem.findtext("legacy_sample_id")
+        paired_elem = elem.find("experiment_xml/EXPERIMENT_SET/EXPERIMENT/DESIGN/LIBRARY_DESCRIPTOR/LIBRARY_LAYOUT/PAIRED")
+        if paired_elem is not None:
+            fragment_layout = FRAGMENT_LAYOUT_PAIRED
+        else:
+            fragment_layout = FRAGMENT_LAYOUT_SINGLE
         bam_files = []
         # find bam file
         files_elem = elem.find("files")
@@ -61,10 +69,9 @@ def main():
             logging.error("Analysis %s has multiple valid bam files" % (analysis_id))
             continue
         fields = [study_id, disease_abbr, patient_id, sample_id, library_id,
-                  description, args.species, args.library_type, args.seq_repo,
-                  "", "", bam_files[0]]
+                  description, args.species, args.library_type, fragment_layout, 
+                  args.seq_repo, "", "", bam_files[0]]
         print '\t'.join(fields)
-    
 
 if __name__ == '__main__':
     sys.exit(main())

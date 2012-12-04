@@ -14,7 +14,6 @@ from assemblyline.rnaseq.lib.fragment_size_distribution import FragmentSizeDistr
 
 # default parameter values
 MIN_FRAG_SIZE_SAMPLES = 100
-
 # job return codes
 JOB_SUCCESS = 0
 JOB_ERROR = 1

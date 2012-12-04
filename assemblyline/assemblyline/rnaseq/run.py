@@ -254,13 +254,14 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         # convert bam to fastq
         for i,prefix in enumerate(results.bam_fastq_prefixes):
             args = [sys.executable,
-                    os.path.join(_pipeline_dir, "bam_to_fastq.py"),
+                    os.path.join(_pipeline_dir, "extract_fastq_from_bam.py"),
+                    "--readnum-in-qname",
+                    "--tmp-dir", results.tmp_dir,
                     "--fragment-layout", library.fragment_layout,
-                    library.bam_files[i], prefix, 
-                    "$PICARDPATH", results.tmp_dir]
+                    library.bam_files[i], prefix] 
             command = ' '.join(map(str, args))
             shell_commands.append(command)
-            shell_commands.append(bash_check_retcode()) 
+            shell_commands.append(bash_check_retcode())
     #
     # copy/concatenate sequences read1
     #
