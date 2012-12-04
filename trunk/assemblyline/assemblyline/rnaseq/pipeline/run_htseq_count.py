@@ -36,7 +36,8 @@ def run_htseq_count(bam_file, gtf_file, output_file, tmp_dir, stranded):
     prefix = os.path.join(tmp_dir, os.path.splitext(os.path.basename(bam_file))[0])
     sorted_bam_prefix = prefix + ".srt"
     sorted_bam_file = sorted_bam_prefix + ".bam"
-    args = ["samtools", "sort", "-n", bam_file, sorted_bam_prefix]
+    args = ["samtools", "sort", "-m", "2000000000",
+            "-n", bam_file, sorted_bam_prefix]
     logging.debug("samtools sort args: %s" % (map(str, args)))
     retcode = subprocess.call(args)
     if retcode != 0:
