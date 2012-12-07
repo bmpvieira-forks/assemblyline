@@ -10,29 +10,36 @@ import sys
 import os
 
 # project imports
-from assemblyline.rnaseq.lib.fragment_size_distribution import FragmentSizeDistribution
+from assemblyline.rnaseq.lib.inspect import RnaseqLibraryCharacteristics
 from assemblyline.rnaseq.lib.base import detect_read_length
+import assemblyline.rnaseq.lib.config as config
 
-def run_tophat(output_dir, fastq_files, frag_size_dist_file,
+def run_tophat(output_dir, fastq_files, library_metrics_file,
                bowtie_index, library_type, num_processors,
                rg_id, rg_sample, rg_library, rg_description, 
                rg_platform_unit, rg_center, rg_platform,
                tophat_args, tophat_bin="tophat", 
                samtools_bin="samtools"):
-    #
+    # read library characteristics information
+    obj = RnaseqLibraryCharacteristics.from_file(open(library_metrics_file))
     # get fragment size parameters for tophat
-    #
     read_length = detect_read_length(fastq_files[0])
-    frag_size_dist = FragmentSizeDistribution.from_file(open(frag_size_dist_file))
-    mean_inner_dist = int(frag_size_dist.isize_at_percentile(50.0) - (2*read_length))
-    mate_stdev = int(round(frag_size_dist.std(),0))
-    logging.info("Tophat mean_inner_dist=%d and mate_stdev=%d" % (mean_inner_dist, mate_stdev))
+    obj = RnaseqLibraryCharacteristics.from_file(open(library_metrics_file))
+    mean_inner_dist = int(obj.tlen_at_percentile(50.0) - (2*read_length))
+    mate_stdev = int(round(obj.std(),0))
+    logging.info("Tophat mean_inner_dist=%d and mate_stdev=%d" % 
+                 (mean_inner_dist, mate_stdev))
+    # predict library type
+    predicted_library_type = obj.predict_library_type(config.STRAND_SPECIFIC_CUTOFF_FRAC)
+    if library_type != predicted_library_type:
+        logging.warning("Library type %s does not agree with prediction %s" % 
+                        (library_type, predicted_library_type))
     #
     # setup run
     #
     args = [tophat_bin,
             "-o", output_dir,
-            "--library-type", library_type,
+            "--library-type", predicted_library_type,
             "-p", num_processors,
             "-r", mean_inner_dist,
             "--mate-std-dev", mate_stdev,
@@ -69,12 +76,12 @@ def main():
     parser.add_argument("--rg-platform", dest="rg_platform")
     parser.add_argument("output_dir")
     parser.add_argument("bowtie_index")
-    parser.add_argument("frag_size_dist_file")
+    parser.add_argument("library_metrics_file")
     parser.add_argument("fastq_files", nargs="+")
     args = parser.parse_args()
     return run_tophat(output_dir=args.output_dir,
                       fastq_files=args.fastq_files,
-                      frag_size_dist_file=args.frag_size_dist_file,
+                      library_metrics_file=args.library_metrics_file,
                       bowtie_index=args.bowtie_index,
                       library_type=args.library_type,
                       num_processors=args.num_processors, 

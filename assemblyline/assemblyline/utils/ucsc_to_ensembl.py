@@ -37,7 +37,7 @@ ensembl_to_ucsc_dict = dict((v,k) for k,v in ucsc_to_ensembl_dict.iteritems())
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-r", action="store_true", default=False, dest="reverse")
-parser.add_argument("--col", dest="colnum", type=int, default=0)
+parser.add_argument("--col", dest="colnum", type=int, default=1)
 parser.add_argument("filename")
 args = parser.parse_args()
 colnum = max(0, args.colnum - 1)

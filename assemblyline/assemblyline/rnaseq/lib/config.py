@@ -10,10 +10,12 @@ import xml.etree.cElementTree as etree
 
 from assemblyline.rnaseq.lib.base import check_executable, check_sam_file, indent_xml, file_exists_and_nz_size, parse_bool
 from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUT_PAIRED
-from assemblyline.rnaseq.lib.fragment_size_distribution import FragmentSizeDistribution
+from assemblyline.rnaseq.lib.inspect import RnaseqLibraryCharacteristics
 
 # default parameter values
-MIN_FRAG_SIZE_SAMPLES = 100
+MIN_INSPECT_SAMPLES = 100
+MAX_INSPECT_SAMPLES = 1000000
+STRAND_SPECIFIC_CUTOFF_FRAC = 0.90
 # job return codes
 JOB_SUCCESS = 0
 JOB_ERROR = 1
@@ -33,12 +35,15 @@ FASTQC_REPORT_FILE = "fastqc_report.html"
 ABUNDANT_SAM_FILES = ('abundant_hits_read1.sam', 'abundant_hits_read2.sam')
 ABUNDANT_BAM_FILE = 'abundant_hits.bam'
 SORTED_ABUNDANT_BAM_FILE = 'abundant_hits.srt.bam'
+ABUNDANT_COUNTS_FILE = 'abundant_counts.txt'
 # filtered fastq files
 FILTERED_FASTQ_PREFIX = 'filtered_read'
 FILTERED_FASTQ_FILES = tuple(("%s%d.fq" % (FILTERED_FASTQ_PREFIX,x)) for x in (1,2)) 
-# fragment size distribution
-FRAG_SIZE_DIST_FILE = "frag_size_dist.txt"
+# rnaseq library inspection
+LIBRARY_METRICS_FILE = "library_metrics.txt"
 FRAG_SIZE_DIST_PLOT_FILE = "frag_size_dist_plot.pdf"
+# repeat elements
+REPEAT_ELEMENTS_FILE = "repeat_element_counts.txt"
 # tophat alignment results
 TOPHAT_DIR = 'tophat'
 TOPHAT_BAM_FILE = os.path.join(TOPHAT_DIR, "accepted_hits.bam")
@@ -50,6 +55,12 @@ TOPHAT_FUSION_BAM_FILE = os.path.join(TOPHAT_FUSION_DIR, "accepted_hits.bam")
 TOPHAT_FUSION_BAM_INDEX_FILE = TOPHAT_FUSION_BAM_FILE + ".bai"
 TOPHAT_FUSION_FILE = os.path.join(TOPHAT_FUSION_DIR, "fusions.out")
 TOPHAT_FUSION_POST_RESULT_FILE = os.path.join(TOPHAT_FUSION_DIR, 'result.txt')
+TOPHAT_FUSION_POST_HTML_FILE = os.path.join(TOPHAT_FUSION_DIR, 'result.html')
+TOPHAT_FUSION_TMP_FILES = (os.path.join(TOPHAT_FUSION_DIR, f) 
+                           for f in ("check", "fusion_seq.bwtout", 
+                                     "fusion_seq.map", 
+                                     "fusion_seq.fa", 
+                                     "potential_fusion.txt"))
 # picard metrics files
 PICARD_ALIGNMENT_SUMMARY_METRICS = "picard.alignment_summary_metrics"
 PICARD_INSERT_SIZE_HISTOGRAM_PDF = "picard.insert_size_histogram.pdf"
@@ -114,13 +125,13 @@ def check_tophat_juncs_file(filename):
             return True
     return lines > 0
 
-def check_frag_size_dist_file(filename):
+def check_library_metrics(filename):
     is_valid=True
     if not file_exists_and_nz_size(filename):
         is_valid = False
     else:
         try:
-            frag_size_dist = FragmentSizeDistribution.from_file(open(filename))
+            obj = RnaseqLibraryCharacteristics.from_file(open(filename))
         except:
             is_valid = False    
     return is_valid
@@ -161,11 +172,14 @@ class RnaseqResults(object):
         self.filtered_fastq_files = []
         for readnum in xrange(len(self.copied_fastq_files)):
             self.filtered_fastq_files.append(os.path.join(self.tmp_dir, FILTERED_FASTQ_FILES[readnum]))
-        # Sorted abundant reads bam file
+        # sorted abundant reads bam file
         self.sorted_abundant_bam_file = os.path.join(self.output_dir, SORTED_ABUNDANT_BAM_FILE)
+        self.abundant_counts_file = os.path.join(self.output_dir, ABUNDANT_COUNTS_FILE)
         # Fragment size distribution
-        self.frag_size_dist_file = os.path.join(self.output_dir, FRAG_SIZE_DIST_FILE)
+        self.library_metrics_file = os.path.join(self.output_dir, LIBRARY_METRICS_FILE)
         self.frag_size_dist_plot_file = os.path.join(self.output_dir, FRAG_SIZE_DIST_PLOT_FILE)
+        # repeat element results
+        self.repeat_elements_file = os.path.join(self.output_dir, REPEAT_ELEMENTS_FILE)
         # tophat results
         self.tophat_dir = os.path.join(self.output_dir, TOPHAT_DIR)
         self.tophat_bam_file = os.path.join(self.output_dir, TOPHAT_BAM_FILE)
@@ -191,6 +205,7 @@ class RnaseqResults(object):
         self.tophat_fusion_bam_index_file = os.path.join(self.output_dir, TOPHAT_FUSION_BAM_INDEX_FILE)
         self.tophat_fusion_file = os.path.join(self.output_dir, TOPHAT_FUSION_FILE)
         self.tophat_fusion_post_result_file = os.path.join(self.output_dir, TOPHAT_FUSION_POST_RESULT_FILE)
+        self.tophat_fusion_tmp_files = (os.path.join(self.output_dir, f) for f in TOPHAT_FUSION_TMP_FILES)
         # cufflinks output files
         self.cufflinks_dir = os.path.join(self.output_dir, CUFFLINKS_DIR)
         self.cufflinks_gtf_file = os.path.join(self.output_dir, CUFFLINKS_TRANSCRIPTS_GTF_FILE)
@@ -208,112 +223,142 @@ class RnaseqResults(object):
 
     def validate(self):
         is_valid = True
+        missing_files = []
         # read config xml file
         if not os.path.exists(self.config_xml_file):
             logging.error("Library %s missing config xml file" % (self.library_id))
-            return False
+            missing_files.append(self.config_xml_file)
+            return False, missing_files
         config = PipelineConfig.from_xml(self.config_xml_file)
         # check FASTQC results
         for f in self.fastqc_data_files:
             if not file_exists_and_nz_size(f):
                 logging.error("Library %s missing fastqc data file %s" % (self.library_id, f))
+                missing_files.append(f)
                 is_valid = False
         for f in self.fastqc_report_files:
             if not file_exists_and_nz_size(f):
                 logging.error("Library %s missing fastqc report file %s" % (self.library_id, f))
+                missing_files.append(f)
                 is_valid = False
         # check sorted abundant reads bam file
         if not check_sam_file(self.sorted_abundant_bam_file, isbam=True):
             logging.error("Library %s missing/corrupt abundant reads BAM file" % (self.library_id))
+            missing_files.append(self.sorted_abundant_bam_file)
             is_valid = False
+        # check abundant counts file
+        if not file_exists_and_nz_size(self.abundant_counts_file):
+            logging.error("Library %s missing/corrupt abundant counts file" % (self.library_id))
+            missing_files.append(self.abundant_counts_file)
+            is_valid = False            
         # check fragment size distribution
-        if not check_frag_size_dist_file(self.frag_size_dist_file):
-            logging.error("Library %s missing/corrupt fragment size distribution" % (self.library_id))
+        if not check_library_metrics(self.library_metrics_file):
+            logging.error("Library %s missing/corrupt inspection results" % (self.library_id))
+            missing_files.append(self.library_metrics_file)
             is_valid = False
         # check tophat junctions file
         if not file_exists_and_nz_size(self.tophat_juncs_file):
             logging.error("Library %s missing/empty tophat junctions file" % (self.library_id))
+            missing_files.append(self.tophat_juncs_file)
             is_valid = False
         # check tophat bam file
         if not check_sam_file(self.tophat_bam_file, isbam=True):
             logging.error("Library %s missing/corrupt tophat BAM file" % (self.library_id))
+            missing_files.append(self.tophat_bam_file)
             is_valid = False
         # check bam index
         if not file_exists_and_nz_size(self.tophat_bam_index_file):
             logging.error("Library %s missing tophat BAM index" % (self.library_id))
+            missing_files.append(self.tophat_bam_index_file)
             is_valid = False
         # check picard summary metrics
         if not file_exists_and_nz_size(self.alignment_summary_metrics):
             logging.error("Library %s missing picard alignment summary metrics" % (self.library_id))
+            missing_files.append(self.alignment_summary_metrics)
             is_valid = False
         if ((len(self.copied_fastq_files) > 2) and 
             (not file_exists_and_nz_size(self.insert_size_metrics))):
             logging.error("Library %s missing picard insert size metrics" % (self.library_id))
+            missing_files.append(self.insert_size_metrics)
             is_valid = False
         if not file_exists_and_nz_size(self.quality_by_cycle_metrics):
             logging.error("Library %s missing picard quality by cycle metrics" % (self.library_id))
+            missing_files.append(self.quality_by_cycle_metrics)
             is_valid = False
         if not file_exists_and_nz_size(self.quality_distribution_metrics):
             logging.error("Library %s missing picard quality distribution metrics" % (self.library_id))
+            missing_files.append(self.quality_distribution_metrics)
             is_valid = False
         if not file_exists_and_nz_size(self.rnaseq_metrics):
             logging.error("Library %s missing picard rnaseq metrics" % (self.library_id))
+            missing_files.append(self.rnaseq_metrics)
             is_valid = False
         # check coverage files
         if not file_exists_and_nz_size(self.coverage_bigwig_file):
             logging.error("Library %s missing coverage bigwig file" % (self.library_id))
+            missing_files.append(self.coverage_bigwig_file)
             is_valid = False
         # check job done file
         if not os.path.exists(self.job_done_file):
             logging.error("Library %s missing job done file" % (self.library_id))
+            missing_files.append(self.job_done_file)
             is_valid = False            
         # check tophat fusion (optional)
         if config.tophat_fusion_run:
             # check tophat fusion bam file
             if not check_sam_file(self.tophat_fusion_bam_file, isbam=True):
                 logging.error("Library %s missing/corrupt tophat fusion BAM file" % (self.library_id))
+                missing_files.append(self.tophat_fusion_bam_file)
                 is_valid = False
             # check tophat fusion bam file
             if not file_exists_and_nz_size(self.tophat_fusion_file):
                 logging.error("Library %s missing/corrupt tophat fusion file" % (self.library_id))
+                missing_files.append(self.tophat_fusion_file)
                 is_valid = False
             # check tophat fusion post result file
             if config.tophat_fusion_post_run:
                 if not file_exists_and_nz_size(self.tophat_fusion_post_result_file):
                     logging.error("Library %s missing/corrupt tophat fusion post result file" % (self.library_id))
+                    missing_files.append(self.tophat_fusion_post_result_file)
                     is_valid = False
         # check cufflinks files
         if config.cufflinks_run:
             if not file_exists_and_nz_size(self.cufflinks_gtf_file):
                 logging.error("Library %s missing cufflinks gtf file" % (self.library_id))
+                missing_files.append(self.cufflinks_gtf_file)
                 is_valid = False
         # check htseq files
         if config.htseq_run:
             if not file_exists_and_nz_size(self.htseq_count_known_file):
                 logging.error("Library %s missing htseq-count output file" % (self.library_id))
+                missing_files.append(self.htseq_count_known_file)
                 is_valid = False
         # check variant calling files
         if config.varscan_run:
             if not file_exists_and_nz_size(self.duplicate_metrics):
                 logging.error("Library %s missing picard duplicate metrics file" % (self.library_id))
+                missing_files.append(self.duplicate_metrics)
                 is_valid = False
             # check varscan files
             if not file_exists_and_nz_size(self.varscan_snv_file):
                 logging.error("Library %s missing varscan snv file" % (self.library_id))
+                missing_files.append(self.varscan_snv_file)
                 is_valid = False
             if not file_exists_and_nz_size(self.varscan_indel_file):
                 logging.error("Library %s missing varscan indel file" % (self.library_id))
+                missing_files.append(self.varscan_indel_file)
                 is_valid = False
-        return is_valid
+        return is_valid, missing_files
 
 class GenomeConfig(object):
     fields = ("root_dir",
               "abundant_bowtie2_index",
               "genome_fasta_file",
               "genome_lexicographical_fasta_file",
-              "genome_bowtie_index",
+              "genome_bowtie1_index",
               "genome_bowtie2_index",
-              "fragment_size_bowtie_index",
+              "fragment_size_bowtie1_index",
+              "repbase_bowtie2_index",
               "gene_annotation_refflat",
               "gene_annotation_refgene",
               "gene_annotation_ensgene",
@@ -350,14 +395,17 @@ class GenomeConfig(object):
         if not os.path.exists(os.path.join(abs_root_dir, self.abundant_bowtie2_index + ".fa")):
             logging.error("Abundant sequences fasta file %s not found" % (self.abundant_bowtie2_index))
             valid = False
-        if not os.path.exists(os.path.join(abs_root_dir, self.genome_bowtie_index + ".1.ebwt")):
-            logging.error("Genome bowtie index %s not found" % (self.genome_bowtie_index))
+        if not os.path.exists(os.path.join(abs_root_dir, self.genome_bowtie1_index + ".1.ebwt")):
+            logging.error("Genome bowtie index %s not found" % (self.genome_bowtie1_index))
             valid = False
         if not os.path.exists(os.path.join(abs_root_dir, self.genome_bowtie2_index + ".1.bt2")):
             logging.error("Genome bowtie2 index %s not found" % (self.genome_bowtie2_index))
             valid = False
-        if not os.path.exists(os.path.join(abs_root_dir, self.fragment_size_bowtie_index + ".1.ebwt")):
-            logging.error("Fragment size bowtie index %s not found" % (self.fragment_size_bowtie_index))
+        if not os.path.exists(os.path.join(abs_root_dir, self.fragment_size_bowtie1_index + ".1.ebwt")):
+            logging.error("Fragment size bowtie index %s not found" % (self.fragment_size_bowtie1_index))
+            valid = False
+        if not os.path.exists(os.path.join(abs_root_dir, self.repbase_bowtie2_index + ".1.bt2")):
+            logging.error("Repeat element bowtie2 index %s not found" % (self.repbase_bowtie2_index))
             valid = False
         for attrname in ("genome_fasta_file",
                          "genome_lexicographical_fasta_file",
