@@ -31,10 +31,10 @@ def main():
             counts[r.tid] += 1
     # print output
     outfh = open(args.output_file, "w")
-    print >>outfh, '\t'.join(["#rname", "length", "count", "unmapped"])
+    print >>outfh, '\t'.join(["#rname", "length", "mapped", "unmapped"])
     for i in xrange(len(samfh.references)):
         print >>outfh, '\t'.join(map(str, [samfh.references[i], samfh.lengths[i], counts[i], "0"]))
-    print >>outfh, '\t'.join(["unmapped", "0", "0", str(unmapped)])
+    print >>outfh, '\t'.join(["*", "0", "0", str(unmapped)])
     return config.JOB_SUCCESS
 
 if __name__ == '__main__': 
