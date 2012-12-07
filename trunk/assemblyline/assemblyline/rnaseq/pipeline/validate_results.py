@@ -26,7 +26,10 @@ def main():
         logging.error("Library not valid")
         return config.JOB_ERROR
     results = config.RnaseqResults(library, args.output_dir)
-    valid = results.validate()
+    valid, missing_files = results.validate()
+    if not valid:
+        valid = (len(missing_files) == 1 and 
+                 missing_files[0] == results.job_done_file)
     if valid:
         open(results.job_done_file, "w").close()
     return config.JOB_SUCCESS
