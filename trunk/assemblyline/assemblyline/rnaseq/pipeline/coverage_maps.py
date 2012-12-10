@@ -12,8 +12,8 @@ import subprocess
 import assemblyline.rnaseq.lib.picard as picard
 import assemblyline.rnaseq.lib.config as config
 from assemblyline.rnaseq.lib.libtable import FR_UNSTRANDED
-from assemblyline.rnaseq.lib.inspect import RnaseqLibraryCharacteristics
-from assemblyline.rnaseq.lib.base import up_to_date, many_up_to_date
+from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
+from assemblyline.rnaseq.lib.base import up_to_date
 
 STRAND_COLOR_MAP = {".": "0,128,0",
                     "+": "255,0,0",
@@ -80,7 +80,7 @@ def main():
             scale_factor = 1.0e6 / float(library_size)
     # predict library type
     logging.debug("Predicting library type from metrics file")
-    obj = RnaseqLibraryCharacteristics.from_file(open(args.library_metrics_file))
+    obj = RnaseqLibraryMetrics.from_file(open(args.library_metrics_file))
     predicted_library_type = obj.predict_library_type(config.STRAND_SPECIFIC_CUTOFF_FRAC)
     logging.debug("Predicted library type: %s" % (predicted_library_type))
     if predicted_library_type == FR_UNSTRANDED:

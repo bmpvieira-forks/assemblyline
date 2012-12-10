@@ -10,7 +10,7 @@ import xml.etree.cElementTree as etree
 
 from assemblyline.rnaseq.lib.base import check_executable, check_sam_file, indent_xml, file_exists_and_nz_size, parse_bool
 from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUT_PAIRED, FR_UNSTRANDED
-from assemblyline.rnaseq.lib.inspect import RnaseqLibraryCharacteristics
+from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
 
 # default parameter values
 MIN_INSPECT_SAMPLES = 100
@@ -91,7 +91,7 @@ VARSCAN_INDEL_FILE = "varscan_indels.vcf"
 JOB_DONE_FILE = "job.done"
 # job memory and runtime
 PBS_JOB_MEM = 24000
-PBS_JOB_WALLTIME = "120:00:00"
+PBS_JOB_WALLTIME = "160:00:00"
 # quality score formats
 SANGER_FORMAT = "sanger"
 SOLEXA_FORMAT = "solexa"
@@ -100,18 +100,6 @@ FASTQ_QUAL_FORMATS = (SANGER_FORMAT, SOLEXA_FORMAT, ILLUMINA_FORMAT)
 
 class PipelineConfigError(Exception):
     pass
-
-def get_tophat_library_type(library_type):
-    if library_type == "dutp":
-        return "fr-firststrand"
-    else:
-        return "fr-unstranded"
-
-def get_picard_strand_specificity(library_type):
-    if library_type == "fr-firststrand":
-        return "SECOND_READ_TRANSCRIPTION_STRAND"
-    else:
-        return "NONE"
 
 def check_tophat_juncs_file(filename):
     if not file_exists_and_nz_size(filename):
@@ -131,7 +119,7 @@ def check_library_metrics(filename):
         is_valid = False
     else:
         try:
-            obj = RnaseqLibraryCharacteristics.from_file(open(filename))
+            obj = RnaseqLibraryMetrics.from_file(open(filename))
         except:
             is_valid = False    
     return is_valid
@@ -299,7 +287,7 @@ class RnaseqResults(object):
             missing_files.append(self.coverage_bigwig_prefix + ".bw")
             is_valid = False
         else:            
-            obj = RnaseqLibraryCharacteristics.from_file(open(self.library_metrics_file))
+            obj = RnaseqLibraryMetrics.from_file(open(self.library_metrics_file))
             predicted_library_type = obj.predict_library_type(STRAND_SPECIFIC_CUTOFF_FRAC)
             if predicted_library_type == FR_UNSTRANDED:
                 bigwig_files = [self.coverage_bigwig_prefix + ".bw"]

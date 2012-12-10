@@ -15,7 +15,7 @@ import os
 import subprocess
 
 # project imports
-from assemblyline.rnaseq.lib.inspect import RnaseqLibraryCharacteristics
+from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
 from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUT_PAIRED, FRAGMENT_LAYOUT_SINGLE
 import assemblyline.rnaseq.lib.config as config
 
@@ -73,7 +73,7 @@ def inspect_rnaseq_library(bowtie_index,
             os.remove(result_file)
         return config.JOB_ERROR
     # plot fragment size distribution
-    obj = RnaseqLibraryCharacteristics.from_file(open(result_file))
+    obj = RnaseqLibraryMetrics.from_file(open(result_file))
     obj.to_file(open(result_file, "w"))
     logging.info("Fragment size samples=%d mean=%f std=%f median=%d mode=%d" % 
                  (obj.num_frag_size_samples(), obj.mean(), obj.std(), 

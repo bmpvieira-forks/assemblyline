@@ -63,7 +63,7 @@ def inspect_pe_sam(samfh, max_frags=None):
     logging.debug("Processed fragments: %d" % (frags))
     logging.debug("Unmapped fragments: %d" % (unmapped))
 
-class RnaseqLibraryCharacteristics(object):
+class RnaseqLibraryMetrics(object):
     def __init__(self, min_frag_size=0, max_frag_size=0):
         self.min_frag_size = max(0, min_frag_size)
         self.max_frag_size = max(0, max_frag_size)
@@ -199,7 +199,7 @@ class RnaseqLibraryCharacteristics(object):
 
     @staticmethod
     def from_file(fileh):
-        res = RnaseqLibraryCharacteristics()
+        res = RnaseqLibraryMetrics()
         # skip first comment
         fileh.next()
         # read strandedness
