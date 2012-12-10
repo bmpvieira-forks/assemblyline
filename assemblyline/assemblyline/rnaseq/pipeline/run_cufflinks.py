@@ -8,7 +8,7 @@ import logging
 import subprocess
 import sys
 
-from assemblyline.rnaseq.lib.inspect import RnaseqLibraryCharacteristics
+from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
 import assemblyline.rnaseq.lib.config as config
 
 def run_cufflinks(bam_file,
@@ -21,7 +21,7 @@ def run_cufflinks(bam_file,
                   library_metrics_file=None,
                   cufflinks_bin="cufflinks"):
     # read rnaseq characteristics info
-    obj = RnaseqLibraryCharacteristics.from_file(open(library_metrics_file))
+    obj = RnaseqLibraryMetrics.from_file(open(library_metrics_file))
     # predict library type
     predicted_library_type = obj.predict_library_type(config.STRAND_SPECIFIC_CUTOFF_FRAC)
     if library_type != predicted_library_type:

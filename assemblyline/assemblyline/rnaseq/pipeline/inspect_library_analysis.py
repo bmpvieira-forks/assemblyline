@@ -13,7 +13,7 @@ import pysam
 # project imports
 import assemblyline.rnaseq.lib.config as config
 from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUT_PAIRED
-from assemblyline.rnaseq.lib.inspect import inspect_sr_sam, inspect_pe_sam, RnaseqLibraryCharacteristics
+from assemblyline.rnaseq.lib.inspect import inspect_sr_sam, inspect_pe_sam, RnaseqLibraryMetrics
 
 def main():
     logging.basicConfig(level=logging.DEBUG,
@@ -34,8 +34,8 @@ def main():
     parser.add_argument("output_file")
     args = parser.parse_args()
     samfh = pysam.Samfile(args.sam_file, "r")
-    obj = RnaseqLibraryCharacteristics(args.min_frag_size, 
-                                       args.max_frag_size)
+    obj = RnaseqLibraryMetrics(args.min_frag_size, 
+                               args.max_frag_size)
     if args.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
         obj.from_stream(inspect_pe_sam(samfh, args.n))
     else:

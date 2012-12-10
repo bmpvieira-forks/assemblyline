@@ -619,21 +619,20 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        args = ["java", "-jar", 
-                "$PICARDPATH/CollectRnaSeqMetrics.jar",
-                "INPUT=%s" % (results.tophat_bam_file),
-                "REF_FLAT=%s" % (os.path.join(server.references_dir, genome.get_path("gene_annotation_refflat"))),
-                "RIBOSOMAL_INTERVALS=%s" % (os.path.join(server.references_dir, genome.get_path("picard_ribosomal_intervals"))),
-                "STRAND_SPECIFICITY=%s" % config.get_picard_strand_specificity(library.library_type),
-                "REFERENCE_SEQUENCE=%s" % (os.path.join(server.references_dir, genome.get_path("genome_lexicographical_fasta_file"))),
-                "OUTPUT=%s" % (results.rnaseq_metrics),
-                "CHART_OUTPUT=%s" % (results.rnaseq_metrics_pdf),
-                "TMP_DIR=%s" % results.tmp_dir]
-                #"ASSUME_SORTED=TRUE",
-                #"VALIDATION_STRINGENCY=SILENT"]
+        args = [sys.executable,
+                os.path.join(_pipeline_dir, "picard_metrics.py"),
+                "--tmp-dir", results.tmp_dir,
+                "--picard-dir", "$PICARDPATH",
+                results.tophat_bam_file,
+                results.library_metrics_file,   
+                os.path.join(server.references_dir, genome.get_path("gene_annotation_refflat")),
+                os.path.join(server.references_dir, genome.get_path("picard_ribosomal_intervals")),
+                os.path.join(server.references_dir, genome.get_path("genome_lexicographical_fasta_file")),
+                results.rnaseq_metrics,
+                results.rnaseq_metrics_pdf]
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
-        log_file = os.path.join(results.log_dir, 'picard_collect_rnaseq_metrics.log')
+        log_file = os.path.join(results.log_dir, 'picard_rnaseq_metrics.log')
         command += ' > %s 2>&1' % (log_file)                
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())   

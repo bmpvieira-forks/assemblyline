@@ -10,7 +10,7 @@ import sys
 import os
 
 # project imports
-from assemblyline.rnaseq.lib.inspect import RnaseqLibraryCharacteristics
+from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
 from assemblyline.rnaseq.lib.base import detect_read_length
 import assemblyline.rnaseq.lib.config as config
 
@@ -21,10 +21,10 @@ def run_tophat(output_dir, fastq_files, library_metrics_file,
                tophat_args, tophat_bin="tophat", 
                samtools_bin="samtools"):
     # read library characteristics information
-    obj = RnaseqLibraryCharacteristics.from_file(open(library_metrics_file))
+    obj = RnaseqLibraryMetrics.from_file(open(library_metrics_file))
     # get fragment size parameters for tophat
     read_length = detect_read_length(fastq_files[0])
-    obj = RnaseqLibraryCharacteristics.from_file(open(library_metrics_file))
+    obj = RnaseqLibraryMetrics.from_file(open(library_metrics_file))
     mean_inner_dist = int(obj.tlen_at_percentile(50.0) - (2*read_length))
     mate_stdev = int(round(obj.std(),0))
     logging.info("Tophat mean_inner_dist=%d and mate_stdev=%d" % 
