@@ -11,9 +11,9 @@ import subprocess
 
 import assemblyline.rnaseq.lib.picard as picard
 import assemblyline.rnaseq.lib.config as config
+from assemblyline.rnaseq.lib.base import up_to_date
 from assemblyline.rnaseq.lib.libtable import FR_UNSTRANDED
 from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
-from assemblyline.rnaseq.lib.base import up_to_date
 
 STRAND_COLOR_MAP = {".": "0,128,0",
                     "+": "255,0,0",
