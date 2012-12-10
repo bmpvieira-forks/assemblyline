@@ -638,45 +638,30 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())   
     #
-    # generate genome coverage bedgraph  
+    # generate genome coverage maps  
     #
-    msg = "Generating coverage bedgraph file"
-    input_files = [results.tophat_bam_file]
-    output_files = [results.coverage_bedgraph_file]
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
-    else:
-        logging.info(msg)
-        shell_commands.append(bash_log(msg, "INFO"))
-        args = [os.path.join(pipeline.bedtools_dir, "genomeCoverageBed"),
-                "-bg", "-split", "-g", (os.path.join(server.references_dir, genome.get_path("chrom_sizes"))),
-                "-ibam", results.tophat_bam_file, ">", results.coverage_bedgraph_file]
-        logging.debug("\targs: %s" % (' '.join(map(str, args))))
-        command = ' '.join(map(str, args))
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())   
-    #
-    # convert bedgraph to bigwig coverage file
-    #
-    msg = "Create bigWig file to display coverage"
-    input_files = [results.coverage_bedgraph_file]
-    output_files = [results.coverage_bigwig_file]
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
-    else:
-        logging.info(msg)
-        shell_commands.append(bash_log(msg, "INFO"))
-        args = [os.path.join(pipeline.ucsc_dir, "bedGraphToBigWig"),
-                results.coverage_bedgraph_file,
-                os.path.join(server.references_dir, genome.get_path("chrom_sizes")),
-                results.coverage_bigwig_file]
-        command = ' '.join(map(str, args))
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())   
+    msg = "Generating coverage maps"
+    logging.info(msg)
+    shell_commands.append(bash_log(msg, "INFO"))
+    args = [sys.executable,
+            os.path.join(_pipeline_dir, "coverage_maps.py"),
+            '--big-data-url', pipeline.ucsc_big_data_url,
+            '--track-name', results.library_id,
+            '--track-desc', results.library_id,
+            "--scale",
+            "--tmp-dir", results.tmp_dir,
+            results.library_metrics_file,
+            results.alignment_summary_metrics,
+            os.path.join(server.references_dir, genome.get_path("chrom_sizes")),
+            results.tophat_bam_file,
+            results.coverage_bigwig_prefix,
+            results.coverage_track_file]
+    logging.debug("\targs: %s" % (' '.join(map(str, args))))
+    command = ' '.join(map(str, args))
+    log_file = os.path.join(results.log_dir, 'coverage_maps.log')
+    command += ' > %s 2>&1' % (log_file)                
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode()) 
     #
     # run cufflinks to assemble transcriptome
     #
