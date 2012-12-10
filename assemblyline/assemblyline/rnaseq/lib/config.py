@@ -9,7 +9,7 @@ import collections
 import xml.etree.cElementTree as etree
 
 from assemblyline.rnaseq.lib.base import check_executable, check_sam_file, indent_xml, file_exists_and_nz_size, parse_bool
-from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUT_PAIRED
+from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUT_PAIRED, FR_UNSTRANDED
 from assemblyline.rnaseq.lib.inspect import RnaseqLibraryCharacteristics
 
 # default parameter values
@@ -72,8 +72,8 @@ PICARD_QUALITY_DISTRIBUTION_PDF = "picard.quality_distribution.pdf"
 PICARD_RNASEQ_METRICS = "picard.rnaseq_metrics"
 PICARD_RNASEQ_METRICS_PLOT_PDF = "picard.rnaseq_metrics_plot.pdf"
 # coverage bedgraph file
-COVERAGE_BEDGRAPH_FILE = "coverage.bedgraph"
-COVERAGE_BIGWIG_FILE = "coverage.bigwig"
+COVERAGE_BIGWIG_PREFIX = "coverage"
+COVERAGE_UCSC_TRACK_FILE = "coverage.ucsc.tracks"
 # cufflinks output
 CUFFLINKS_DIR = "cufflinks"
 CUFFLINKS_TRANSCRIPTS_GTF_FILE = os.path.join(CUFFLINKS_DIR, "transcripts.gtf")
@@ -195,10 +195,9 @@ class RnaseqResults(object):
         self.quality_distribution_pdf = os.path.join(self.output_dir, PICARD_QUALITY_DISTRIBUTION_PDF)
         self.rnaseq_metrics = os.path.join(self.output_dir, PICARD_RNASEQ_METRICS)
         self.rnaseq_metrics_pdf = os.path.join(self.output_dir, PICARD_RNASEQ_METRICS_PLOT_PDF)
-        # Coverage file
-        self.coverage_bedgraph_file = os.path.join(self.tmp_dir, COVERAGE_BEDGRAPH_FILE)
-        # Bigwig file
-        self.coverage_bigwig_file = os.path.join(self.output_dir, COVERAGE_BIGWIG_FILE)
+        # bigwig file prefix
+        self.coverage_bigwig_prefix = os.path.join(self.output_dir, COVERAGE_BIGWIG_PREFIX)
+        self.coverage_track_file = os.path.join(self.output_dir, COVERAGE_UCSC_TRACK_FILE)        
         # tophat fusion results
         self.tophat_fusion_dir = os.path.join(self.output_dir, TOPHAT_FUSION_DIR)
         self.tophat_fusion_bam_file = os.path.join(self.output_dir, TOPHAT_FUSION_BAM_FILE)        
@@ -252,7 +251,8 @@ class RnaseqResults(object):
             missing_files.append(self.abundant_counts_file)
             is_valid = False            
         # check fragment size distribution
-        if not check_library_metrics(self.library_metrics_file):
+        has_library_metrics = check_library_metrics(self.library_metrics_file)
+        if not has_library_metrics:
             logging.error("Library %s missing/corrupt inspection results" % (self.library_id))
             missing_files.append(self.library_metrics_file)
             is_valid = False
@@ -294,9 +294,26 @@ class RnaseqResults(object):
             missing_files.append(self.rnaseq_metrics)
             is_valid = False
         # check coverage files
-        if not file_exists_and_nz_size(self.coverage_bigwig_file):
-            logging.error("Library %s missing coverage bigwig file" % (self.library_id))
-            missing_files.append(self.coverage_bigwig_file)
+        if not has_library_metrics:
+            logging.error("Library %s missing coverage bigwig file(s)" % (self.library_id))
+            missing_files.append(self.coverage_bigwig_prefix + ".bw")
+            is_valid = False
+        else:            
+            obj = RnaseqLibraryCharacteristics.from_file(open(self.library_metrics_file))
+            predicted_library_type = obj.predict_library_type(STRAND_SPECIFIC_CUTOFF_FRAC)
+            if predicted_library_type == FR_UNSTRANDED:
+                bigwig_files = [self.coverage_bigwig_prefix + ".bw"]
+            else:
+                bigwig_files = [self.coverage_bigwig_prefix + "_pos.bw",
+                                self.coverage_bigwig_prefix + "_neg.bw"]
+            for f in bigwig_files:
+                if not file_exists_and_nz_size(f):
+                    logging.error("Library %s missing coverage bigwig file %s" % (self.library_id))
+                    is_valid = False
+                    missing_files.append(f)
+        if not file_exists_and_nz_size(self.coverage_track_file):
+            logging.error("Library %s missing coverage track file" % (self.library_id))
+            missing_files.append(self.coverage_track_file)
             is_valid = False
         # check job done file
         if not os.path.exists(self.job_done_file):
@@ -523,11 +540,13 @@ class PipelineConfig(object):
         c.cufflinks_bin = "cufflinks"
         c.bedtools_dir = ""
         c.ucsc_dir = ""
-        # default fragment size parameters
+        # fragment size parameters
         c.fragment_size_mean_default = int(root.findtext("fragment_size_mean_default"))
         c.fragment_size_stdev_default = int(root.findtext("fragment_size_stdev_default"))
         c.min_fragment_size = int(root.findtext("min_fragment_size"))
         c.max_fragment_size = int(root.findtext("max_fragment_size"))
+        # ucsc server url parameters
+        c.ucsc_big_data_url = root.findtext("ucsc_big_data_url")
         # tophat parameters
         c.tophat_args = []
         elem = root.find("tophat")
@@ -580,12 +599,13 @@ class PipelineConfig(object):
         for m in self.modules:
             elem = etree.SubElement(modules_elem, "module")
             elem.text = m
-        # fragment size parameters
+        # single element parameters
         for attrname in ("fragment_size_mean_default",
                          "fragment_size_stdev_default",
                          "adaptor_length_default",
                          "min_fragment_size",
-                         "max_fragment_size"):
+                         "max_fragment_size",
+                         "ucsc_big_data_url"):
             elem = etree.SubElement(root, attrname)
             elem.text = str(getattr(self, attrname))
         # tophat parameters
@@ -743,7 +763,7 @@ class PipelineConfig(object):
             valid = False
         # check BEDTools
         msg = 'BEDTools'
-        if check_executable(os.path.join(self.bedtools_dir, "intersectBed")):
+        if check_executable("bedtools"):
             logging.debug("Checking for '%s' binary... found" % msg)
         else:
             logging.error("'%s' binary not found or not executable" % msg)
