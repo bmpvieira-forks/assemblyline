@@ -20,26 +20,34 @@ def find_library_sequence_files(library, server):
     seq_dirs = server.seq_dirs[library.seq_repo]
     for seq_dir in seq_dirs:
         read1_files = []
-        read2_files = []    
-        found_dir = True
+        read2_files = []
+        bam_files = []   
+        found_files = True
         for filename in library.read1_files:
-            fullpath = os.path.join(seq_dir, os.path.basename(filename))
+            fullpath = os.path.join(seq_dir, filename)
             if os.path.exists(fullpath) and os.path.isfile(fullpath):
                 read1_files.append(fullpath)
             else:
-                found_dir = False
+                found_files = False
                 break
         if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
             for filename in library.read2_files:
-                fullpath = os.path.join(seq_dir, os.path.basename(filename))
+                fullpath = os.path.join(seq_dir, filename)
                 if os.path.exists(fullpath) and os.path.isfile(fullpath):
                     read2_files.append(fullpath)
                 else:
-                    found_dir = False
+                    found_files = False
                     break
-        if found_dir:
-            return read1_files,read2_files
-    return None,None
+        for filename in library.bam_files:
+            fullpath = os.path.join(seq_dir, filename)
+            if os.path.exists(fullpath) and os.path.isfile(fullpath):
+                bam_files.append(fullpath)
+            else:
+                found_files = False
+                break
+        if found_files:
+            return read1_files,read2_files,bam_files
+    return None,None,None
 
 def main():
     logging.basicConfig(level=logging.DEBUG,
@@ -63,13 +71,14 @@ def main():
     logging.info("Generating XML files at output directory '%s'" % (args.output_dir))
     for library in libraries.itervalues():
         # search for library sequence files
-        read1_files, read2_files = find_library_sequence_files(library, server)
+        read1_files, read2_files, bam_files = find_library_sequence_files(library, server)
         if read1_files is None:
             logging.error("Library %s sequence files not found" % (library.library_id))
             continue
         # update library sequence files
         library.read1_files = read1_files
         library.read2_files = read2_files
+        library.bam_files = bam_files
         # check for valid data structure
         if not library.is_valid():
             logging.error("Library %s not valid" % (library.library_id))
