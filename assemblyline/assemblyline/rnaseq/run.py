@@ -667,8 +667,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Assembling transcriptome with Cufflinks"
     input_files = [results.library_metrics_file, 
                    results.tophat_bam_file]
-    output_files = [results.cufflinks_gtf_file]    
-    skip = ((not pipeline.cufflinks_run) or
+    output_files = [results.cufflinks_de_novo_gtf_file]    
+    skip = ((not pipeline.cufflinks_de_novo_run) or
             many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % msg)
@@ -676,9 +676,9 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        if not os.path.exists(results.cufflinks_dir):
-            logging.info("\tcreating directory: %s" % (results.cufflinks_dir))
-            os.makedirs(results.cufflinks_dir)
+        if not os.path.exists(results.cufflinks_de_novo_dir):
+            logging.info("\tcreating directory: %s" % (results.cufflinks_de_novo_dir))
+            os.makedirs(results.cufflinks_de_novo_dir)
         args = [sys.executable, os.path.join(_pipeline_dir, "run_cufflinks.py"),
                 "--cufflinks-bin", pipeline.cufflinks_bin,
                 "-p", num_processors,
@@ -686,16 +686,54 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 "--library-type", library.library_type]
         if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
             args.append("--learn-frag-size")
-        for arg in pipeline.cufflinks_args:
+        for arg in pipeline.cufflinks_de_novo_args:
             # substitute species-specific root directory
             species_arg = arg.replace("${SPECIES}", genome_dir)
             args.append('--cufflinks-arg="%s"' % (species_arg))
         args.extend([results.tophat_bam_file,
-                     results.cufflinks_dir,
+                     results.cufflinks_de_novo_dir,
                      results.library_metrics_file])
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
-        log_file = os.path.join(results.log_dir, 'cufflinks.log')
+        log_file = os.path.join(results.log_dir, 'cufflinks_de_novo.log')
+        command += ' > %s 2>&1' % (log_file)
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())
+    #
+    # cufflinks on known genes
+    #
+    msg = "Estimating known gene expression with cufflinks"
+    input_files = [results.library_metrics_file, 
+                   results.tophat_bam_file]
+    output_files = [results.cufflinks_known_gtf_file]    
+    skip = ((not pipeline.cufflinks_known_run) or
+            many_up_to_date(output_files, input_files))
+    if skip:
+        logging.info("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+    else:
+        logging.info(msg)
+        shell_commands.append(bash_log(msg, "INFO"))
+        if not os.path.exists(results.cufflinks_known_dir):
+            logging.info("\tcreating directory: %s" % (results.cufflinks_known_dir))
+            os.makedirs(results.cufflinks_known_dir)
+        args = [sys.executable, os.path.join(_pipeline_dir, "run_cufflinks.py"),
+                "--cufflinks-bin", pipeline.cufflinks_bin,
+                "-p", num_processors,
+                "-L", library.library_id,
+                "--library-type", library.library_type]
+        if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
+            args.append("--learn-frag-size")
+        for arg in pipeline.cufflinks_known_args:
+            # substitute species-specific root directory
+            species_arg = arg.replace("${SPECIES}", genome_dir)
+            args.append('--cufflinks-arg="%s"' % (species_arg))
+        args.extend([results.tophat_bam_file,
+                     results.cufflinks_known_dir,
+                     results.library_metrics_file])
+        logging.debug("\targs: %s" % (' '.join(map(str, args))))
+        command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'cufflinks_known.log')
         command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())

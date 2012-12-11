@@ -75,10 +75,11 @@ PICARD_RNASEQ_METRICS_PLOT_PDF = "picard.rnaseq_metrics_plot.pdf"
 COVERAGE_BIGWIG_PREFIX = "coverage"
 COVERAGE_UCSC_TRACK_FILE = "coverage.ucsc.tracks"
 # cufflinks output
-CUFFLINKS_DIR = "cufflinks"
-CUFFLINKS_TRANSCRIPTS_GTF_FILE = os.path.join(CUFFLINKS_DIR, "transcripts.gtf")
-CUFFLINKS_GENES_FILE = os.path.join(CUFFLINKS_DIR, "genes.fpkm_tracking")
-CUFFLINKS_ISOFORMS_FILE = os.path.join(CUFFLINKS_DIR, "isoforms.fpkm_tracking")
+CUFFLINKS_DE_NOVO_DIR = "cufflinks_de_novo"
+CUFFLINKS_KNOWN_DIR = "cufflinks_known"
+CUFFLINKS_TRANSCRIPTS_GTF_FILE = "transcripts.gtf"
+CUFFLINKS_GENES_FILE = "genes.fpkm_tracking"
+CUFFLINKS_ISOFORMS_FILE = "isoforms.fpkm_tracking"
 # htseq count output
 HTSEQ_COUNT_KNOWN_OUTPUT_FILE = "htseq_count_known_genes.txt"
 # picard mark duplicates output
@@ -193,11 +194,14 @@ class RnaseqResults(object):
         self.tophat_fusion_file = os.path.join(self.output_dir, TOPHAT_FUSION_FILE)
         self.tophat_fusion_post_result_file = os.path.join(self.output_dir, TOPHAT_FUSION_POST_RESULT_FILE)
         self.tophat_fusion_tmp_files = (os.path.join(self.output_dir, f) for f in TOPHAT_FUSION_TMP_FILES)
-        # cufflinks output files
-        self.cufflinks_dir = os.path.join(self.output_dir, CUFFLINKS_DIR)
-        self.cufflinks_gtf_file = os.path.join(self.output_dir, CUFFLINKS_TRANSCRIPTS_GTF_FILE)
-        self.cufflinks_genes_fpkm_file = os.path.join(self.output_dir, CUFFLINKS_GENES_FILE)
-        self.cufflinks_isoforms_fpkm_file = os.path.join(self.output_dir, CUFFLINKS_ISOFORMS_FILE)
+        # cufflinks ab initio output files
+        self.cufflinks_de_novo_dir = os.path.join(self.output_dir, CUFFLINKS_DE_NOVO_DIR)
+        self.cufflinks_de_novo_gtf_file = os.path.join(self.cufflinks_de_novo_dir, CUFFLINKS_TRANSCRIPTS_GTF_FILE)
+        # cufflinks known output files
+        self.cufflinks_known_dir = os.path.join(self.output_dir, CUFFLINKS_KNOWN_DIR)
+        self.cufflinks_known_gtf_file = os.path.join(self.cufflinks_known_dir, CUFFLINKS_TRANSCRIPTS_GTF_FILE)
+        self.cufflinks_known_genes_fpkm_file = os.path.join(self.cufflinks_known_dir, CUFFLINKS_GENES_FILE)
+        self.cufflinks_known_isoforms_fpkm_file = os.path.join(self.cufflinks_known_dir, CUFFLINKS_ISOFORMS_FILE)
         # htseq-count output files
         self.htseq_count_known_file = os.path.join(self.output_dir, HTSEQ_COUNT_KNOWN_OUTPUT_FILE)
         # variant calling output
@@ -307,7 +311,7 @@ class RnaseqResults(object):
         if not os.path.exists(self.job_done_file):
             logging.error("Library %s missing job done file" % (self.library_id))
             missing_files.append(self.job_done_file)
-            is_valid = False            
+            is_valid = False        
         # check tophat fusion (optional)
         if config.tophat_fusion_run:
             # check tophat fusion bam file
@@ -326,11 +330,17 @@ class RnaseqResults(object):
                     logging.error("Library %s missing/corrupt tophat fusion post result file" % (self.library_id))
                     missing_files.append(self.tophat_fusion_post_result_file)
                     is_valid = False
-        # check cufflinks files
-        if config.cufflinks_run:
-            if not file_exists_and_nz_size(self.cufflinks_gtf_file):
-                logging.error("Library %s missing cufflinks gtf file" % (self.library_id))
-                missing_files.append(self.cufflinks_gtf_file)
+        # check cufflinks de novo files
+        if config.cufflinks_de_novo_run:
+            if not file_exists_and_nz_size(self.cufflinks_de_novo_gtf_file):
+                logging.error("Library %s missing cufflinks de novo gtf file" % (self.library_id))
+                missing_files.append(self.cufflinks_de_novo_gtf_file)
+                is_valid = False
+        # check cufflinks known files
+        if config.cufflinks_known_run:
+            if not file_exists_and_nz_size(self.cufflinks_known_gtf_file):
+                logging.error("Library %s missing cufflinks known gtf file" % (self.library_id))
+                missing_files.append(self.cufflinks_known_gtf_file)
                 is_valid = False
         # check htseq files
         if config.htseq_run:
@@ -552,12 +562,18 @@ class PipelineConfig(object):
         c.tophat_fusion_post_run = parse_bool(elem.get("run", "no"))
         for arg_elem in elem.findall("arg"):
             c.tophat_fusion_post_args.append(arg_elem.text)
-        # cufflinks parameters
-        c.cufflinks_args = []
-        elem = root.find("cufflinks")
-        c.cufflinks_run = parse_bool(elem.get("run", "no"))
+        # cufflinks de novo parameters
+        c.cufflinks_de_novo_args = []
+        elem = root.find("cufflinks_de_novo")
+        c.cufflinks_de_novo_run = parse_bool(elem.get("run", "no"))
         for arg_elem in elem.findall("arg"):
-            c.cufflinks_args.append(arg_elem.text)
+            c.cufflinks_de_novo_args.append(arg_elem.text)
+        # cufflinks known parameters
+        c.cufflinks_known_args = []
+        elem = root.find("cufflinks_known")
+        c.cufflinks_known_run = parse_bool(elem.get("run", "no"))
+        for arg_elem in elem.findall("arg"):
+            c.cufflinks_known_args.append(arg_elem.text)
         # htseq parameters
         elem = root.find("htseq")
         c.htseq_run = parse_bool(elem.get("run", "no"))
@@ -613,11 +629,17 @@ class PipelineConfig(object):
         for arg in self.tophat_fusion_post_args:
             elem = etree.SubElement(tophat_fusion_post_elem, "arg")
             elem.text = arg
-        # cufflinks parameters
-        cufflinks_elem = etree.SubElement(root, "cufflinks")
-        cufflinks_elem.set("run", self.cufflinks_run)
-        for arg in self.cufflinks_args:
-            elem = etree.SubElement(cufflinks_elem, "arg")
+        # cufflinks de novo parameters
+        cufflinks_de_novo_elem = etree.SubElement(root, "cufflinks_de_novo")
+        cufflinks_de_novo_elem.set("run", self.cufflinks_de_novo_run)
+        for arg in self.cufflinks_de_novo_args:
+            elem = etree.SubElement(cufflinks_de_novo_elem, "arg")
+            elem.text = arg
+        # cufflinks known parameters
+        cufflinks_known_elem = etree.SubElement(root, "cufflinks_known")
+        cufflinks_known_elem.set("run", self.cufflinks_known_run)
+        for arg in self.cufflinks_known_args:
+            elem = etree.SubElement(cufflinks_known_elem, "arg")
             elem.text = arg
         # htseq parameters
         htseq_elem = etree.SubElement(root, "htseq")
