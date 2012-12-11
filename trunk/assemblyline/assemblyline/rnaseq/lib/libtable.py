@@ -116,12 +116,16 @@ class Library(object):
     def to_xml(self, parent):
         self.read1_files = ','.join(self.read1_files)
         self.read2_files = ','.join(self.read2_files)
+        self.bam_files = ','.join(self.bam_files)
         for f in Library.fields:
             elem = etree.SubElement(parent, f)
             elem.text = getattr(self,f)
         for k,v in self.params.iteritems():
             elem = etree.SubElement(parent, "param", name=k)
             elem.text = v
+        self.read1_files = self.read1_files.split(',')
+        self.read2_files = self.read2_files.split(',')
+        self.bam_files = self.bam_files.split(',')
         return parent
 
     def is_valid(self):
@@ -132,26 +136,21 @@ class Library(object):
             is_valid = False
         if self.fragment_layout not in FRAGMENT_LAYOUTS:
             logging.error("Unknown fragment layout")
-            is_valid = False
-        if len(self.read1_files) == 0:
-            logging.error("Library %s read 1 files not found" % (self.library_id))
-            is_valid = False            
+            is_valid = False    
         for filename in self.read1_files:
             if not os.path.exists(filename):
                 logging.error("Library %s read 1 file %s not found" % (self.library_id, filename))
                 is_valid = False
         if (self.fragment_layout == FRAGMENT_LAYOUT_PAIRED):
-            if len(self.read2_files) == 0:
-                logging.error("Library %s read 2 files not found" % (self.library_id))
-                is_valid = False
             if len(self.read1_files) != len(self.read2_files):
                 logging.error("Library %s unequal number of read1 and read2 files" % (self.library_id))
+            for filename in self.read2_files:
+                if not os.path.exists(filename):
+                    logging.error("Library %s read 2 file %s not found" % (self.library_id, filename))
+                    is_valid = False
             for filename1 in self.read1_files:
                 for filename2 in self.read2_files:
-                    if not os.path.exists(filename2):
-                        logging.error("Library %s read 2 file %s not found" % (self.library_id, filename2))
-                        is_valid = False
-                    elif filename1 == filename2:
+                    if filename1 == filename2:
                         logging.error("Library %s read 1 and read 2 point to same file %s" % (self.library_id, filename1))
                         is_valid = False
         for filename in self.bam_files:
