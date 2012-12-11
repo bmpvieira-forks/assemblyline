@@ -31,6 +31,9 @@ def bash_remove_files(filenames):
 def bash_log(msg, level="DEBUG"):
     return 'echo "[`date`] - %s - %s" >&2' % (level, msg)
 
+def bash_set_tmpdir(tmp_dir):
+    return 'export TMPDIR=%s' % (tmp_dir)
+
 def setup_modules_environment(pipeline, server):
     commands = ["source %s" % (server.modules_init_script)]
     for name in pipeline.modules:
@@ -219,6 +222,9 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     #
     # setup environment
     #
+    msg = "Setting TMPDIR environment variable to %s" % (results.tmp_dir)
+    logging.info(msg)
+    shell_commands.append(bash_set_tmpdir(results.tmp_dir))
     msg = "Setting up modules environment"
     logging.info(msg)
     commands = setup_modules_environment(pipeline, server)
@@ -600,7 +606,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        args = ["java", "-jar", 
+        args = ["java", "-Xmx4g", "-jar", 
                 "$PICARDPATH/CollectMultipleMetrics.jar",
                 "INPUT=%s" % (results.tophat_bam_file),
                 "REFERENCE_SEQUENCE=%s" % os.path.join(server.references_dir, genome.get_path("genome_lexicographical_fasta_file")),
@@ -684,9 +690,6 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        if not os.path.exists(results.cufflinks_de_novo_dir):
-            logging.info("\tcreating directory: %s" % (results.cufflinks_de_novo_dir))
-            os.makedirs(results.cufflinks_de_novo_dir)
         args = [sys.executable, os.path.join(_pipeline_dir, "run_cufflinks.py"),
                 "--cufflinks-bin", pipeline.cufflinks_bin,
                 "-p", num_processors,
@@ -722,9 +725,6 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        if not os.path.exists(results.cufflinks_known_dir):
-            logging.info("\tcreating directory: %s" % (results.cufflinks_known_dir))
-            os.makedirs(results.cufflinks_known_dir)
         args = [sys.executable, os.path.join(_pipeline_dir, "run_cufflinks.py"),
                 "--cufflinks-bin", pipeline.cufflinks_bin,
                 "-p", num_processors,
@@ -785,7 +785,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        args = ["java", "-jar", 
+        args = ["java", "-Xmx4g", "-jar", 
                 "$PICARDPATH/MarkDuplicates.jar",
                 "INPUT=%s" % (results.tophat_bam_file),
                 "OUTPUT=%s" % (results.tophat_rmdup_bam_file),

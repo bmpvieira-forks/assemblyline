@@ -131,7 +131,8 @@ def filter_abundant_sequences(fastqc_data_files,
     #
     msg = "Sorting abundant hits BAM file"
     logging.info(msg)
-    args = ["java", "-jar", os.path.join(picard_dir, "SortSam.jar"),
+    args = ["java", "-Xmx4g",
+            "-jar", os.path.join(picard_dir, "SortSam.jar"),
             "INPUT=%s" % (abundant_bam_file),
             "OUTPUT=%s" % (sorted_abundant_bam_file),
             "SO=coordinate",            
