@@ -138,7 +138,7 @@ class RnaseqResults(object):
         self.bam_fastq_prefixes = []
         self.bam_read1_files = []
         self.bam_read2_files = []
-        for i in xrange(len(library.bam_files)):
+        for i in xrange(1,len(library.bam_files)+1):
             prefix = os.path.join(self.tmp_dir, "bam_file%03d" % (i))
             self.bam_fastq_prefixes.append(prefix)
             self.bam_read1_files.append(prefix + "_1.fq")

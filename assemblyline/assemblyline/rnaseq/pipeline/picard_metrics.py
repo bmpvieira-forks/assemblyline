@@ -38,7 +38,7 @@ def main():
     obj = RnaseqLibraryMetrics.from_file(open(args.library_metrics_file))
     predicted_library_type = obj.predict_library_type(config.STRAND_SPECIFIC_CUTOFF_FRAC)
     logging.debug("Predicted library type: %s" % (predicted_library_type))
-    picard_args = ["java", "-jar", 
+    picard_args = ["java", "-Xmx4g", "-jar", 
                    os.path.join(args.picard_dir, "CollectRnaSeqMetrics.jar"),
                    "INPUT=%s" % (args.tophat_bam_file),
                    "REF_FLAT=%s" % (args.refflat_file),

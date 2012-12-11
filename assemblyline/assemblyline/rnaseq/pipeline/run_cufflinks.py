@@ -7,6 +7,7 @@ import argparse
 import logging
 import subprocess
 import sys
+import os
 
 from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
 import assemblyline.rnaseq.lib.config as config
@@ -20,6 +21,10 @@ def run_cufflinks(bam_file,
                   learn_frag_size_dist=True,
                   library_metrics_file=None,
                   cufflinks_bin="cufflinks"):
+    # create output dir if necessary
+    if not os.path.exists(output_dir):
+        logging.info("Creating directory: %s" % (output_dir))
+        os.makedirs(output_dir)
     # read rnaseq characteristics info
     obj = RnaseqLibraryMetrics.from_file(open(library_metrics_file))
     # predict library type

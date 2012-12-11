@@ -18,7 +18,7 @@ def run_varscan(ref_fa,
     # run varscan snv
     args = ["samtools", "mpileup", "-f", ref_fa, bam_file]
     samtools_p = subprocess.Popen(args, stdout=subprocess.PIPE)
-    args = ["java", "-jar", varscan_jar, "mpileup2snp"]
+    args = ["java", "-Xmx4g", "-jar", varscan_jar, "mpileup2snp"]
     args.extend(varscan_args)
     outfh = open(snv_file, "w")
     retcode1 = subprocess.call(args, stdin=samtools_p.stdout, stdout=outfh)
@@ -32,7 +32,7 @@ def run_varscan(ref_fa,
     # run varscan indel
     args = ["samtools", "mpileup", "-f", ref_fa, bam_file]
     samtools_p = subprocess.Popen(args, stdout=subprocess.PIPE)    
-    args = ["java", "-jar", varscan_jar, "mpileup2indel"]
+    args = ["java", "-Xmx4g", "-jar", varscan_jar, "mpileup2indel"]
     args.extend(varscan_args)
     outfh = open(indel_file, "w")
     retcode1 = subprocess.call(args, stdin=samtools_p.stdout, stdout=outfh)
