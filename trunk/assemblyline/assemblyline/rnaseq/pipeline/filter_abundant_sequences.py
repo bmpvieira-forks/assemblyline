@@ -6,6 +6,7 @@ Created on Aug 10, 2011
 import argparse
 import logging
 import os
+import sys
 import subprocess
 
 # local imports
@@ -146,7 +147,8 @@ def filter_abundant_sequences(fastqc_data_files,
         logging.error("%s FAILED" % (msg))
         return config.JOB_ERROR
     # remove temp files
-    os.remove(abundant_bam_file)    
+    os.remove(abundant_bam_file)
+    return config.JOB_SUCCESS
 
 def main():
     logging.basicConfig(level=logging.DEBUG,
@@ -170,15 +172,14 @@ def main():
             parser.error("PICARDPATH not found in environment")
     else:
         picard_dir = args.picard_dir
-    filter_abundant_sequences(args.fastqc_data_files.split(","),
-                              args.input_files.split(","),
-                              args.output_files.split(","),
-                              args.bam_file,
-                              args.abundant_index,
-                              args.tmp_dir,
-                              picard_dir,
-                              args.num_processors)
-    return 0
+    return filter_abundant_sequences(args.fastqc_data_files.split(","),
+                                     args.input_files.split(","),
+                                     args.output_files.split(","),
+                                     args.bam_file,
+                                     args.abundant_index,
+                                     args.tmp_dir,
+                                     picard_dir,
+                                     args.num_processors)
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
