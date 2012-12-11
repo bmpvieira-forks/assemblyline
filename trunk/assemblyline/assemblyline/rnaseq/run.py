@@ -149,16 +149,24 @@ def submit_nopbs(shell_commands,
                  stderr_filename=None):
     outfh = None
     errfh = None
-    if stdout_filename is not None:
+    if ((stdout_filename is not None) and
+        (stdout_filename == stderr_filename)):
         outfh = open(stdout_filename, "w")
-    if stderr_filename is not None:
-        errfh = open(stderr_filename, "w")
+        errfh = outfh
+    else:
+        if stdout_filename is not None:
+            outfh = open(stdout_filename, "w")
+        if stderr_filename is not None:
+            errfh = open(stderr_filename, "w")
     command_str = ';'.join(shell_commands)
     retcode = subprocess.call(command_str, shell=True, stdout=outfh, stderr=errfh)
-    if stdout_filename is not None:
+    if (outfh is not None) and (outfh == errfh):
         outfh.close()
-    if stderr_filename is not None:
-        errfh.close()
+    else:
+        if stdout_filename is not None:
+            outfh.close()
+        if stderr_filename is not None:
+            errfh.close()
     return retcode
 
 def run(library_xml_file, config_xml_file, server_name, num_processors,
