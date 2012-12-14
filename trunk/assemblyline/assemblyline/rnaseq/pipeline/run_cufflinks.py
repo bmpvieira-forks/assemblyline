@@ -19,8 +19,7 @@ def run_cufflinks(bam_file,
                   cufflinks_args,
                   num_processors=1,
                   learn_frag_size_dist=True,
-                  library_metrics_file=None,
-                  cufflinks_bin="cufflinks"):
+                  library_metrics_file=None):
     # create output dir if necessary
     if not os.path.exists(output_dir):
         logging.info("Creating directory: %s" % (output_dir))
@@ -32,7 +31,7 @@ def run_cufflinks(bam_file,
     if library_type != predicted_library_type:
         logging.warning("Library type %s does not agree with prediction %s" % 
                         (library_type, predicted_library_type))
-    args = [cufflinks_bin,
+    args = ['cufflinks',
             "-o", output_dir,
             "-p", num_processors,
             "--library-type", library_type,
@@ -56,7 +55,6 @@ def main():
     parser.add_argument("-L", dest="output_label", default="CUFF")
     parser.add_argument("--library-type", dest="library_type", default="fr-unstranded")
     parser.add_argument("--learn-frag-size", dest="learn_frag_size", action="store_true", default=False)
-    parser.add_argument("--cufflinks-bin", dest="cufflinks_bin", default="cufflinks")
     parser.add_argument("--cufflinks-arg", dest="cufflinks_args", action="append", default=[])
     parser.add_argument("bam_file")
     parser.add_argument("output_dir")
@@ -69,9 +67,7 @@ def main():
                          cufflinks_args=args.cufflinks_args,
                          num_processors=args.num_processors,
                          learn_frag_size_dist=args.learn_frag_size,
-                         library_metrics_file=args.library_metrics_file,
-                         cufflinks_bin=args.cufflinks_bin)
-
+                         library_metrics_file=args.library_metrics_file)
     
 if __name__ == '__main__':
     sys.exit(main())

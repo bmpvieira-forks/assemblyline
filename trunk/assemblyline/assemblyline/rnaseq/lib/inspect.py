@@ -15,16 +15,19 @@ def inspect_sr_sam(samfh, max_frags=None):
     # process input sam stream
     frags = 0
     unmapped = 0
+    useable = 0
     for r in samfh:
         frags += 1
         if r.is_unmapped:
             unmapped += 1
             continue
+        useable += 1
         yield -1, r.is_reverse
-        if (max_frags is not None) and (frags >= max_frags):
+        if (max_frags is not None) and (useable >= max_frags):
             break
     logging.debug("Processed fragments: %d" % (frags))
     logging.debug("Unmapped fragments: %d" % (unmapped))
+    logging.debug("Useable fragments: %d" % (useable))
 
 def inspect_pe_sam(samfh, max_frags=None):
     # function to parse concordant read pairs    
@@ -48,20 +51,23 @@ def inspect_pe_sam(samfh, max_frags=None):
     # process input sam stream
     frags = 0
     unmapped = 0
+    useable = 0
     for r1,r2 in parse_pe(samfh):
         frags += 1
         if r1.is_unmapped or r2.is_unmapped:
             unmapped += 1
             continue
+        useable += 1
         # get insert size
         tlen = r1.tlen
         if tlen < 0: tlen = -tlen        
         # yield read info
         yield tlen, r1.is_reverse
-        if (max_frags is not None) and (frags >= max_frags):
+        if (max_frags is not None) and (useable >= max_frags):
             break
     logging.debug("Processed fragments: %d" % (frags))
     logging.debug("Unmapped fragments: %d" % (unmapped))
+    logging.debug("Useable fragments: %d" % (useable))
 
 class RnaseqLibraryMetrics(object):
     def __init__(self, min_frag_size=0, max_frag_size=0):

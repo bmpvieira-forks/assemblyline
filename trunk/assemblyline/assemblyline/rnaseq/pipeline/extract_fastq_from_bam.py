@@ -11,6 +11,7 @@ import subprocess
 
 import pysam
 
+from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUTS
 import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
 
@@ -75,6 +76,8 @@ def main():
     parser.add_argument('bam_file')
     parser.add_argument('fastq_prefix')
     args = parser.parse_args()
+    if args.fragment_layout not in FRAGMENT_LAYOUTS:
+        parser.error("Invalid fragment layout '%s'" % (args.fragment_layout))
     if not os.path.exists(args.bam_file):
         parser.error("Input bam file not found")
     return bam_to_fastq(args.bam_file, args.fastq_prefix, 

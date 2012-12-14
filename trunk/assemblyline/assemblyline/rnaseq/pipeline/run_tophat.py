@@ -18,8 +18,7 @@ def run_tophat(output_dir, fastq_files, library_metrics_file,
                bowtie_index, library_type, num_processors,
                rg_id, rg_sample, rg_library, rg_description, 
                rg_platform_unit, rg_center, rg_platform,
-               tophat_args, tophat_bin="tophat", 
-               samtools_bin="samtools"):
+               tophat_args):
     # read library characteristics information
     obj = RnaseqLibraryMetrics.from_file(open(library_metrics_file))
     # get fragment size parameters for tophat
@@ -37,7 +36,7 @@ def run_tophat(output_dir, fastq_files, library_metrics_file,
     #
     # setup run
     #
-    args = [tophat_bin,
+    args = ['tophat',
             "-o", output_dir,
             "--library-type", predicted_library_type,
             "-p", num_processors,
@@ -63,7 +62,6 @@ def main():
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser()
-    parser.add_argument("--tophat-bin", dest="tophat_bin", default="tophat")
     parser.add_argument("--tophat-arg", dest="tophat_args", action="append", default=[])
     parser.add_argument("-p", type=int, dest="num_processors", default=1)
     parser.add_argument("--library-type", dest="library_type", default="fr-unstranded")
@@ -92,8 +90,7 @@ def main():
                       rg_platform_unit=args.rg_platform_unit, 
                       rg_center=args.rg_center, 
                       rg_platform=args.rg_platform,
-                      tophat_args=args.tophat_args,
-                      tophat_bin=args.tophat_bin)
+                      tophat_args=args.tophat_args)
     
 if __name__ == '__main__':
     sys.exit(main())

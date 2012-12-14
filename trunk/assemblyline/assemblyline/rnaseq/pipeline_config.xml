@@ -1,0 +1,231 @@
+<rnaseq>
+  <!-- server setup -->
+  <server name="mkiyer_rhel6" address="None" ssh_port="22">
+    <modules_init_script>/home/mkiyer/sw/rhel6/init.sh</modules_init_script>
+    <output_dir>/exds/users/mkiyer/projects/rnaseq/runs</output_dir>
+    <references_dir>/exds/users/mkiyer/projects/rnaseq/references</references_dir>
+    <seq_repos>
+       <dir name="mctp_seq">/exds/solexa/seq</dir>
+       <dir name="bodymap_rnaseq_pe_fca">/exds/solexa/bodymap/50bp_PE_mRNA_Seq/FCA</dir>
+       <dir name="bodymap_rnaseq_pe_fcb">/exds/solexa/bodymap/50bp_PE_mRNA_Seq/FCB</dir>
+       <dir name="idea_rnaseq_pe">/exds/solexa/illumina/idea/BC_cellLinesData/PE_RNAseq/Sequences</dir>
+       <dir name="erp001058">/exds/users/mkiyer/data/ERP001058</dir>
+       <dir name="encode">/exds/flux/mkiyer/encode</dir>
+       <dir name="30HJDAAXX">/exds/solexa/runs/090130_PATHBIO-SOLEXA1_30HJDAAXX/Data/IPAR_1.01/Bustard1.9.6_05-02-2009_root/GERALD_05-02-2009_root</dir>
+    </seq_repos>
+    <node_mem>8192</node_mem>
+    <node_processors>4</node_processors>
+    <pbs use="no"/>
+  </server>
+
+  <server name="exds_rhel5" address="None" ssh_port="22">
+    <modules_init_script>/exds/sw/rhel5/init.sh</modules_init_script>
+    <output_dir>/exds/users/mkiyer/projects/rnaseq/runs</output_dir>
+    <references_dir>/exds/users/mkiyer/projects/rnaseq/references</references_dir>
+    <seq_repos>
+       <dir name="mctp_seq">/exds/solexa/seq</dir>
+       <dir name="bodymap_rnaseq_pe_fca">/exds/solexa/bodymap/50bp_PE_mRNA_Seq/FCA</dir>
+       <dir name="bodymap_rnaseq_pe_fcb">/exds/solexa/bodymap/50bp_PE_mRNA_Seq/FCB</dir>
+       <dir name="idea_rnaseq_pe">/exds/solexa/illumina/idea/BC_cellLinesData/PE_RNAseq/Sequences</dir>
+       <dir name="erp001058">/exds/users/mkiyer/data/ERP001058</dir>
+       <dir name="encode">/exds/flux/mkiyer/encode</dir>
+       <dir name="30HJDAAXX">/exds/solexa/runs/090130_PATHBIO-SOLEXA1_30HJDAAXX/Data/IPAR_1.01/Bustard1.9.6_05-02-2009_root/GERALD_05-02-2009_root</dir>
+    </seq_repos>
+    <node_mem>256000</node_mem>
+    <node_processors>48</node_processors>
+    <pbs use="no"/>
+  </server>
+
+  <server name="exds_rhel6" address="None" ssh_port="22">
+    <modules_init_script>/exds/sw/rhel6/init.sh</modules_init_script>
+    <output_dir>/exds/users/mkiyer/projects/rnaseq/runs</output_dir>
+    <references_dir>/exds/users/mkiyer/projects/rnaseq/references</references_dir>
+    <seq_repos>
+       <dir name="mctp_seq">/exds/solexa/seq</dir>
+       <dir name="bodymap_rnaseq_pe_fca">/exds/solexa/bodymap/50bp_PE_mRNA_Seq/FCA</dir>
+       <dir name="bodymap_rnaseq_pe_fcb">/exds/solexa/bodymap/50bp_PE_mRNA_Seq/FCB</dir>
+       <dir name="idea_rnaseq_pe">/exds/solexa/illumina/idea/BC_cellLinesData/PE_RNAseq/Sequences</dir>
+       <dir name="erp001058">/exds/users/mkiyer/data/ERP001058</dir>
+       <dir name="encode">/exds/flux/mkiyer/encode</dir>
+       <dir name="30HJDAAXX">/exds/solexa/runs/090130_PATHBIO-SOLEXA1_30HJDAAXX/Data/IPAR_1.01/Bustard1.9.6_05-02-2009_root/GERALD_05-02-2009_root</dir>
+    </seq_repos>
+    <node_mem>256000</node_mem>
+    <node_processors>48</node_processors>
+    <pbs use="no"/>
+  </server>
+
+  <server name="mctp_hpc" address="None" ssh_port="22">
+    <modules_init_script>/exds/sw/rhel6/init.sh</modules_init_script>
+    <output_dir>/exds/users/mkiyer/projects/rnaseq/runs</output_dir>
+    <references_dir>/exds/users/mkiyer/projects/rnaseq/references</references_dir>
+    <seq_repos>
+       <dir name="mctp_seq">/exds/solexa/seq</dir>
+       <dir name="bodymap_rnaseq_pe_fca">/exds/solexa/bodymap/50bp_PE_mRNA_Seq/FCA</dir>
+       <dir name="bodymap_rnaseq_pe_fcb">/exds/solexa/bodymap/50bp_PE_mRNA_Seq/FCB</dir>
+       <dir name="idea_rnaseq_pe">/exds/solexa/illumina/idea/BC_cellLinesData/PE_RNAseq/Sequences</dir>
+       <dir name="erp001058">/exds/users/mkiyer/data/ERP001058</dir>
+       <dir name="encode">/exds/flux/mkiyer/encode</dir>
+       <dir name="30HJDAAXX">/exds/solexa/runs/090130_PATHBIO-SOLEXA1_30HJDAAXX/Data/IPAR_1.01/Bustard1.9.6_05-02-2009_root/GERALD_05-02-2009_root</dir>
+    </seq_repos>
+    <node_mem>128000</node_mem>
+    <node_processors>32</node_processors>
+    <pbs use="yes">
+        <max_user_jobs>0</max_user_jobs>
+        <script_line>#PBS -q batch</script_line>
+        <script_line>#PBS -m abe</script_line>
+        <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
+    </pbs>
+  </server>
+
+  <server name="flux" address="flux-login.engin.umich.edu" ssh_port="22">
+    <modules_init_script>/scratch/arul_flux/med-mctp/sw/rhel6/init.sh</modules_init_script>
+    <output_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq/runs</output_dir>
+    <references_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq/references</references_dir>
+    <seq_repos>
+       <dir name="mctp_seq">/nfs/med-mctp-seq-3_ls</dir>
+       <dir name="tcga">/nfs/med-mctp-tcga-1_ls/bam_files/rnaseq</dir>
+    </seq_repos>
+    <node_mem>45000</node_mem>
+    <node_processors>12</node_processors>
+    <pbs use="yes">
+        <max_user_jobs>3000</max_user_jobs>
+        <script_line>#PBS -l qos=flux</script_line>
+        <script_line>#PBS -A arul_flux</script_line>
+        <script_line>#PBS -q flux</script_line>
+        <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
+        <script_line>#PBS -m abe</script_line>
+    </pbs>
+  </server>
+
+  <server name="fluxm" address="flux-login.engin.umich.edu" ssh_port="22">
+    <modules_init_script>/scratch/arul_flux/med-mctp/sw/rhel6/init.sh</modules_init_script>
+    <output_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq/runs</output_dir>
+    <references_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq/references</references_dir>
+    <seq_repos>
+       <dir name="mctp_seq">/nfs/med-mctp-seq-3_ls</dir>
+    </seq_repos>
+    <node_mem>999000</node_mem>
+    <node_processors>40</node_processors>
+    <pbs use="yes">
+        <max_user_jobs>3000</max_user_jobs>
+        <script_line>#PBS -l qos=flux</script_line>
+        <script_line>#PBS -A arul_fluxm</script_line>
+        <script_line>#PBS -q fluxm</script_line>
+        <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
+        <script_line>#PBS -m abe</script_line>
+    </pbs>
+  </server>
+
+  <!-- modules used by pipeline -->
+  <modules>
+    <module>epd</module>
+    <module>java</module>
+    <module>R</module>
+    <module>bioinfo</module>
+    <module>bx-python/0.7.0</module>
+    <module>pysam/0.6</module>
+    <module>fastqc/0.10.1</module>
+    <module>picard/1.80</module>
+    <module>samtools/0.1.18</module>
+    <module>bowtie/0.12.8</module>
+    <module>bowtie2/2.0.0-beta6</module>
+    <module>tophat/2.0.6</module>
+    <module>cufflinks/2.0.2</module>
+    <module>BEDTools/2.17.0</module>
+    <module>ucsc/2012-Feb-08</module>
+    <module>HTSeq/0.5.3p9</module>
+    <module>varscan/2.3.3</module>
+  </modules>
+
+  <!-- fragment size parameters -->
+  <fragment_size_mean_default>200</fragment_size_mean_default>
+  <fragment_size_stdev_default>40</fragment_size_stdev_default>
+  <min_fragment_size>0</min_fragment_size>
+  <max_fragment_size>1000</max_fragment_size>
+
+  <!-- UCSC big data server url -->
+  <ucsc_big_data_url>http://141.214.4.250</ucsc_big_data_url>
+
+  <!-- tophat parameters -->
+  <tophat>
+    <arg>--GTF $known_genes_gtf</arg>
+    <arg>--transcriptome-index $transcriptome_bowtie2_index</arg>
+  </tophat>
+
+  <!-- tophat-fusion parameters -->
+  <tophatfusion run="yes">
+    <arg>--GTF $known_genes_gtf</arg>
+    <arg>--transcriptome-index $transcriptome_bowtie1_index</arg>
+    <arg>--bowtie1</arg>
+    <arg>--fusion-search</arg>
+    <arg>--keep-fasta-order</arg>
+    <arg>--no-coverage-search</arg>
+    <arg>--fusion-min-dist 0</arg>
+    <arg>--fusion-anchor-length 13</arg>
+    <arg>--fusion-ignore-chromosomes chrM</arg>
+  </tophatfusion>
+
+  <!-- tophat-fusion post parameters -->
+  <tophatfusionpost run="yes">
+    <arg>--skip-blast</arg>
+    <arg>--num-fusion-reads 1</arg>
+    <arg>--num-fusion-pairs 1</arg>
+    <arg>--num-fusion-both 3</arg>
+  </tophatfusionpost>
+
+  <!-- cufflinks ab initio parameters -->
+  <cufflinks_ab_initio run="yes">
+    <arg>-M $cufflinks_mask_genes</arg>
+    <arg>--multi-read-correct</arg>
+    <arg>--no-update-check</arg>
+    <arg>-q</arg>
+    <arg>--max-bundle-length 5000000</arg>
+  </cufflinks_ab_initio>
+
+  <!-- cufflinks known parameters -->
+  <cufflinks_known run="yes">
+    <arg>--GTF $known_genes_gtf</arg>
+    <arg>-M $cufflinks_mask_genes</arg>
+    <arg>--multi-read-correct</arg>
+    <arg>--no-update-check</arg>
+    <arg>-q</arg>
+    <arg>--max-bundle-length 5000000</arg>
+  </cufflinks_known>
+
+  <!-- htseq parameters -->
+  <htseq run="yes">
+    <stranded>no</stranded>
+  </htseq>
+
+  <!-- varscan parameters -->
+  <varscan run="yes">
+    <arg>--min-coverage 8</arg>
+    <arg>--min-reads2 2</arg>
+    <arg>--min-avg-qual 15</arg>
+    <arg>--min-var-freq 0.01</arg>
+    <arg>--min-freq-for-hom 0.75</arg> 
+    <arg>--p-value 0.10</arg>
+    <arg>--strand-filter 0</arg>
+    <arg>--output-vcf 1</arg>
+  </varscan>
+
+  <!-- genome-specific file locations -->
+  <genome name="human" root_dir="Homo_sapiens_UCSC_hg19">
+    <abundant_bowtie2_index>Sequence/AbundantSequences/abundant</abundant_bowtie2_index>
+    <genome_fasta_file>Sequence/Genome/genome.fa</genome_fasta_file>
+    <genome_lexicographical_fasta_file>Sequence/Genome/genome_lexicographical_order.fa</genome_lexicographical_fasta_file>
+    <genome_bowtie1_index>Sequence/Genome/Bowtie1Index/genome</genome_bowtie1_index>
+    <genome_bowtie2_index>Sequence/Genome/Bowtie2Index/genome</genome_bowtie2_index>
+    <fragment_size_bowtie1_index>Sequence/Transcriptome/FragSizeBowtie1Index/fragsize</fragment_size_bowtie1_index>
+    <repbase_bowtie2_index>Sequence/RepeatElements/repeats</repbase_bowtie2_index>
+    <gene_annotation_refflat>Annotation/refFlat.txt</gene_annotation_refflat>
+    <gene_annotation_refgene>Annotation/tophatfusion_ucsc_hg19_refGene.txt</gene_annotation_refgene>
+    <gene_annotation_ensgene>Annotation/tophatfusion_ucsc_hg19_ensGene.txt</gene_annotation_ensgene>
+    <picard_ribosomal_intervals>Annotation/picard_ribosomal_intervals.txt</picard_ribosomal_intervals>
+    <chrom_sizes>Annotation/ChromInfo.txt</chrom_sizes>
+    <known_genes_gtf>Annotation/genes.gtf</known_genes_gtf>
+    <transcriptome_bowtie1_index>Sequence/Transcriptome/Bowtie1Index/transcriptome</transcriptome_bowtie1_index>
+    <transcriptome_bowtie2_index>Sequence/Transcriptome/Bowtie2Index/transcriptome</transcriptome_bowtie2_index>
+    <cufflinks_mask_genes>Annotation/cufflinks_mask_genes.gtf</cufflinks_mask_genes>
+  </genome>
+</rnaseq>
