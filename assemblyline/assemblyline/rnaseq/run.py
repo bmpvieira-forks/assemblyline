@@ -124,8 +124,7 @@ def get_pbs_header(job_name,
     # make PBS script
     lines = ["#!/bin/sh",
              "#PBS -N %s" % job_name,
-             "#PBS -l %s" % (",".join(resource_fields)),
-             "#PBS -V"]
+             "#PBS -l %s" % (",".join(resource_fields))]
     if email is not None:
         lines.append("#PBS -m %s" % (email))
     if stdout_filename is None:
@@ -191,13 +190,13 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         return config.JOB_ERROR
     logging.info("Analyzing library: %s" % (library.library_id)) 
     # check genome
-    if library.species not in pipeline.species:
+    if library.species not in pipeline.genomes:
         logging.error("Library %s genome %s not found" % 
                       (library.library_id, library.species))
         return config.JOB_ERROR
-    # get genome
-    genome = pipeline.species[library.species]
-    genome_dir = os.path.join(server.references_dir, genome.root_dir)
+    # resolve genome paths now that server is known
+    genome_local = pipeline.genomes[library.species]
+    genome_static = genome_local.resolve_paths(server.references_dir)    
     # setup results    
     output_dir = os.path.join(server.output_dir, library.library_id)
     results = config.RnaseqResults(library, output_dir)
@@ -338,7 +337,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.info("%s" % msg)    
         shell_commands.append(bash_log(msg, "INFO"))
         num_threads = min(num_processors, len(results.copied_fastq_files))
-        args = [pipeline.fastqc_bin, "--threads", num_threads, "-o", results.output_dir]
+        args = ['fastqc', "--threads", num_threads, "-o", results.output_dir]
         args.extend(results.copied_fastq_files)
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
@@ -366,7 +365,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 ','.join(results.copied_fastq_files),
                 ','.join(results.filtered_fastq_files),
                 results.sorted_abundant_bam_file,
-                os.path.join(server.references_dir, genome.get_path("abundant_bowtie2_index")),
+                genome_static.abundant_bowtie2_index,
                 results.tmp_dir]
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
@@ -416,7 +415,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 "--frag-size-stdev", pipeline.fragment_size_stdev_default,
                 "-n", config.MAX_INSPECT_SAMPLES,
                 "-p", num_processors,
-                os.path.join(server.references_dir, genome.get_path("fragment_size_bowtie1_index")),
+                genome_static.fragment_size_bowtie1_index,
                 results.library_metrics_file,
                 results.frag_size_dist_plot_file]
         args.extend(results.filtered_fastq_files)
@@ -442,7 +441,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         args = [sys.executable,
                 os.path.join(_pipeline_dir, "repeat_elements.py"),
                 "-p", num_processors,
-                os.path.join(server.references_dir, genome.get_path("repbase_bowtie2_index")),
+                genome_static.repbase_bowtie2_index,
                 results.repeat_elements_file]
         args.extend(results.filtered_fastq_files)
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
@@ -473,12 +472,11 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 '--rg-library="%s"' % library.library_id,
                 '--rg-description="%s"' % library.description,
                 '--rg-center="%s"' % library.study_id]
+        # resolve genome-specific args
         for arg in pipeline.tophat_fusion_args:
-            # substitute species-specific root directory
-            species_arg = arg.replace("${SPECIES}", genome_dir)
-            args.extend(['--tophat-arg="%s"' % species_arg])
+            args.append('--tophat-arg="%s"' % genome_static.resolve_arg(arg))
         args.extend([results.tophat_fusion_dir,
-                     os.path.join(server.references_dir, genome.get_path("genome_bowtie1_index")),
+                     genome_static.genome_bowtie1_index,
                      results.library_metrics_file])
         args.extend(results.filtered_fastq_files)
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
@@ -525,9 +523,9 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 "-p", num_processors,
                 "-o", results.tophat_fusion_dir]
         args.extend(pipeline.tophat_fusion_post_args)
-        args.extend([os.path.join(server.references_dir, genome.get_path("genome_bowtie1_index")),
-                     os.path.join(server.references_dir, genome.get_path("gene_annotation_refgene")),
-                     os.path.join(server.references_dir, genome.get_path("gene_annotation_ensgene")),
+        args.extend([genome_static.genome_bowtie1_index,
+                     genome_static.gene_annotation_refgene,
+                     genome_static.gene_annotation_ensgene,
                      results.tophat_fusion_dir,
                      results.library_id])
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
@@ -559,12 +557,11 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 '--rg-library="%s"' % library.library_id,
                 '--rg-description="%s"' % library.description,
                 '--rg-center="%s"' % library.study_id]
+        # resolve genome-specific args
         for arg in pipeline.tophat_args:
-            # substitute species-specific root directory
-            species_arg = arg.replace("${SPECIES}", genome_dir)
-            args.extend(['--tophat-arg="%s"' % species_arg])
+            args.append('--tophat-arg="%s"' % genome_static.resolve_arg(arg))
         args.extend([results.tophat_dir,
-                     os.path.join(server.references_dir, genome.get_path("genome_bowtie2_index")),
+                     genome_static.genome_bowtie2_index,
                      results.library_metrics_file])
         args.extend(results.filtered_fastq_files)
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
@@ -609,7 +606,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         args = ["java", "-Xmx4g", "-jar", 
                 "$PICARDPATH/CollectMultipleMetrics.jar",
                 "INPUT=%s" % (results.tophat_bam_file),
-                "REFERENCE_SEQUENCE=%s" % os.path.join(server.references_dir, genome.get_path("genome_lexicographical_fasta_file")),
+                "REFERENCE_SEQUENCE=%s" % genome_static.genome_lexicographical_fasta_file,
                 "OUTPUT=%s" % (os.path.join(results.output_dir, "picard")),
                 "ASSUME_SORTED=TRUE",
                 "TMP_DIR=%s" % results.tmp_dir,
@@ -638,10 +635,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 "--tmp-dir", results.tmp_dir,
                 "--picard-dir", "$PICARDPATH",
                 results.tophat_bam_file,
-                results.library_metrics_file,   
-                os.path.join(server.references_dir, genome.get_path("gene_annotation_refflat")),
-                os.path.join(server.references_dir, genome.get_path("picard_ribosomal_intervals")),
-                os.path.join(server.references_dir, genome.get_path("genome_lexicographical_fasta_file")),
+                results.library_metrics_file,
+                genome_static.gene_annotation_refflat,
+                genome_static.picard_ribosomal_intervals,
+                genome_static.genome_lexicographical_fasta_file,   
                 results.rnaseq_metrics,
                 results.rnaseq_metrics_pdf]
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
@@ -665,7 +662,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
             "--tmp-dir", results.tmp_dir,
             results.library_metrics_file,
             results.alignment_summary_metrics,
-            os.path.join(server.references_dir, genome.get_path("chrom_sizes")),
+            genome_static.chrom_sizes,
             results.tophat_bam_file,
             results.coverage_bigwig_prefix,
             results.coverage_track_file]
@@ -681,8 +678,8 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Assembling transcriptome with Cufflinks"
     input_files = [results.library_metrics_file, 
                    results.tophat_bam_file]
-    output_files = [results.cufflinks_de_novo_gtf_file]    
-    skip = ((not pipeline.cufflinks_de_novo_run) or
+    output_files = [results.cufflinks_ab_initio_gtf_file]    
+    skip = ((not pipeline.cufflinks_ab_initio_run) or
             many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % msg)
@@ -691,22 +688,20 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, os.path.join(_pipeline_dir, "run_cufflinks.py"),
-                "--cufflinks-bin", pipeline.cufflinks_bin,
                 "-p", num_processors,
                 "-L", library.library_id,
                 "--library-type", library.library_type]
         if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
             args.append("--learn-frag-size")
-        for arg in pipeline.cufflinks_de_novo_args:
-            # substitute species-specific root directory
-            species_arg = arg.replace("${SPECIES}", genome_dir)
-            args.append('--cufflinks-arg="%s"' % (species_arg))
+        # resolve genome-specific args
+        for arg in pipeline.cufflinks_ab_initio_args:
+            args.append('--cufflinks-arg="%s"' % genome_static.resolve_arg(arg))
         args.extend([results.tophat_bam_file,
-                     results.cufflinks_de_novo_dir,
+                     results.cufflinks_ab_initio_dir,
                      results.library_metrics_file])
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
-        log_file = os.path.join(results.log_dir, 'cufflinks_de_novo.log')
+        log_file = os.path.join(results.log_dir, 'cufflinks_ab_initio.log')
         command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())
@@ -726,16 +721,14 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, os.path.join(_pipeline_dir, "run_cufflinks.py"),
-                "--cufflinks-bin", pipeline.cufflinks_bin,
                 "-p", num_processors,
                 "-L", library.library_id,
                 "--library-type", library.library_type]
         if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
             args.append("--learn-frag-size")
+        # resolve genome-specific args
         for arg in pipeline.cufflinks_known_args:
-            # substitute species-specific root directory
-            species_arg = arg.replace("${SPECIES}", genome_dir)
-            args.append('--cufflinks-arg="%s"' % (species_arg))
+            args.append('--cufflinks-arg="%s"' % genome_static.resolve_arg(arg))
         args.extend([results.tophat_bam_file,
                      results.cufflinks_known_dir,
                      results.library_metrics_file])
@@ -761,7 +754,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, os.path.join(_pipeline_dir, "run_htseq_count.py"),
                 "--stranded", pipeline.htseq_count_stranded,
-                os.path.join(server.references_dir, genome.get_path("known_genes_gtf")),
+                genome_static.known_genes_gtf,
                 results.tophat_bam_file,
                 results.htseq_count_known_file,
                 results.tmp_dir]                
@@ -816,7 +809,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         for arg in pipeline.varscan_args:
             args.append('--varscan-arg="%s"' % (arg))
         args.extend(["$VARSCANPATH/VarScan.jar",
-                     os.path.join(server.references_dir, genome.get_path("genome_lexicographical_fasta_file")),
+                     genome_static.genome_lexicographical_fasta_file,
                      results.tophat_rmdup_bam_file,
                      results.varscan_snv_file,
                      results.varscan_indel_file])

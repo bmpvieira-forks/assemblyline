@@ -3,6 +3,7 @@ Created on Aug 3, 2011
 
 @author: mkiyer
 '''
+import re
 import os
 import logging
 import collections
@@ -75,7 +76,7 @@ PICARD_RNASEQ_METRICS_PLOT_PDF = "picard.rnaseq_metrics_plot.pdf"
 COVERAGE_BIGWIG_PREFIX = "coverage"
 COVERAGE_UCSC_TRACK_FILE = "coverage.ucsc.tracks"
 # cufflinks output
-CUFFLINKS_DE_NOVO_DIR = "cufflinks_de_novo"
+CUFFLINKS_AB_INITIO_DIR = "cufflinks_ab_initio"
 CUFFLINKS_KNOWN_DIR = "cufflinks_known"
 CUFFLINKS_TRANSCRIPTS_GTF_FILE = "transcripts.gtf"
 CUFFLINKS_GENES_FILE = "genes.fpkm_tracking"
@@ -195,8 +196,8 @@ class RnaseqResults(object):
         self.tophat_fusion_post_result_file = os.path.join(self.output_dir, TOPHAT_FUSION_POST_RESULT_FILE)
         self.tophat_fusion_tmp_files = (os.path.join(self.output_dir, f) for f in TOPHAT_FUSION_TMP_FILES)
         # cufflinks ab initio output files
-        self.cufflinks_de_novo_dir = os.path.join(self.output_dir, CUFFLINKS_DE_NOVO_DIR)
-        self.cufflinks_de_novo_gtf_file = os.path.join(self.cufflinks_de_novo_dir, CUFFLINKS_TRANSCRIPTS_GTF_FILE)
+        self.cufflinks_ab_initio_dir = os.path.join(self.output_dir, CUFFLINKS_AB_INITIO_DIR)
+        self.cufflinks_ab_initio_gtf_file = os.path.join(self.cufflinks_ab_initio_dir, CUFFLINKS_TRANSCRIPTS_GTF_FILE)
         # cufflinks known output files
         self.cufflinks_known_dir = os.path.join(self.output_dir, CUFFLINKS_KNOWN_DIR)
         self.cufflinks_known_gtf_file = os.path.join(self.cufflinks_known_dir, CUFFLINKS_TRANSCRIPTS_GTF_FILE)
@@ -215,6 +216,11 @@ class RnaseqResults(object):
     def validate(self):
         is_valid = True
         missing_files = []
+        # check job done file
+        if not os.path.exists(self.job_done_file):
+            logging.error("Library %s missing job done file" % (self.library_id))
+            missing_files.append(self.job_done_file)
+            is_valid = False       
         # read config xml file
         if not os.path.exists(self.config_xml_file):
             logging.error("Library %s missing config xml file" % (self.library_id))
@@ -307,11 +313,6 @@ class RnaseqResults(object):
             logging.error("Library %s missing coverage track file" % (self.library_id))
             missing_files.append(self.coverage_track_file)
             is_valid = False
-        # check job done file
-        if not os.path.exists(self.job_done_file):
-            logging.error("Library %s missing job done file" % (self.library_id))
-            missing_files.append(self.job_done_file)
-            is_valid = False        
         # check tophat fusion (optional)
         if config.tophat_fusion_run:
             # check tophat fusion bam file
@@ -330,11 +331,11 @@ class RnaseqResults(object):
                     logging.error("Library %s missing/corrupt tophat fusion post result file" % (self.library_id))
                     missing_files.append(self.tophat_fusion_post_result_file)
                     is_valid = False
-        # check cufflinks de novo files
-        if config.cufflinks_de_novo_run:
-            if not file_exists_and_nz_size(self.cufflinks_de_novo_gtf_file):
-                logging.error("Library %s missing cufflinks de novo gtf file" % (self.library_id))
-                missing_files.append(self.cufflinks_de_novo_gtf_file)
+        # check cufflinks ab initio files
+        if config.cufflinks_ab_initio_run:
+            if not file_exists_and_nz_size(self.cufflinks_ab_initio_gtf_file):
+                logging.error("Library %s missing cufflinks ab initio gtf file" % (self.library_id))
+                missing_files.append(self.cufflinks_ab_initio_gtf_file)
                 is_valid = False
         # check cufflinks known files
         if config.cufflinks_known_run:
@@ -366,8 +367,7 @@ class RnaseqResults(object):
         return is_valid, missing_files
 
 class GenomeConfig(object):
-    fields = ("root_dir",
-              "abundant_bowtie2_index",
+    fields = ("abundant_bowtie2_index",
               "genome_fasta_file",
               "genome_lexicographical_fasta_file",
               "genome_bowtie1_index",
@@ -379,25 +379,45 @@ class GenomeConfig(object):
               "gene_annotation_ensgene",
               "picard_ribosomal_intervals",
               "chrom_sizes",
-              "known_genes_gtf")
+              "known_genes_gtf",
+              "transcriptome_bowtie1_index",
+              "transcriptome_bowtie2_index",
+              "cufflinks_mask_genes")
     
     @staticmethod
     def from_xml_elem(elem):
         g = GenomeConfig()
-        g.species = elem.get("name")
+        g.name = elem.get("name")
+        g.root_dir = elem.get("root_dir")
         for attrname in GenomeConfig.fields:
             setattr(g, attrname, elem.findtext(attrname))
         return g
 
     def to_xml(self, root):
-        root.set("name", self.species)
+        root.set("name", self.name)
+        root.set("root_dir", self.root_dir)
         for attrname in GenomeConfig.fields:
             elem = etree.SubElement(root, attrname)
             elem.text = str(getattr(self, attrname))            
 
-    def get_path(self, attr_name):
-        return os.path.join(self.root_dir, getattr(self, attr_name))
-    
+    def resolve_paths(self, root_dir=''):
+        # copy genome config object
+        g = GenomeConfig()
+        g.name = self.name
+        g.root_dir = self.root_dir
+        # expand paths
+        for attrname in GenomeConfig.fields:
+            abspath = os.path.join(str(root_dir), g.root_dir, getattr(self, attrname))
+            setattr(g, attrname, abspath)
+        return g
+
+    def resolve_arg(self, arg):
+        newtxt = str(arg)
+        for k in re.findall(r'\$\w+', arg):
+            v = getattr(self, k[1:])
+            newtxt = re.sub('\%s' % k, v, newtxt, count=1)
+        return newtxt
+
     def is_valid(self, references_dir=""):
         valid = True
         abs_root_dir = os.path.join(references_dir, self.root_dir)
@@ -422,6 +442,12 @@ class GenomeConfig(object):
         if not os.path.exists(os.path.join(abs_root_dir, self.repbase_bowtie2_index + ".1.bt2")):
             logging.error("Repeat element bowtie2 index %s not found" % (self.repbase_bowtie2_index))
             valid = False
+        if not os.path.exists(os.path.join(abs_root_dir, self.transcriptome_bowtie1_index + ".1.ebwt")):
+            logging.error("Transcriptome bowtie index %s not found" % (self.transcriptome_bowtie1_index))
+            valid = False
+        if not os.path.exists(os.path.join(abs_root_dir, self.transcriptome_bowtie2_index + ".1.bt2")):
+            logging.error("Transcriptome bowtie2 index %s not found" % (self.transcriptome_bowtie2_index))
+            valid = False
         for attrname in ("genome_fasta_file",
                          "genome_lexicographical_fasta_file",
                          "gene_annotation_refflat",
@@ -429,9 +455,10 @@ class GenomeConfig(object):
                          "gene_annotation_ensgene",
                          "picard_ribosomal_intervals",
                          "chrom_sizes",
-                         "known_genes_gtf"):
+                         "known_genes_gtf",
+                         "cufflinks_mask_genes"):
             if not os.path.exists(os.path.join(abs_root_dir, getattr(self, attrname))):
-                logging.error("Annotation file %s not found" % (getattr(self, attrname)))
+                logging.error("Annotation file '%s' not found" % (getattr(self, attrname)))
                 valid = False
         return valid
 
@@ -522,22 +549,16 @@ class PipelineConfig(object):
         tree = etree.parse(xmlfile)  
         root = tree.getroot()
         c = PipelineConfig()
+        # genome config
+        c.genomes = {}
+        for elem in root.findall("genome"):
+            g = GenomeConfig.from_xml_elem(elem)
+            c.genomes[g.name] = g
         # modules
         modules_elem = root.find("modules")
         c.modules = []
         for elem in modules_elem.findall("module"):
             c.modules.append(elem.text)
-        # binaries (hard-coded for now)
-        c.fastqc_bin = "fastqc"
-        c.samtools_bin = "samtools"
-        c.r_bin = "R"
-        c.rscript_bin = "Rscript"
-        c.bowtie_bin = "bowtie"
-        c.bowtie2_bin = "bowtie2"
-        c.tophat_bin = "tophat"
-        c.cufflinks_bin = "cufflinks"
-        c.bedtools_dir = ""
-        c.ucsc_dir = ""
         # fragment size parameters
         c.fragment_size_mean_default = int(root.findtext("fragment_size_mean_default"))
         c.fragment_size_stdev_default = int(root.findtext("fragment_size_stdev_default"))
@@ -562,12 +583,12 @@ class PipelineConfig(object):
         c.tophat_fusion_post_run = parse_bool(elem.get("run", "no"))
         for arg_elem in elem.findall("arg"):
             c.tophat_fusion_post_args.append(arg_elem.text)
-        # cufflinks de novo parameters
-        c.cufflinks_de_novo_args = []
-        elem = root.find("cufflinks_de_novo")
-        c.cufflinks_de_novo_run = parse_bool(elem.get("run", "no"))
+        # cufflinks ab initio parameters
+        c.cufflinks_ab_initio_args = []
+        elem = root.find("cufflinks_ab_initio")
+        c.cufflinks_ab_initio_run = parse_bool(elem.get("run", "no"))
         for arg_elem in elem.findall("arg"):
-            c.cufflinks_de_novo_args.append(arg_elem.text)
+            c.cufflinks_ab_initio_args.append(arg_elem.text)
         # cufflinks known parameters
         c.cufflinks_known_args = []
         elem = root.find("cufflinks_known")
@@ -589,11 +610,6 @@ class PipelineConfig(object):
         for elem in root.findall("server"):
             server = ServerConfig.from_xml_elem(elem)
             c.servers[server.name] = server
-        # genome config
-        c.species = {}
-        for elem in root.findall("species"):
-            g = GenomeConfig.from_xml_elem(elem)
-            c.species[g.species] = g
         return c
 
     def to_xml(self, output_file):
@@ -629,11 +645,11 @@ class PipelineConfig(object):
         for arg in self.tophat_fusion_post_args:
             elem = etree.SubElement(tophat_fusion_post_elem, "arg")
             elem.text = arg
-        # cufflinks de novo parameters
-        cufflinks_de_novo_elem = etree.SubElement(root, "cufflinks_de_novo")
-        cufflinks_de_novo_elem.set("run", self.cufflinks_de_novo_run)
-        for arg in self.cufflinks_de_novo_args:
-            elem = etree.SubElement(cufflinks_de_novo_elem, "arg")
+        # cufflinks ab initio parameters
+        cufflinks_ab_initio_elem = etree.SubElement(root, "cufflinks_ab_initio")
+        cufflinks_ab_initio_elem.set("run", self.cufflinks_ab_initio_run)
+        for arg in self.cufflinks_ab_initio_args:
+            elem = etree.SubElement(cufflinks_ab_initio_elem, "arg")
             elem.text = arg
         # cufflinks known parameters
         cufflinks_known_elem = etree.SubElement(root, "cufflinks_known")
@@ -657,8 +673,8 @@ class PipelineConfig(object):
             elem = etree.SubElement(root, "server")
             server.to_xml(elem)
         # genomes
-        for genome in self.species.itervalues():
-            elem = etree.SubElement(root, "species")
+        for genome in self.genomes.itervalues():
+            elem = etree.SubElement(root, "genome")
             genome.to_xml(elem)
         # output files
         f = open(output_file, "w")
@@ -681,24 +697,23 @@ class PipelineConfig(object):
             logging.error("Server %s missing required paths" % (server_name))
             valid = False
         # check genomes
-        for species_name,genome in self.species.iteritems():
+        for name,genome in self.genomes.iteritems():
             if not genome.is_valid(server.references_dir):
-                logging.error("Genome %s missing required files" % (species_name))
+                logging.error("Genome %s missing required files" % (name))
                 valid = False
-        species_dir = os.path.join(server.references_dir, genome.root_dir)
         #
         # Check software installation
         #
         # check fastqc
         msg = 'fastqc'
-        if check_executable(self.fastqc_bin):
+        if check_executable('fastqc'):
             logging.debug("Checking for '%s' binary... found" % msg)
         else:
             logging.error("'%s' binary not found or not executable" % msg)
             valid = False
         # check samtools
         msg = 'samtools'
-        if check_executable(self.samtools_bin):
+        if check_executable('samtools'):
             logging.debug("Checking for '%s' binary... found" % msg)
         else:
             logging.error("'%s' binary not found or not executable" % msg)
@@ -736,37 +751,37 @@ class PipelineConfig(object):
                 valid = False
         # check R
         msg = 'R'
-        if check_executable(self.r_bin):
+        if check_executable('R'):
             logging.debug("Checking for '%s' binary... found" % msg)
         else:
             logging.error("'%s' binary not found or not executable" % msg)
             valid = False
         msg = 'Rscript'
-        if check_executable(self.rscript_bin):
+        if check_executable("Rscript"):
             logging.debug("Checking for '%s' binary... found" % msg)
         else:
             logging.error("'%s' binary not found or not executable" % msg)
             valid = False                
         msg = 'bowtie'
-        if check_executable(self.bowtie_bin):
+        if check_executable('bowtie'):
             logging.debug("Checking for '%s' binary... found" % msg)
         else:
             logging.error("'%s' binary not found or not executable" % msg)
             valid = False
         msg = 'bowtie2'
-        if check_executable(self.bowtie2_bin):
+        if check_executable('bowtie2'):
             logging.debug("Checking for '%s' binary... found" % msg)
         else:
             logging.error("'%s' binary not found or not executable" % msg)
             valid = False
         msg = 'tophat'
-        if check_executable(self.tophat_bin):
+        if check_executable('tophat'):
             logging.debug("Checking for '%s' binary... found" % msg)
         else:
             logging.error("'%s' binary not found or not executable" % msg)
             valid = False
         msg = 'cufflinks'
-        if check_executable(self.cufflinks_bin):
+        if check_executable('cufflinks'):
             logging.debug("Checking for '%s' binary... found" % msg)
         else:
             logging.error("'%s' binary not found or not executable" % msg)
@@ -778,21 +793,9 @@ class PipelineConfig(object):
         else:
             logging.error("'%s' binary not found or not executable" % msg)
             valid = False            
-        # check UCSC binaries
+        # check UCSC binary
         msg = 'UCSC bedGraphToBigWig'
-        if check_executable(os.path.join(self.ucsc_dir, "bedGraphToBigWig")):
-            logging.debug("Checking for '%s' binaries... found" % msg)
-        else:
-            logging.error("'%s' binaries not found or not executable" % msg)
-            valid = False
-        msg = 'UCSC blat'
-        if check_executable(os.path.join(self.ucsc_dir, "blat")):
-            logging.debug("Checking for '%s' binaries... found" % msg)
-        else:
-            logging.error("'%s' binaries not found or not executable" % msg)
-            valid = False
-        msg = 'UCSC faToTwoBit'
-        if check_executable(os.path.join(self.ucsc_dir, "faToTwoBit")):
+        if check_executable('bedGraphToBigWig'):
             logging.debug("Checking for '%s' binaries... found" % msg)
         else:
             logging.error("'%s' binaries not found or not executable" % msg)

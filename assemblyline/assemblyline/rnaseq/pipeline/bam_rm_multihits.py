@@ -72,6 +72,7 @@ def parse_pe_readnum_in_flags(bamfh, fix_qname=True):
 
 def bam_pe_rm_multihits(bamfh, outfh, readnum_in_qname):
     num_frags = 0
+    orphan_frags = 0
     if readnum_in_qname:
         parse_pe_reads_iter = parse_pe_readnum_in_qname(bamfh)
     else:
@@ -80,6 +81,7 @@ def bam_pe_rm_multihits(bamfh, outfh, readnum_in_qname):
         n1 = len(pe_reads[0])
         n2 = len(pe_reads[1])
         if (n1 == 0 or n2 == 0):
+            orphan_frags += 1
             continue
         r1 = pe_reads[0][0]
         r2 = pe_reads[1][0]
@@ -90,7 +92,8 @@ def bam_pe_rm_multihits(bamfh, outfh, readnum_in_qname):
         num_frags += 1
     outfh.close()
     bamfh.close()
-    logging.debug("Found %d fragments" % (num_frags))
+    logging.info("Found %d fragments" % (num_frags))
+    logging.info("Skipped %d orphan fragments" % (orphan_frags))
 
 def parse_sr_reads(bamfh, fix_qname=True):
     reads = []
