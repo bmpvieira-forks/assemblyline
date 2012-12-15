@@ -26,42 +26,57 @@ import os
 import logging
 import argparse
 
-import HTSeq
-
 import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
 
-def run_htseq_count(bam_file, gtf_file, output_file, tmp_dir, stranded):
-    # sort bam by read name
-    prefix = os.path.join(tmp_dir, os.path.splitext(os.path.basename(bam_file))[0])
-    sorted_bam_prefix = prefix + ".srt"
-    sorted_bam_file = sorted_bam_prefix + ".bam"
-    args = ["samtools", "sort", "-m", "2000000000",
-            "-n", bam_file, sorted_bam_prefix]
-    logging.debug("samtools sort args: %s" % (map(str, args)))
-    retcode = subprocess.call(args)
-    if retcode != 0:
-        if os.path.exists(sorted_bam_file):
-            os.remove(sorted_bam_file)
-        return 1
-    logging.debug("sorted bam file: %s" % (bam_file))
-    # convert to sam for htseq-count
-    #args = [sys.executable, 
-    #        os.path.join(_pipeline_dir, "fix_pe_qname.py"),
-    #        sorted_bam_file, "-"]
-    args = ["samtools", "view", sorted_bam_file]
-    sam_p = subprocess.Popen(args, stdout=subprocess.PIPE)
+def run_htseq_count(gtf_file, bam_file, output_file, run_as_pe, 
+                    is_sorted, extra_args, tmp_dir):
+    # to use paired-end alignments the bam file needs to be sorted by 
+    # queryname before running htseq-count
+    do_sort = run_as_pe and (not is_sorted)
+    if do_sort:
+        # sort bam by read name
+        prefix = os.path.join(tmp_dir, os.path.splitext(os.path.basename(bam_file))[0])
+        sorted_bam_prefix = prefix + ".qnamesorted"
+        sorted_bam_file = sorted_bam_prefix + ".bam"
+        args = ["samtools", "sort", "-m", "2000000000",
+                "-n", bam_file, sorted_bam_prefix]
+        logging.debug("samtools sort args: %s" % (map(str, args)))
+        retcode = subprocess.call(args)
+        if retcode != 0:
+            if os.path.exists(sorted_bam_file):
+                os.remove(sorted_bam_file)
+            return 1
+        logging.debug("sorted bam file: %s" % (bam_file))
+        input_file = sorted_bam_file
+    else:
+        input_file = bam_file
+    # now stream the bam file as sam for htseq-count
+    if run_as_pe:
+        args = ["samtools", "view", input_file]
+        logging.debug("samtools view args: %s" % (map(str, args)))
+        sam_p = subprocess.Popen(args, stdout=subprocess.PIPE)
+    else:
+        # if running as single-read need to eliminate all paired-end flags from
+        # the reads 
+        args = [sys.executable, 
+                os.path.join(_pipeline_dir, "bam_pe_to_sr.py"),
+                input_file, "-"]
+        logging.debug("bam pe to sr args: %s" % (map(str, args)))
+        sam_p = subprocess.Popen(args, stdout=subprocess.PIPE)
     # run htseq-count
-    args = ["htseq-count", "-m", "union", "-s", stranded, "-", gtf_file]
-    outfh = open(output_file, "w")
+    args = ["htseq-count"]
+    for arg in extra_args:        
+        args.extend(arg.split())
+    args.extend(["-", gtf_file])
     logging.debug("htseq-count args: %s" % (map(str, args)))
+    outfh = open(output_file, "w")
     retcode1 = subprocess.call(args, stdin=sam_p.stdout, stdout=outfh)
+    outfh.close()
     retcode2 = sam_p.wait()
     retcode = retcode1 + retcode2
-    logging.info("finished htseq-count bam file: %s" % (bam_file))
     # clean up
-    outfh.close()
-    if os.path.exists(sorted_bam_file):
+    if do_sort and os.path.exists(sorted_bam_file):
         os.remove(sorted_bam_file)
     if retcode != 0:
         if os.path.exists(output_file):
@@ -75,11 +90,13 @@ def main():
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     # command line parsing
     parser = argparse.ArgumentParser()
-    parser.add_argument('--stranded', dest="stranded", default="no")
+    parser.add_argument("--tmp-dir", dest='tmp_dir', default="/tmp")
+    parser.add_argument("--arg", dest="extra_args", action="append", default=[])
+    parser.add_argument("--pe", dest='pe', action="store_true", default=False)
+    parser.add_argument("--assume-sorted", dest='assume_sorted', action="store_true", default=False)
     parser.add_argument('gtf_file')
     parser.add_argument('bam_file')
     parser.add_argument('output_file')
-    parser.add_argument('tmp_dir')
     args = parser.parse_args()
     # check args
     if not os.path.exists(args.gtf_file):
@@ -88,9 +105,11 @@ def main():
     if not os.path.exists(args.bam_file):
         logging.error("bam file %s not found" % (args.bam_file))
         return 1
-    return run_htseq_count(args.bam_file, args.gtf_file, 
-                           args.output_file, args.tmp_dir, 
-                           args.stranded)
+    return run_htseq_count(args.gtf_file, args.bam_file, args.output_file, 
+                           run_as_pe=args.pe,
+                           is_sorted=args.assume_sorted,
+                           extra_args=args.extra_args,
+                           tmp_dir=args.tmp_dir)
 
 if __name__ == '__main__':
     sys.exit(main())
