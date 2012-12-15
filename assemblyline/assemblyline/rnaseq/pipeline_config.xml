@@ -193,8 +193,9 @@
   </cufflinks_known>
 
   <!-- htseq parameters -->
-  <htseq run="yes">
-    <stranded>no</stranded>
+  <htseq run="yes" pe="no">
+    <arg>-m union</arg>
+    <arg>-s no</arg>
   </htseq>
 
   <!-- varscan parameters -->

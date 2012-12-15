@@ -344,7 +344,7 @@ class RnaseqResults(object):
                 missing_files.append(self.cufflinks_known_gtf_file)
                 is_valid = False
         # check htseq files
-        if config.htseq_run:
+        if config.htseq_count_run:
             if not file_exists_and_nz_size(self.htseq_count_known_file):
                 logging.error("Library %s missing htseq-count output file" % (self.library_id))
                 missing_files.append(self.htseq_count_known_file)
@@ -596,9 +596,12 @@ class PipelineConfig(object):
         for arg_elem in elem.findall("arg"):
             c.cufflinks_known_args.append(arg_elem.text)
         # htseq parameters
+        c.htseq_count_args = []
         elem = root.find("htseq")
-        c.htseq_run = parse_bool(elem.get("run", "no"))
-        c.htseq_count_stranded = elem.findtext("stranded")
+        c.htseq_count_run = parse_bool(elem.get("run", "no"))
+        c.htseq_count_pe = parse_bool(elem.get("pe", "no"))
+        for arg_elem in elem.findall("arg"):
+            c.htseq_count_args.append(arg_elem.text)
         # varscan parameters
         c.varscan_args = []
         elem = root.find("varscan")
@@ -659,9 +662,11 @@ class PipelineConfig(object):
             elem.text = arg
         # htseq parameters
         htseq_elem = etree.SubElement(root, "htseq")
-        htseq_elem.set("run", self.htseq_run)
-        elem = etree.SubElement(htseq_elem, "stranded")
-        elem.text = self.htseq_count_stranded
+        htseq_elem.set("run", self.htseq_count_run)
+        htseq_elem.set("pe", self.htseq_count_pe)
+        for arg in self.htseq_count_args:
+            elem = etree.SubElement(htseq_elem, "arg")
+            elem.text = arg
         # varscan parameters
         varscan_elem = etree.SubElement(root, "varscan")
         varscan_elem.set("run", self.varscan_run)

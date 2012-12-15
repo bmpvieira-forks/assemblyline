@@ -744,7 +744,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Counting reads across genes with htseq-count"
     output_files = [results.htseq_count_known_file]
     input_files = [results.tophat_bam_file]
-    skip = ((not pipeline.htseq_run) or
+    skip = ((not pipeline.htseq_count_run) or
             many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % msg)
@@ -753,17 +753,20 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, os.path.join(_pipeline_dir, "run_htseq_count.py"),
-                "--stranded", pipeline.htseq_count_stranded,
-                genome_static.known_genes_gtf,
-                results.tophat_bam_file,
-                results.htseq_count_known_file,
-                results.tmp_dir]                
+                "--tmp-dir", results.tmp_dir]
+        if pipeline.htseq_count_pe:
+            args.append("--pe")
+        for arg in pipeline.htseq_count_args:
+            args.append('--arg="%s"' % genome_static.resolve_arg(arg))
+        args.extend([genome_static.known_genes_gtf,
+                     results.tophat_bam_file,
+                     results.htseq_count_known_file])
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
         log_file = os.path.join(results.log_dir, 'htseq_count_known.log')
         command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())    
+        shell_commands.append(bash_check_retcode())
     #
     # run picard to remove duplicates
     #
