@@ -87,6 +87,9 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
     PBS_JOB_WALLTIME = "10:00:00"
     # parse library table
     for lib in libs:
+        # library directories
+        lib_output_dir = os.path.join(config.output_dir, lib.library_id)
+        tmp_dir = os.path.join(lib_output_dir, "tmp")                
         #
         # build up sequence of commands
         #
@@ -96,8 +99,8 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
         # get pbs header
         #
         if config.pbs:
-            stdout_file = os.path.join(config.output_dir, "job.stdout")
-            stderr_file = os.path.join(config.output_dir, "job.stderr")
+            stdout_file = os.path.join(lib_output_dir, "job.stdout")
+            stderr_file = os.path.join(lib_output_dir, "job.stderr")            
             pbs_commands = get_pbs_header(job_name=lib.library_id,
                                           num_processors=num_processors,
                                           node_processors=config.node_processors,
@@ -125,8 +128,6 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
         #
         # create directories
         #
-        lib_output_dir = os.path.join(config.output_dir, lib.library_id)
-        tmp_dir = os.path.join(lib_output_dir, "tmp")
         if not os.path.exists(lib_output_dir):
             shell_commands.append(bash_log("Creating directory: %s" % (lib_output_dir), "INFO"))
             shell_commands.append("mkdir -p %s" % (lib_output_dir))
