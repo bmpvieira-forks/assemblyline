@@ -48,6 +48,7 @@ def main():
         for param in sorted_params:
             fields.append(library.params.get(param, "na"))
         fields.append(results.tophat_bam_file)
+        #fields.append(results.cufflinks_ab_initio_gtf_file)
         fields.append(results.cufflinks_gtf_file)
         print '\t'.join(fields)
     return config.JOB_SUCCESS

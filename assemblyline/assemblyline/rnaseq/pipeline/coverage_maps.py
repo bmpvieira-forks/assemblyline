@@ -118,7 +118,7 @@ def main():
                                    'color=%s' % (STRAND_COLOR_MAP[strand]),
                                    'autoScale=on',
                                    'maxHeightPixels=64:64:11',
-                                   'bigDataUrl=%s' % (ucsc_url)])
+                                   'bigDataUrl="%s"' % (ucsc_url)])
             print >>fileh, track_line
         fileh.close()
     return 0
