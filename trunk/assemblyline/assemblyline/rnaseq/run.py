@@ -795,10 +795,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())   
     #
-    # run varscan for variant/indel calling
+    # run varscan for variant calling
     #
     msg = "Calling variants with VarScan"
-    output_files = [results.varscan_snv_file, results.varscan_indel_file]
+    output_files = [results.varscan_snv_file]
     input_files = [results.tophat_rmdup_bam_file]
     skip = ((not pipeline.varscan_run) or
             many_up_to_date(output_files, input_files))
@@ -811,11 +811,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         args = [sys.executable, os.path.join(_pipeline_dir, "run_varscan.py")]
         for arg in pipeline.varscan_args:
             args.append('--varscan-arg="%s"' % (arg))
-        args.extend(["$VARSCANPATH/VarScan.jar",
+        args.extend(["$VARSCANPATH/VarScan.jar", "mpileup2snp",
                      genome_static.genome_lexicographical_fasta_file,
                      results.tophat_rmdup_bam_file,
-                     results.varscan_snv_file,
-                     results.varscan_indel_file])
+                     results.varscan_snv_file])
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
         log_file = os.path.join(results.log_dir, 'varscan.log')
