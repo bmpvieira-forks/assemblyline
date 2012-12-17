@@ -479,39 +479,47 @@ class ServerConfig(object):
             name = dir_elem.get("name")
             c.seq_dirs[name].append(dir_elem.text)
         # pbs support
-        c.node_mem = float(elem.findtext("node_mem"))
-        c.node_processors = int(elem.findtext("node_processors"))
+        c.pbs = False
+        c.node_mem = None
+        c.node_processors = None
+        c.pbs_script_lines = []
         pbs_elem = elem.find("pbs")
         has_pbs = (pbs_elem.get("use") == "yes")
-        c.pbs = False
-        c.pbs_script_lines = []
         if has_pbs:
             c.pbs = True
+            c.node_mem = float(pbs_elem.findtext("node_mem"))
+            c.node_processors = int(pbs_elem.findtext("node_processors"))
             for line_elem in pbs_elem.findall("script_line"):
                 c.pbs_script_lines.append(line_elem.text)
         return c
-    
+
     def to_xml(self, root):
         root.set("name", self.name)
-        root.set("ssh_port", str(self.ssh_port))
         for attrname in ("modules_init_script",
                          "output_dir",
-                         "references_dir",
-                         "node_mem",
-                         "node_processors"):
+                         "references_dir"):
             attrval = getattr(self,attrname)
             if attrval is not None:
                 elem = etree.SubElement(root, attrname)
                 elem.text = str(attrval)
+        # seq repository
+        seq_repos_elem = etree.SubElement(root, "seq_repos")
+        for name, dir_txt in self.seq_dirs.iteritems():
+            elem = etree.SubElement(seq_repos_elem, "dir")
+            elem.set("name", name)
+            elem.text = dir_txt
+        # pbs
+        pbs_elem = etree.SubElement(root, "pbs")
+        use_pbs = "yes" if self.pbs else "no"
+        pbs_elem.set("use", use_pbs)
         if self.pbs:
-            elem = etree.SubElement(root, "pbs")
-            elem.text = "yes"
-        else:
-            elem = etree.SubElement(root, "pbs")
-            elem.text = "no"
-        for line in self.pbs_script_lines:
-            elem = etree.SubElement(root, "script_line")
-            elem.text = line
+            elem = etree.SubElement(pbs_elem, "node_mem")
+            elem.text = self.node_mem
+            elem = etree.SubElement(pbs_elem, "node_processors")
+            elem.text = self.node_processors            
+            for line in self.pbs_script_lines:
+                elem = etree.SubElement(pbs_elem, "script_line")
+                elem.text = line
 
     def is_valid(self):
         valid = True

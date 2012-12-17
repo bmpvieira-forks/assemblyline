@@ -1,6 +1,6 @@
 <rnaseq>
   <!-- server setup -->
-  <server name="mkiyer_rhel6" address="None" ssh_port="22">
+  <server name="mkiyer_rhel6">
     <modules_init_script>/home/mkiyer/sw/rhel6/init.sh</modules_init_script>
     <output_dir>/exds/users/mkiyer/projects/rnaseq/runs</output_dir>
     <references_dir>/exds/users/mkiyer/projects/rnaseq/references</references_dir>
@@ -13,12 +13,10 @@
        <dir name="encode">/exds/flux/mkiyer/encode</dir>
        <dir name="30HJDAAXX">/exds/solexa/runs/090130_PATHBIO-SOLEXA1_30HJDAAXX/Data/IPAR_1.01/Bustard1.9.6_05-02-2009_root/GERALD_05-02-2009_root</dir>
     </seq_repos>
-    <node_mem>8192</node_mem>
-    <node_processors>4</node_processors>
     <pbs use="no"/>
   </server>
 
-  <server name="exds_rhel5" address="None" ssh_port="22">
+  <server name="exds_rhel5">
     <modules_init_script>/exds/sw/rhel5/init.sh</modules_init_script>
     <output_dir>/exds/users/mkiyer/projects/rnaseq/runs</output_dir>
     <references_dir>/exds/users/mkiyer/projects/rnaseq/references</references_dir>
@@ -31,12 +29,10 @@
        <dir name="encode">/exds/flux/mkiyer/encode</dir>
        <dir name="30HJDAAXX">/exds/solexa/runs/090130_PATHBIO-SOLEXA1_30HJDAAXX/Data/IPAR_1.01/Bustard1.9.6_05-02-2009_root/GERALD_05-02-2009_root</dir>
     </seq_repos>
-    <node_mem>256000</node_mem>
-    <node_processors>48</node_processors>
     <pbs use="no"/>
   </server>
 
-  <server name="exds_rhel6" address="None" ssh_port="22">
+  <server name="exds_rhel6">
     <modules_init_script>/exds/sw/rhel6/init.sh</modules_init_script>
     <output_dir>/exds/users/mkiyer/projects/rnaseq/runs</output_dir>
     <references_dir>/exds/users/mkiyer/projects/rnaseq/references</references_dir>
@@ -49,12 +45,10 @@
        <dir name="encode">/exds/flux/mkiyer/encode</dir>
        <dir name="30HJDAAXX">/exds/solexa/runs/090130_PATHBIO-SOLEXA1_30HJDAAXX/Data/IPAR_1.01/Bustard1.9.6_05-02-2009_root/GERALD_05-02-2009_root</dir>
     </seq_repos>
-    <node_mem>256000</node_mem>
-    <node_processors>48</node_processors>
     <pbs use="no"/>
   </server>
 
-  <server name="mctp_hpc" address="None" ssh_port="22">
+  <server name="mctp_hpc">
     <modules_init_script>/exds/sw/rhel6/init.sh</modules_init_script>
     <output_dir>/exds/users/mkiyer/projects/rnaseq/runs</output_dir>
     <references_dir>/exds/users/mkiyer/projects/rnaseq/references</references_dir>
@@ -67,52 +61,56 @@
        <dir name="encode">/exds/flux/mkiyer/encode</dir>
        <dir name="30HJDAAXX">/exds/solexa/runs/090130_PATHBIO-SOLEXA1_30HJDAAXX/Data/IPAR_1.01/Bustard1.9.6_05-02-2009_root/GERALD_05-02-2009_root</dir>
     </seq_repos>
-    <node_mem>128000</node_mem>
-    <node_processors>32</node_processors>
     <pbs use="yes">
-        <max_user_jobs>0</max_user_jobs>
-        <script_line>#PBS -q batch</script_line>
-        <script_line>#PBS -m abe</script_line>
-        <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
+      <node_mem>128000</node_mem>
+      <node_processors>32</node_processors>
+      <script_line>#PBS -q batch</script_line>
+      <script_line>#PBS -m abe</script_line>
+      <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
     </pbs>
   </server>
 
-  <server name="flux" address="flux-login.engin.umich.edu" ssh_port="22">
+  <server name="flux">
     <modules_init_script>/scratch/arul_flux/med-mctp/sw/rhel6/init.sh</modules_init_script>
     <output_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq/runs</output_dir>
     <references_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq/references</references_dir>
     <seq_repos>
        <dir name="mctp_seq">/nfs/med-mctp-seq-3_ls</dir>
        <dir name="tcga">/nfs/med-mctp-tcga-1_ls/bam_files/rnaseq</dir>
+       <dir name="erp001058">/nfs/med-mctp-exds-3_ls/mkiyer/ERP001058</dir>
+       <dir name="encode">/nfs/med-mctp-exds-3_ls/mkiyer/encode</dir>
+       <dir name="phs000310">/nfs/med-mctp-exds-3_ls/mkiyer/phs000310</dir>
     </seq_repos>
-    <node_mem>45000</node_mem>
-    <node_processors>12</node_processors>
     <pbs use="yes">
-        <max_user_jobs>3000</max_user_jobs>
-        <script_line>#PBS -l qos=flux</script_line>
-        <script_line>#PBS -A arul_flux</script_line>
-        <script_line>#PBS -q flux</script_line>
-        <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
-        <script_line>#PBS -m abe</script_line>
+      <node_mem>45000</node_mem>
+      <node_processors>12</node_processors>
+      <script_line>#PBS -l qos=flux</script_line>
+      <script_line>#PBS -A arul_flux</script_line>
+      <script_line>#PBS -q flux</script_line>
+      <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
+      <script_line>#PBS -m abe</script_line>
     </pbs>
   </server>
 
-  <server name="fluxm" address="flux-login.engin.umich.edu" ssh_port="22">
+  <server name="fluxm">
     <modules_init_script>/scratch/arul_flux/med-mctp/sw/rhel6/init.sh</modules_init_script>
     <output_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq/runs</output_dir>
     <references_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq/references</references_dir>
     <seq_repos>
        <dir name="mctp_seq">/nfs/med-mctp-seq-3_ls</dir>
+       <dir name="tcga">/nfs/med-mctp-tcga-1_ls/bam_files/rnaseq</dir>
+       <dir name="erp001058">/nfs/med-mctp-exds-3_ls/mkiyer/ERP001058</dir>
+       <dir name="encode">/nfs/med-mctp-exds-3_ls/mkiyer/encode</dir>
+       <dir name="phs000310">/nfs/med-mctp-exds-3_ls/mkiyer/phs000310</dir>
     </seq_repos>
-    <node_mem>999000</node_mem>
-    <node_processors>40</node_processors>
     <pbs use="yes">
-        <max_user_jobs>3000</max_user_jobs>
-        <script_line>#PBS -l qos=flux</script_line>
-        <script_line>#PBS -A arul_fluxm</script_line>
-        <script_line>#PBS -q fluxm</script_line>
-        <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
-        <script_line>#PBS -m abe</script_line>
+      <node_mem>999000</node_mem>
+      <node_processors>40</node_processors>
+      <script_line>#PBS -l qos=flux</script_line>
+      <script_line>#PBS -A arul_fluxm</script_line>
+      <script_line>#PBS -q fluxm</script_line>
+      <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
+      <script_line>#PBS -m abe</script_line>
     </pbs>
   </server>
 
