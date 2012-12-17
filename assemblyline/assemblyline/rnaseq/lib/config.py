@@ -467,8 +467,6 @@ class ServerConfig(object):
     def from_xml_elem(elem):
         c = ServerConfig()
         c.name = elem.get("name")
-        c.address = elem.get("address", None)
-        c.ssh_port = int(elem.get("ssh_port", "22"))
         c.modules_init_script = elem.findtext("modules_init_script")
         c.output_dir = elem.findtext("output_dir")
         c.references_dir = elem.findtext("references_dir")
@@ -486,21 +484,15 @@ class ServerConfig(object):
         pbs_elem = elem.find("pbs")
         has_pbs = (pbs_elem.get("use") == "yes")
         c.pbs = False
-        c.pbs_max_user_jobs = None
         c.pbs_script_lines = []
         if has_pbs:
             c.pbs = True
-            c.pbs_max_user_jobs = 0
-            pbs_max_user_jobs = elem.findtext("max_user_jobs")
-            if pbs_max_user_jobs is not None:            
-                c.pbs_max_user_jobs = int(pbs_max_user_jobs) 
             for line_elem in pbs_elem.findall("script_line"):
                 c.pbs_script_lines.append(line_elem.text)
         return c
     
     def to_xml(self, root):
         root.set("name", self.name)
-        root.set("address", str(self.address))
         root.set("ssh_port", str(self.ssh_port))
         for attrname in ("modules_init_script",
                          "output_dir",
@@ -514,8 +506,6 @@ class ServerConfig(object):
         if self.pbs:
             elem = etree.SubElement(root, "pbs")
             elem.text = "yes"
-            elem = etree.SubElement(root, "max_user_jobs")
-            elem.text = str(self.max_user_jobs)
         else:
             elem = etree.SubElement(root, "pbs")
             elem.text = "no"

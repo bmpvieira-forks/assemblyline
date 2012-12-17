@@ -91,9 +91,7 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
         # build up sequence of commands
         #
         shell_commands = []
-        shell_commands.append(bash_log("AssemblyLine RNA-Seq Pipeline", "INFO"))
-        shell_commands.append(bash_log("Plugin 'htseq'", "INFO"))
-        shell_commands.append(bash_log("Library '%s'" % (lib.library_id), "INFO"))
+        shell_commands.append("#!/bin/sh")
         #
         # get pbs header
         #
@@ -110,6 +108,12 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
                                           stdout_filename=stdout_file,
                                           stderr_filename=stderr_file)
             shell_commands.extend(pbs_commands)
+        #
+        # intro logging messages
+        #
+        shell_commands.append(bash_log("AssemblyLine RNA-Seq Pipeline", "INFO"))
+        shell_commands.append(bash_log("Plugin 'htseq'", "INFO"))
+        shell_commands.append(bash_log("Library '%s'" % (lib.library_id), "INFO"))
         #
         # setup environment
         #

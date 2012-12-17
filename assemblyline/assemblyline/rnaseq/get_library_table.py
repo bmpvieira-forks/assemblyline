@@ -15,17 +15,9 @@ def main():
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser()
-    parser.add_argument("config_xml_file")
-    parser.add_argument("server_name")
     parser.add_argument("library_xls_file")
+    parser.add_argument("root_dir")
     args = parser.parse_args()
-    # read configuration file
-    logging.info("Reading pipeline configuration file '%s'" % (args.config_xml_file))
-    pipeline = config.PipelineConfig.from_xml(args.config_xml_file)
-    # get server information
-    if args.server_name not in pipeline.servers:
-        logging.error("Server %s not found" % (args.server_name))
-    server = pipeline.servers[args.server_name]
     # read library file
     logging.info("Reading library table '%s'" % (args.library_xls_file))
     libraries = read_library_table_xls(args.library_xls_file)
@@ -42,7 +34,7 @@ def main():
     header_fields.extend(["bam_file", "gtf_file"])
     print '\t'.join(header_fields)
     for library in libraries.itervalues():
-        output_dir = os.path.join(server.output_dir, library.library_id)
+        output_dir = os.path.join(args.root_dir, library.library_id)
         results = config.RnaseqResults(library, output_dir)
         if not results.validate():
             setattr(library, 'description', 'invalid')
