@@ -129,15 +129,13 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
         # create directories
         #
         lib_output_dir = os.path.join(config.output_dir, lib.library_id)
+        shell_commands.append(bash_log("Creating directory: %s" % (lib_output_dir), "INFO"))
+        shell_commands.append("mkdir -p %s" % (lib_output_dir))
+        shell_commands.append(bash_check_retcode())  
         tmp_dir = os.path.join(lib_output_dir, "tmp")
-        if not os.path.exists(lib_output_dir):
-            shell_commands.append(bash_log("Creating directory: %s" % (lib_output_dir), "INFO"))
-            shell_commands.append("mkdir -p %s" % (lib_output_dir))
-            shell_commands.append(bash_check_retcode())  
-        if not os.path.exists(tmp_dir):
-            shell_commands.append(bash_log("Creating directory: %s" % (tmp_dir), "INFO"))
-            shell_commands.append("mkdir -p %s" % (tmp_dir))
-            shell_commands.append(bash_check_retcode())  
+        shell_commands.append(bash_log("Creating directory: %s" % (tmp_dir), "INFO"))
+        shell_commands.append("mkdir -p %s" % (tmp_dir))
+        shell_commands.append(bash_check_retcode())  
         #
         # run htseq-count for gene expression
         #
