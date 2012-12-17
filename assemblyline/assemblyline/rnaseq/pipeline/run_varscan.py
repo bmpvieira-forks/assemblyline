@@ -11,38 +11,23 @@ import os
 
 def run_varscan(ref_fa, 
                 bam_file, 
-                snv_file, 
-                indel_file,
+                output_file,
                 varscan_jar,
+                varscan_func,
                 varscan_args):
     # run varscan snv
     args = ["samtools", "mpileup", "-f", ref_fa, bam_file]
     samtools_p = subprocess.Popen(args, stdout=subprocess.PIPE)
-    args = ["java", "-Xmx4g", "-jar", varscan_jar, "mpileup2snp"]
+    args = ["java", "-Xmx4g", "-jar", varscan_jar, varscan_func]
     args.extend(varscan_args)
-    outfh = open(snv_file, "w")
+    outfh = open(output_file, "w")
     retcode1 = subprocess.call(args, stdin=samtools_p.stdout, stdout=outfh)
     retcode2 = samtools_p.wait()
     retcode = retcode1 + retcode2
     outfh.close()
     if retcode != 0:
-        if os.path.exists(snv_file):
-            os.remove(snv_file)
-        return 1
-    # run varscan indel
-    args = ["samtools", "mpileup", "-f", ref_fa, bam_file]
-    samtools_p = subprocess.Popen(args, stdout=subprocess.PIPE)    
-    args = ["java", "-Xmx4g", "-jar", varscan_jar, "mpileup2indel"]
-    args.extend(varscan_args)
-    outfh = open(indel_file, "w")
-    retcode1 = subprocess.call(args, stdin=samtools_p.stdout, stdout=outfh)
-    retcode2 = samtools_p.wait()
-    retcode = retcode1 + retcode2    
-    outfh.close()
-    if retcode != 0:
-        if os.path.exists(indel_file):
-            os.remove(indel_file)
-        return 1
+        if os.path.exists(output_file):
+            os.remove(output_file)
     return retcode
 
 def main():
@@ -51,14 +36,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--varscan-arg", dest="varscan_args", action="append", default=[])
     parser.add_argument("varscan_jar")
+    parser.add_argument("varscan_func")
     parser.add_argument("ref_fa")
     parser.add_argument("bam_file")
-    parser.add_argument("snv_file")
-    parser.add_argument("indel_file")
+    parser.add_argument("output_file")
     args = parser.parse_args()
-    return run_varscan(args.ref_fa, args.bam_file, 
-                       args.snv_file, args.indel_file,
-                       args.varscan_jar, args.varscan_args)                     
+    return run_varscan(args.ref_fa, args.bam_file, args.output_file, 
+                       args.varscan_jar, args.varscan_func, 
+                       args.varscan_args)                     
 
 if __name__ == '__main__': 
     sys.exit(main())

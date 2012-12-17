@@ -88,7 +88,6 @@ TOPHAT_RMDUP_BAM_FILE = "accepted_hits.rmdup.bam"
 PICARD_DUPLICATE_METRICS = "picard.duplicate_metrics"
 # varscan output
 VARSCAN_SNV_FILE = "varscan_snvs.vcf"
-VARSCAN_INDEL_FILE = "varscan_indels.vcf"
 # job complete
 JOB_DONE_FILE = "job.done"
 # job memory and runtime
@@ -209,7 +208,6 @@ class RnaseqResults(object):
         self.tophat_rmdup_bam_file = os.path.join(self.tmp_dir, TOPHAT_RMDUP_BAM_FILE)
         self.duplicate_metrics = os.path.join(self.output_dir, PICARD_DUPLICATE_METRICS)
         self.varscan_snv_file = os.path.join(self.output_dir, VARSCAN_SNV_FILE)
-        self.varscan_indel_file = os.path.join(self.output_dir, VARSCAN_INDEL_FILE)        
         # job finished file
         self.job_done_file = os.path.join(self.output_dir, JOB_DONE_FILE)
 
@@ -359,10 +357,6 @@ class RnaseqResults(object):
             if not file_exists_and_nz_size(self.varscan_snv_file):
                 logging.error("Library %s missing varscan snv file" % (self.library_id))
                 missing_files.append(self.varscan_snv_file)
-                is_valid = False
-            if not file_exists_and_nz_size(self.varscan_indel_file):
-                logging.error("Library %s missing varscan indel file" % (self.library_id))
-                missing_files.append(self.varscan_indel_file)
                 is_valid = False
         return is_valid, missing_files
 
