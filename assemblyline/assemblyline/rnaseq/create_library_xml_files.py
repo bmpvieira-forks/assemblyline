@@ -16,7 +16,7 @@ from assemblyline.rnaseq.lib.libtable import read_library_table_xls, FRAGMENT_LA
 def find_library_sequence_files(library, server):
     if library.seq_repo not in server.seq_dirs:
         logging.error("Library %s seq_repo '%s' not found" % (library.library_id, library.seq_repo))
-        return None,None
+        return None,None,None
     seq_dirs = server.seq_dirs[library.seq_repo]
     for seq_dir in seq_dirs:
         read1_files = []
