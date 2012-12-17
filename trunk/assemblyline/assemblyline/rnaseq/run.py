@@ -121,9 +121,8 @@ def get_pbs_header(job_name,
     # set job walltime
     if walltime is not None:
         resource_fields.append("walltime=%s" % (walltime))
-    # make PBS script
-    lines = ["#!/bin/sh",
-             "#PBS -N %s" % job_name,
+    # add PBS parameters
+    lines = ["#PBS -N %s" % job_name,
              "#PBS -l %s" % (",".join(resource_fields))]
     if email is not None:
         lines.append("#PBS -m %s" % (email))
@@ -204,6 +203,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     # build up sequence of commands
     #
     shell_commands = []
+    shell_commands.append("#!/bin/sh")
     #
     # get pbs header
     #
