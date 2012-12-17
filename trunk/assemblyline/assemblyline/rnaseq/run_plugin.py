@@ -70,6 +70,9 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
     tasks_dir = os.path.join(config.output_dir, "tasks")
     if not os.path.exists(tasks_dir):
         os.makedirs(tasks_dir)
+    log_dir = os.path.join(config.output_dir, "log")
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
     # htseq parameters
     num_processors = int(plugin_elem.findtext("num_processors"))
     run_as_pe = parse_bool(plugin_elem.findtext("pe", "no"))    
@@ -87,9 +90,6 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
     PBS_JOB_WALLTIME = "10:00:00"
     # parse library table
     for lib in libs:
-        # library directories
-        lib_output_dir = os.path.join(config.output_dir, lib.library_id)
-        tmp_dir = os.path.join(lib_output_dir, "tmp")                
         #
         # build up sequence of commands
         #
@@ -99,8 +99,8 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
         # get pbs header
         #
         if config.pbs:
-            stdout_file = os.path.join(lib_output_dir, "job.stdout")
-            stderr_file = os.path.join(lib_output_dir, "job.stderr")            
+            stdout_file = os.path.join(log_dir, "%s.stdout" % (lib.library_id))
+            stderr_file = os.path.join(log_dir, "%s.stderr" % (lib.library_id))
             pbs_commands = get_pbs_header(job_name=lib.library_id,
                                           num_processors=num_processors,
                                           node_processors=config.node_processors,
@@ -128,6 +128,8 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
         #
         # create directories
         #
+        lib_output_dir = os.path.join(config.output_dir, lib.library_id)
+        tmp_dir = os.path.join(lib_output_dir, "tmp")
         if not os.path.exists(lib_output_dir):
             shell_commands.append(bash_log("Creating directory: %s" % (lib_output_dir), "INFO"))
             shell_commands.append("mkdir -p %s" % (lib_output_dir))
