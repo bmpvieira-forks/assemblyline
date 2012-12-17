@@ -1,0 +1,32 @@
+<plugins>
+  <modules_init_script>/home/mkiyer/sw/rhel6/init.sh</modules_init_script>
+  <output_dir>/exds/users/mkiyer/projects/assemblyline/lung_v002_2012-Nov-08/quantify_htseq_sr</output_dir>
+  
+  <pbs use="no"/>
+  
+  <!-- FLUX  
+  <pbs use="yes">
+      <node_mem>45000</node_mem>
+      <node_processors>12</node_processors>
+      <script_line>#PBS -l qos=flux</script_line>
+      <script_line>#PBS -A arul_flux</script_line>
+      <script_line>#PBS -q flux</script_line>
+      <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
+      <script_line>#PBS -m abe</script_line>
+  </pbs>
+  -->
+  
+  <plugin name="htseq">
+    <num_processors>1</num_processors>
+    <gtf_file>/exds/users/mkiyer/projects/assemblyline/lung_v002_2012-Nov-08/assemble/assembly_kmax5_utr10_intron25.gtf</gtf_file>
+    <pe>no</pe>
+    <arg>-m union</arg>
+    <arg>-s no</arg>    
+    <modules>
+      <module>epd</module>
+      <module>pysam/0.6</module>
+      <module>samtools/0.1.18</module>
+      <module>HTSeq/0.5.3p9</module>
+    </modules>
+  </plugin>
+</plugins>

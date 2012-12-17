@@ -27,8 +27,6 @@ import logging
 import argparse
 from multiprocessing import Pool
 
-import HTSeq
-
 import assemblyline
 from assemblyline.lib.librarytable import LibraryInfo
 
