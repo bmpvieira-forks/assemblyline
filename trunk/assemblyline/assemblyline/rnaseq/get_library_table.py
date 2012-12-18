@@ -34,7 +34,8 @@ def main():
     header_fields.extend(sorted_params)
     header_fields.extend(["total_aligned_reads", "bam_file", "gtf_file"])
     print '\t'.join(header_fields)
-    for library in libraries.itervalues():
+    for library_id in sorted(libraries):
+        library = libraries[library_id]
         output_dir = os.path.join(args.root_dir, library.library_id)
         results = config.RnaseqResults(library, output_dir)
         if not results.validate():
