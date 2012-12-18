@@ -60,7 +60,6 @@ def main():
             fields.append(results.tophat_bam_file)
         else:
             fields.append('na')
-        print results.cufflinks_gtf_file
         if os.path.exists(results.cufflinks_gtf_file):
             fields.append(results.cufflinks_gtf_file)
         else:
