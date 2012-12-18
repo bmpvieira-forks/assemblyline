@@ -122,6 +122,9 @@ def main():
             specials.append(special_count_map[special_id])
         count_vector_dict[lib.library_id] = counts
         special_vector_dict[lib.library_id] = specials
+    if len(count_vector_dict) == 0:
+        logging.error("No valid libraries, exiting")
+        return 1
     # write phenotype file
     logging.info("Writing phenotype file")
     fh = open(args.library_table)
@@ -157,7 +160,8 @@ def main():
         fields.extend(map(str, gene_metadata_dict[gene_id]))
         fields.extend(map(str, mat[i,:]))
         print >>f, '\t'.join(fields)
-    f.close()  
+    f.close()
+    return 0
 
 if __name__ == '__main__':
     sys.exit(main())

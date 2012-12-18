@@ -48,8 +48,7 @@ class Library(object):
 
     def __init__(self, **kwargs):
         for attrname in Library.fields:
-            if attrname in kwargs:
-                setattr(self, attrname, kwargs[attrname])
+            setattr(self, attrname, kwargs.get(attrname, ''))
         if not kwargs['read1_files']:
             self.read1_files = []
         else:
@@ -58,7 +57,7 @@ class Library(object):
             self.read2_files = []
         else:        
             self.read2_files = kwargs['read2_files'].split(",")
-        if not kwargs.get('bam_files', ''):
+        if not kwargs['bam_files']:
             self.bam_files = []
         else:
             self.bam_files = kwargs['bam_files'].split(",")
