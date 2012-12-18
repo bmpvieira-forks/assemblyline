@@ -18,7 +18,7 @@ import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
 
 def bash_check_retcode(msg="ERROR"):
-    return 'if [ $? -gt 0 ]; then echo "%s" >&2; exit $?; fi' % (msg)
+    return 'ERRCODE=$?; if [ $ERRCODE -gt 0 ]; then echo "%s" >&2; exit $ERRCODE; fi' % (msg)
 
 def bash_remove_files(filenames):
     commands = []
