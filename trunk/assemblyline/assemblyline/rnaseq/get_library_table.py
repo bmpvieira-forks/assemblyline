@@ -50,7 +50,10 @@ def main():
         for param in sorted_params:
             fields.append(library.params.get(param, "na"))
         # results
-        total_aligned_reads = picard.get_total_reads(results.alignment_summary_metrics)
+        if os.path.exists(results.alignment_summary_metrics):
+            total_aligned_reads = picard.get_total_reads(results.alignment_summary_metrics)
+        else:
+            total_aligned_reads = 'na'
         fields.append(total_aligned_reads)
         fields.append(results.tophat_bam_file)
         #fields.append(results.cufflinks_ab_initio_gtf_file)
