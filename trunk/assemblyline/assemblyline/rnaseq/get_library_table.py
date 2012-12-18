@@ -61,6 +61,7 @@ def main():
         else:
             fields.append('na')
         if os.path.exists(results.cufflinks_gtf_file):
+            print results.cufflinks_gtf_file
             fields.append(results.cufflinks_gtf_file)
         else:
             fields.append('na')
