@@ -52,12 +52,17 @@ def main():
         # results
         if os.path.exists(results.alignment_summary_metrics):
             total_aligned_reads = picard.get_total_reads(results.alignment_summary_metrics)
+            fields.append(total_aligned_reads)
         else:
-            total_aligned_reads = 'na'
-        fields.append(total_aligned_reads)
-        fields.append(results.tophat_bam_file)
-        #fields.append(results.cufflinks_ab_initio_gtf_file)
-        fields.append(results.cufflinks_gtf_file)
+            fields.append('na')
+        if os.path.exists(results.tophat_bam_file):
+            fields.append(results.tophat_bam_file)
+        else:
+            fields.append('na')
+        if os.path.exists(results.cufflinks_gtf_file):
+            fields.append(results.cufflinks_gtf_file)
+        else:
+            fields.append('na')
         print '\t'.join(map(str, fields))
     return config.JOB_SUCCESS
     
