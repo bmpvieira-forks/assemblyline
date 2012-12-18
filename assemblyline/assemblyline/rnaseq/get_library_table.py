@@ -55,7 +55,7 @@ def main():
         fields.append(results.tophat_bam_file)
         #fields.append(results.cufflinks_ab_initio_gtf_file)
         fields.append(results.cufflinks_gtf_file)
-        print '\t'.join(fields)
+        print '\t'.join(map(str, fields))
     return config.JOB_SUCCESS
     
 if __name__ == '__main__':
