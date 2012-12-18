@@ -47,17 +47,21 @@ class Library(object):
               'fragment_layout')  
 
     def __init__(self, **kwargs):
+        # basic parameters
         for attrname in Library.fields:
             setattr(self, attrname, kwargs.get(attrname, ''))
-        if not kwargs['read1_files']:
+        # custom parameters
+        self.params = kwargs["params"]
+        # modify specific fields
+        if not self.read1_files:
             self.read1_files = []
         else:
             self.read1_files = kwargs['read1_files'].split(",")              
-        if not kwargs['read2_files']:
+        if not self.read2_files:
             self.read2_files = []
         else:        
             self.read2_files = kwargs['read2_files'].split(",")
-        if not kwargs['bam_files']:
+        if not self.bam_files:
             self.bam_files = []
         else:
             self.bam_files = kwargs['bam_files'].split(",")
@@ -71,8 +75,6 @@ class Library(object):
                 self.fragment_layout = FRAGMENT_LAYOUT_SINGLE
             else:
                 self.fragment_layout = FRAGMENT_LAYOUT_UNKNOWN
-        # custom parameters
-        self.params = kwargs["params"]
 
     @staticmethod
     def from_fields(fields, field_dict=None):
