@@ -58,7 +58,7 @@ class Library(object):
             self.read2_files = []
         else:        
             self.read2_files = kwargs['read2_files'].split(",")
-        if not kwargs['bam_files']:
+        if not kwargs.get('bam_files', ''):
             self.bam_files = []
         else:
             self.bam_files = kwargs['bam_files'].split(",")
