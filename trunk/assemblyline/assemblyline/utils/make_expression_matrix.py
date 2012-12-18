@@ -93,9 +93,6 @@ def main():
     parser.add_argument('input_dir')
     parser.add_argument('output_file_prefix')
     args = parser.parse_args()
-    # read library information
-    logging.info("Reading library information")
-    librarydict = collections.OrderedDict()
     # get gene metadata
     logging.info("Reading gene features")
     gene_metadata_dict = {}
@@ -103,7 +100,7 @@ def main():
         gene_metadata_dict[gene_metadata[0]] = gene_metadata
     # aggregate runs into a single gene expression matrix
     # (assume this will fit into memory)
-    logging.info("Building expression data matrix")
+    logging.info("Reading count data for each library")
     count_vector_dict = {}
     special_vector_dict = {}
     for lib in LibraryInfo.from_file(args.library_table):
@@ -138,7 +135,7 @@ def main():
     for line in fh:
         fields = line.strip().split('\t')
         lib_id = fields[lib_id_col]
-        if lib_id not in librarydict:
+        if lib_id not in count_vector_dict:
             continue
         fields.extend(special_vector_dict[lib_id])
         fields.append(sum(count_vector_dict[lib_id]))
