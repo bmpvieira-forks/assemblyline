@@ -9,6 +9,7 @@ import sys
 import os
 
 import assemblyline.rnaseq.lib.config as config
+import assemblyline.rnaseq.lib.picard as picard
 from assemblyline.rnaseq.lib.libtable import Library, read_library_table_xls
 
 def main():
@@ -31,7 +32,7 @@ def main():
     header_fields = []
     header_fields.extend(Library.fields)
     header_fields.extend(sorted_params)
-    header_fields.extend(["bam_file", "gtf_file"])
+    header_fields.extend(["total_aligned_reads", "bam_file", "gtf_file"])
     print '\t'.join(header_fields)
     for library in libraries.itervalues():
         output_dir = os.path.join(args.root_dir, library.library_id)
@@ -42,11 +43,15 @@ def main():
             setattr(library, 'description', 'valid')
         library.read1_files = ','.join(library.read1_files)
         library.read2_files = ','.join(library.read2_files)
+        library.bam_files = ','.join(library.bam_files)
         fields = []
         for field_name in Library.fields:
             fields.append(getattr(library, field_name))
         for param in sorted_params:
             fields.append(library.params.get(param, "na"))
+        # results
+        total_aligned_reads = picard.get_total_reads(results.alignment_summary_metrics)
+        fields.append(total_aligned_reads)
         fields.append(results.tophat_bam_file)
         #fields.append(results.cufflinks_ab_initio_gtf_file)
         fields.append(results.cufflinks_gtf_file)
