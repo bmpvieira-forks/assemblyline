@@ -203,7 +203,7 @@ class RnaseqResults(object):
         self.cufflinks_known_genes_fpkm_file = os.path.join(self.cufflinks_known_dir, CUFFLINKS_GENES_FILE)
         self.cufflinks_known_isoforms_fpkm_file = os.path.join(self.cufflinks_known_dir, CUFFLINKS_ISOFORMS_FILE)
         # TODO: maintain backwards compatibility
-        self.cufflinks_gtf_file = os.path.join(self.output_dir, "cufflinks", "transcript.gtf")
+        self.cufflinks_gtf_file = os.path.join(self.output_dir, "cufflinks", "transcripts.gtf")
         # htseq-count output files
         self.htseq_count_known_file = os.path.join(self.output_dir, HTSEQ_COUNT_KNOWN_OUTPUT_FILE)
         # variant calling output
