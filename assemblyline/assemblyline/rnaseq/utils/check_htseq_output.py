@@ -33,7 +33,7 @@ def main():
         # total picard
         metrics_file = os.path.join(args.runs_dir, lib.library_id, "picard.alignment_summary_metrics")
         if not os.path.exists(metrics_file):
-            logging.error("\tLibrary %s no metrics file" % (lib.library_id))
+            logging.error("\tLibrary %s no metrics file '%s'" % (lib.library_id, metrics_file))
             continue
         obj = picard.AlignmentSummaryMetrics()
         picard_count = obj.get_total_reads()
