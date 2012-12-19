@@ -35,7 +35,7 @@ def main():
         if not os.path.exists(metrics_file):
             logging.error("\tLibrary %s no metrics file '%s'" % (lib.library_id, metrics_file))
             continue
-        obj = picard.AlignmentSummaryMetrics()
+        obj = picard.AlignmentSummaryMetrics(metrics_file)
         picard_count = obj.get_total_reads()
         # total htseq
         output_file = os.path.join(args.root_dir, lib.library_id, "htseq.txt")
