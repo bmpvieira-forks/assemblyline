@@ -40,11 +40,10 @@ def main():
         # total htseq
         output_file = os.path.join(args.htseq_dir, lib.library_id, "htseq.txt")
         if not os.path.exists(output_file):
-            print lib.library_id
+            logging.error("\tLibrary %s no htseq file '%s'" % (lib.library_id, output_file))
             continue
         htseq_count = sum_htseq_count(output_file)
-        print lib.library_id, picard_count, htseq_count
-
+        print '\t'.join(map(str, [lib.library_id, picard_count, htseq_count]))
 
 if __name__ == '__main__':
     sys.exit(main())
