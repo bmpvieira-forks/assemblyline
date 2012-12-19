@@ -38,7 +38,7 @@ def main():
         obj = picard.AlignmentSummaryMetrics(metrics_file)
         picard_count = obj.get_total_reads()
         # total htseq
-        output_file = os.path.join(args.root_dir, lib.library_id, "htseq.txt")
+        output_file = os.path.join(args.htseq_dir, lib.library_id, "htseq.txt")
         if not os.path.exists(output_file):
             print lib.library_id
             continue
