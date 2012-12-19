@@ -114,26 +114,35 @@ def get_qual_conversion_func(qual_format):
     tbl = conv_tables[qual_format]
     return lambda q: q.translate(tbl)
 
-def get_read_length(fastqc_data_file):
+def get_fastqc_sequence_length(fastqc_data_file):
     for line in open(fastqc_data_file):
         if not line: continue
         line = line.strip()
         if line.startswith("Sequence length"):
             return int(line.split()[-1])
 
-def get_total_reads(fastqc_data_file):
+def get_fastqc_total_sequences(fastqc_data_file):
     for line in open(fastqc_data_file):
         if not line: continue
         line = line.strip()
         if line.startswith("Total Sequences"):
             return int(line.split()[-1])
 
-def get_fastq_encoding(fastqc_data_file):
+def get_fastqc_encoding(fastqc_data_file):
     for line in open(fastqc_data_file):
         if not line: continue
         line = line.strip()
         if line.startswith("Encoding"):
             return line.split("\t")[-1]
+
+def get_abundant_counts(abundant_counts_file):
+    counts = []
+    for line in open(abundant_counts_file):
+        if line.startswith("#"):
+            continue
+        fields = line.strip().split('\t')
+        count = int(fields[2]) + int(fields[3])
+        counts.append((fields[0], count))
 
 def detect_format(f):
     if f.endswith(".gz"):
