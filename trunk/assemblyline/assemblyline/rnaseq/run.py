@@ -17,8 +17,12 @@ from assemblyline.rnaseq.lib.libtable import Library, FRAGMENT_LAYOUT_PAIRED
 import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
 
-def bash_check_retcode(msg="ERROR"):
-    return 'ERRCODE=$?; if [ $ERRCODE -gt 0 ]; then echo "%s" >&2; exit $ERRCODE; fi' % (msg)
+def bash_log(msg, level="DEBUG"):
+    return 'echo "[`date`] - %s - %s" >&2' % (level, msg)
+
+def bash_check_retcode(msg="ERROR", level="ERROR"):
+    echo_command = bash_log(msg, level)
+    return 'ERRCODE=$?; if [ $ERRCODE -gt 0 ]; then %s; exit $ERRCODE; fi' % (echo_command)
 
 def bash_remove_files(filenames):
     commands = []
@@ -27,9 +31,6 @@ def bash_remove_files(filenames):
         commands.append(command)
         commands.append(bash_check_retcode())
     return commands
-
-def bash_log(msg, level="DEBUG"):
-    return 'echo "[`date`] - %s - %s" >&2' % (level, msg)
 
 def bash_set_tmpdir(tmp_dir):
     return 'export TMPDIR=%s' % (tmp_dir)
