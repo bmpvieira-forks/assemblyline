@@ -203,11 +203,11 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     # build up sequence of commands
     #
     shell_commands = []
-    shell_commands.append("#!/bin/sh")
     #
     # get pbs header
     #
     if server.pbs:
+        shell_commands.append("#!/bin/sh")
         pbs_commands = get_pbs_header(job_name=library.library_id,
                                       num_processors=num_processors,
                                       node_processors=server.node_processors,
