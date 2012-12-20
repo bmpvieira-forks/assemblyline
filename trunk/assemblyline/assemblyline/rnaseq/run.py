@@ -416,7 +416,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                 "--max-frag-size", pipeline.max_fragment_size,
                 "--frag-size-mean", pipeline.fragment_size_mean_default,
                 "--frag-size-stdev", pipeline.fragment_size_stdev_default,
-                "-n", config.MAX_INSPECT_SAMPLES,
+                "-n", pipeline.max_inspect_samples,
                 "-p", num_processors,
                 genome_static.fragment_size_bowtie1_index,
                 results.library_metrics_file,
@@ -425,31 +425,6 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
         log_file = os.path.join(results.log_dir, 'inspect_library.log')
-        command += ' > %s 2>&1' % (log_file)        
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())
-    #
-    # analysis repeat element content
-    #
-    msg = "Mapping reads to repeat elements"
-    input_files = results.filtered_fastq_files
-    output_files = [results.repeat_elements_file]
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
-    else:
-        logging.info(msg) 
-        shell_commands.append(bash_log(msg, "INFO"))
-        args = [sys.executable,
-                os.path.join(_pipeline_dir, "repeat_elements.py"),
-                "-p", num_processors,
-                genome_static.repbase_bowtie2_index,
-                results.repeat_elements_file]
-        args.extend(results.filtered_fastq_files)
-        logging.debug("\targs: %s" % (' '.join(map(str, args))))
-        command = ' '.join(map(str, args))
-        log_file = os.path.join(results.log_dir, 'repeat_elements.log')
         command += ' > %s 2>&1' % (log_file)        
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())
@@ -649,7 +624,65 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         log_file = os.path.join(results.log_dir, 'picard_rnaseq_metrics.log')
         command += ' > %s 2>&1' % (log_file)                
         shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())   
+        shell_commands.append(bash_check_retcode())
+    #
+    # analyze repeat element content
+    #
+    msg = "Aligning and counting repeat element sequences"
+    input_files = [results.tophat_unmapped_bam_file]
+    output_files = [results.repeat_element_counts_file]
+    skip = many_up_to_date(output_files, input_files)
+    if skip:
+        logging.info("[SKIPPED] %s" % (msg))
+        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+    else:
+        logging.info(msg) 
+        shell_commands.append(bash_log(msg, "INFO"))
+        log_file = os.path.join(results.log_dir, 'repeat_elements.log')
+        args = [sys.executable,
+                os.path.join(_pipeline_dir, "bowtie2_unpaired_align.py"),
+                "-p", num_processors,
+                "--tmp-dir", results.tmp_dir]
+        # extra args
+        for arg in pipeline.repeat_elements_bt2_args:
+            args.append('--extra-arg="%s"' % arg)
+        args.extend(["--bam-file", results.tophat_unmapped_bam_file,
+                     genome_static.repbase_bowtie2_index,
+                     results.repeat_element_counts_file,
+                     '> %s 2>&1' % (log_file)])
+        command = ' '.join(map(str, args))
+        logging.debug("\tcommand: %s" % (command))
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())
+    #
+    # analyze pathogen content
+    #
+    msg = "Aligning and counting pathogen sequences"
+    input_files = [results.tophat_unmapped_bam_file]
+    output_files = [results.pathogen_counts_file]
+    skip = many_up_to_date(output_files, input_files)
+    if skip:
+        logging.info("[SKIPPED] %s" % (msg))
+        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+    else:
+        logging.info(msg) 
+        shell_commands.append(bash_log(msg, "INFO"))
+        log_file = os.path.join(results.log_dir, 'pathogens.log')
+        args = [sys.executable,
+                os.path.join(_pipeline_dir, "bowtie2_unpaired_align.py"),
+                "-p", num_processors,
+                "--tmp-dir", results.tmp_dir]
+        # extra args
+        for arg in pipeline.repeat_elements_bt2_args:
+            args.append('--extra-arg="%s"' % arg)
+        args.extend(["--bam-file", results.tophat_unmapped_bam_file,
+                     genome_static.pathogen_bowtie2_index,
+                     results.pathogen_counts_file,
+                     '> %s 2>&1' % (log_file)])
+        command = ' '.join(map(str, args))
+        logging.debug("\tcommand: %s" % (command))
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())
     #
     # generate genome coverage maps  
     #
@@ -684,17 +717,17 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
+        log_file = os.path.join(results.log_dir, 'bed_to_bigbed.log')
         args = [sys.executable,
-                os.path.join(_pipeline_dir, "bed_to_bigbed"),
+                os.path.join(_pipeline_dir, "bed_to_bigbed.py"),
                 "--score-to-name",
                 "--tmp-dir", results.tmp_dir,
                 results.tophat_juncs_file,
                 genome_static.chrom_sizes,
-                results.junctions_bigbed_file]
-        logging.debug("\targs: %s" % (' '.join(map(str, args))))
+                results.junctions_bigbed_file,
+                '> %s 2>&1' % (log_file)]
         command = ' '.join(map(str, args))
-        log_file = os.path.join(results.log_dir, 'bed_to_bigbed.log')
-        command += ' > %s 2>&1' % (log_file)
+        logging.debug("\tcommand: %s" % (command))
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode()) 
     #
