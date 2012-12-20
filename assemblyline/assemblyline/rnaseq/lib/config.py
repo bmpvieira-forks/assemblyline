@@ -74,6 +74,7 @@ PICARD_RNASEQ_METRICS = "picard.rnaseq_metrics"
 PICARD_RNASEQ_METRICS_PLOT_PDF = "picard.rnaseq_metrics_plot.pdf"
 # coverage bedgraph file
 COVERAGE_BIGWIG_PREFIX = "coverage"
+JUNCTIONS_BIGBED_FILE = "junctions.bb"
 # cufflinks output
 CUFFLINKS_AB_INITIO_DIR = "cufflinks_ab_initio"
 CUFFLINKS_KNOWN_DIR = "cufflinks_known"
@@ -187,6 +188,7 @@ class RnaseqResults(object):
         self.rnaseq_metrics_pdf = os.path.join(self.output_dir, PICARD_RNASEQ_METRICS_PLOT_PDF)
         # bigwig file prefix
         self.coverage_bigwig_prefix = os.path.join(self.output_dir, COVERAGE_BIGWIG_PREFIX)
+        self.junctions_bigbed_file = os.path.join(self.output_dir, JUNCTIONS_BIGBED_FILE)
         # tophat fusion results
         self.tophat_fusion_dir = os.path.join(self.output_dir, TOPHAT_FUSION_DIR)
         self.tophat_fusion_bam_file = os.path.join(self.output_dir, TOPHAT_FUSION_BAM_FILE)        
@@ -311,6 +313,11 @@ class RnaseqResults(object):
                     logging.error("Library %s missing coverage bigwig file %s" % (self.library_id))
                     is_valid = False
                     missing_files.append(f)
+        # check junction bigbed file
+        if not file_exists_and_nz_size(self.junctions_bigbed_file):
+            logging.error("Library %s missing junctions bigbed file" % (self.library_id))
+            missing_files.append(self.junctions_bigbed_file)
+            is_valid = False
         # check tophat fusion (optional)
         if config.tophat_fusion_run:
             # check tophat fusion bam file
@@ -709,7 +716,8 @@ class PipelineConfig(object):
         #
         progs = ['fastqc', 'samtools', 'java', 'bowtie', 
                  'bowtie2', 'tophat', 'bedtools',
-                 'bedGraphToBigWig', 'cufflinks', 'htseq-count',
+                 'bedGraphToBigWig', 'bedToBigBed',
+                 'cufflinks', 'htseq-count',
                  'bgzip', 'tabix', 'R', 'Rscript']
         for prog in progs:
             if check_executable(prog):

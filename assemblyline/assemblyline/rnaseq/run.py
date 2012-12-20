@@ -667,7 +667,33 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     log_file = os.path.join(results.log_dir, 'coverage_maps.log')
     command += ' > %s 2>&1' % (log_file)                
     shell_commands.append(command)
-    shell_commands.append(bash_check_retcode()) 
+    shell_commands.append(bash_check_retcode())        
+    #
+    # generate splice junction bigbed file  
+    #
+    msg = "Generating splice junction bigBed file"
+    input_files = [results.tophat_juncs_file] 
+    output_files = [results.junctions_bigbed_file]    
+    skip = many_up_to_date(output_files, input_files)
+    if skip:
+        logging.info("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+    else:
+        logging.info(msg)
+        shell_commands.append(bash_log(msg, "INFO"))
+        args = [sys.executable,
+                os.path.join(_pipeline_dir, "bed_to_bigbed"),
+                "--score-to-name",
+                "--tmp-dir", results.tmp_dir,
+                results.tophat_juncs_file,
+                genome_static.chrom_sizes,
+                results.junctions_bigbed_file]
+        logging.debug("\targs: %s" % (' '.join(map(str, args))))
+        command = ' '.join(map(str, args))
+        log_file = os.path.join(results.log_dir, 'bed_to_bigbed.log')
+        command += ' > %s 2>&1' % (log_file)
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode()) 
     #
     # run cufflinks to assemble transcriptome
     #
