@@ -243,7 +243,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     command = ' '.join(map(str, args))
     logging.debug("\tcommand: %s" % (command))
     shell_commands.append(command)
-    shell_commands.append(bash_check_retcode())   
+    shell_commands.append(bash_check_retcode("[ERROR] %s" % (msg)))   
     #
     # create directories
     #
