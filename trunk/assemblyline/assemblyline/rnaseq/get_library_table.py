@@ -11,6 +11,7 @@ import os
 import assemblyline.rnaseq.lib.config as config
 import assemblyline.rnaseq.lib.picard as picard
 from assemblyline.rnaseq.lib.libtable import Library, read_library_table_xls
+from assemblyline.rnaseq.lib.base import get_fastqc_total_sequences
 
 def main():
     logging.basicConfig(level=logging.DEBUG,
@@ -32,7 +33,11 @@ def main():
     header_fields = []
     header_fields.extend(Library.fields)
     header_fields.extend(sorted_params)
-    header_fields.extend(["total_aligned_reads", "bam_file", "gtf_file"])
+    header_fields.extend(["total_fragments",
+                          "total_aligned_reads", 
+                          "mean_read_length", 
+                          "bam_file", 
+                          "gtf_file"])
     print '\t'.join(header_fields)
     for library_id in sorted(libraries):
         library = libraries[library_id]
@@ -51,11 +56,17 @@ def main():
         for param in sorted_params:
             fields.append(library.params.get(param, "na"))
         # results
-        if os.path.exists(results.alignment_summary_metrics):
-            total_aligned_reads = picard.get_total_reads(results.alignment_summary_metrics)
-            fields.append(total_aligned_reads)
+        if os.path.exists(results.fastqc_data_files[0]):
+            total_frags = get_fastqc_total_sequences(results.fastqc_data_files[0])
+            fields.append(total_frags)
         else:
             fields.append('na')
+        if os.path.exists(results.alignment_summary_metrics):
+            obj = picard.AlignmentSummaryMetrics(results.alignment_summary_metrics)
+            fields.append(obj.get_total_reads())
+            fields.append(obj.get_mean_read_length()) 
+        else:
+            fields.extend(['na', 'na'])
         if os.path.exists(results.tophat_bam_file):
             fields.append(results.tophat_bam_file)
         else:

@@ -15,7 +15,7 @@ import pysam
 # project imports
 from assemblyline.rnaseq.lib.base import parse_reads_by_qname, \
     DNA_reverse_complement, BOWTIE2_QUAL_MAP, file_exists_and_nz_size, \
-    get_fastq_encoding, ENCODING_TO_QUAL_FORMAT
+    get_fastqc_encoding, ENCODING_TO_QUAL_FORMAT
 import assemblyline.rnaseq.lib.config as config
 
 def to_fastq(r, f):
@@ -28,7 +28,7 @@ def get_fastqc_encoding(fastqc_data_files):
     encodings = set()
     for f in fastqc_data_files:
         if file_exists_and_nz_size(f):
-            encoding = get_fastq_encoding(f)
+            encoding = get_fastqc_encoding(f)
             if encoding not in ENCODING_TO_QUAL_FORMAT:
                 logging.error("Unrecognized FASTQ encoding %s" % (encoding))
                 return config.JOB_ERROR

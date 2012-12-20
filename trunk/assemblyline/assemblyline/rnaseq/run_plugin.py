@@ -48,6 +48,8 @@ class PluginConfig(object):
         # general
         c.modules_init_script = root.findtext("modules_init_script")
         c.output_dir = root.findtext("output_dir")
+        c.tasks_dir = os.path.join(c.output_dir, "tasks")
+        c.log_dir = os.path.join(c.output_dir, "log")
         # pbs
         c.pbs = False
         c.node_mem = None
@@ -63,16 +65,19 @@ class PluginConfig(object):
                 c.pbs_script_lines.append(line_elem.text)
         return c
 
+    def setup_output_dirs(self):
+        # setup tasks dir
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+        if not os.path.exists(self.tasks_dir):
+            os.makedirs(self.tasks_dir)
+        if not os.path.exists(self.log_dir):
+            os.makedirs(self.log_dir)
+
+
 def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
-    # setup tasks dir
-    if not os.path.exists(config.output_dir):
-        os.makedirs(config.output_dir)
-    tasks_dir = os.path.join(config.output_dir, "tasks")
-    if not os.path.exists(tasks_dir):
-        os.makedirs(tasks_dir)
-    log_dir = os.path.join(config.output_dir, "log")
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    # setup output directories
+    config.setup_output_dirs()
     # htseq parameters
     num_processors = int(plugin_elem.findtext("num_processors"))
     run_as_pe = parse_bool(plugin_elem.findtext("pe", "no"))    
@@ -99,8 +104,8 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
         # get pbs header
         #
         if config.pbs:
-            stdout_file = os.path.join(log_dir, "%s.stdout" % (lib.library_id))
-            stderr_file = os.path.join(log_dir, "%s.stderr" % (lib.library_id))
+            stdout_file = os.path.join(config.log_dir, "%s.stdout" % (lib.library_id))
+            stderr_file = os.path.join(config.log_dir, "%s.stderr" % (lib.library_id))
             pbs_commands = get_pbs_header(job_name=lib.library_id,
                                           num_processors=num_processors,
                                           node_processors=config.node_processors,
@@ -178,7 +183,7 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
                 ext = ".pbs"
             else:
                 ext = ".sh"
-            filename = os.path.join(tasks_dir, "%s%s" % (lib.library_id, ext))
+            filename = os.path.join(config.tasks_dir, "%s%s" % (lib.library_id, ext))
             f = open(filename, "w")
             for command in shell_commands:
                 print >>f, command

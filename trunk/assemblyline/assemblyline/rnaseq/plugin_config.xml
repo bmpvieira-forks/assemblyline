@@ -31,4 +31,10 @@
       <module>HTSeq/0.5.3p9</module>
     </modules>
   </plugin>
+
+  <plugin name="ucsc_tracks">
+    <!-- UCSC big data server url -->
+    <ucsc_big_data_url>http://141.214.4.250</ucsc_big_data_url>
+  </plugin>  
+
 </plugins>

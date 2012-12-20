@@ -39,12 +39,15 @@ def main():
     else:
         parser.error("Unrecognized output file extension '%s' (must be .sam or .bam)" % (ext))
     outfh = pysam.Samfile(args.output_file, mode, template=infh)
+    num_reads = 0
     for r in infh:
         # erase 'is_paired', 'is_proper_pair', 'mate_is_unmapped', 'mate_is_reverse', 'is_read2'
         r.flag = r.flag & 0b1111111100010100
         # reset mate reference tid
         r.rnext = -1
         outfh.write(r)
+        num_reads += 1
+    logging.debug("bam_pe_to_sr: %d total reads" % (num_reads))
     outfh.close()
     infh.close()
     return 0

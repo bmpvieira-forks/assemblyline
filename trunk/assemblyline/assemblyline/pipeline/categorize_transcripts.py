@@ -29,6 +29,7 @@ from assemblyline.lib.bx.intersection import Interval, IntervalTree
 from assemblyline.lib.bx.cluster import ClusterTree
 
 from assemblyline.lib import gtf
+from assemblyline.lib.base import GTFAttr
 from assemblyline.lib.transcript import strand_int_to_str
 from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
 
@@ -279,7 +280,7 @@ def categorize_transcripts(ref_gtf_file, gtf_file):
         # group transcripts by gene id
         gene_transcript_map = collections.defaultdict(lambda: [])
         for t in locus_transcripts:
-            gene_transcript_map[t.gene_id].append(t)
+            gene_transcript_map[t.attrs[GTFAttr.GENE_ID]].append(t)
         # categorize genes
         for gene_transcripts in gene_transcript_map.itervalues():
             categorize_gene_transcripts(gene_transcripts, locus_trees)
