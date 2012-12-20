@@ -199,6 +199,8 @@
 
   <!-- varscan parameters -->
   <varscan run="yes">
+    <!-- note: the output-vcf 1 arg is required -->
+    <arg>--output-vcf 1</arg>
     <arg>--min-coverage 8</arg>
     <arg>--min-reads2 2</arg>
     <arg>--min-avg-qual 15</arg>
@@ -206,8 +208,6 @@
     <arg>--min-freq-for-hom 0.75</arg> 
     <arg>--p-value 0.10</arg>
     <arg>--strand-filter 0</arg>
-    <!-- note: do not add the output-vcf tag here -->
-    <arg>--output-vcf 1</arg>
   </varscan>
 
   <!-- genome-specific file locations -->
