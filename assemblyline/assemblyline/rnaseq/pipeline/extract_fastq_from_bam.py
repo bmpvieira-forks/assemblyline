@@ -9,8 +9,6 @@ import os
 import sys
 import subprocess
 
-import pysam
-
 from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUTS
 import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
