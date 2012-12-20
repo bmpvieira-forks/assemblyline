@@ -52,7 +52,7 @@ class AlignmentSummaryMetrics(object):
         for category,fields in self.category_field_dict.iteritems():
             if ((category == "FIRST_OF_PAIR") or 
                 (category == "SECOND_OF_PAIR")):
-                return int(fields[index])
+                return int(round(float(fields[index])))
         return None
 
     

@@ -45,11 +45,8 @@ class PluginConfig(object):
         for elem in root.findall("plugin"):
             name = elem.get("name")
             c.plugins[name] = elem
-        # general
+        # modules
         c.modules_init_script = root.findtext("modules_init_script")
-        c.output_dir = root.findtext("output_dir")
-        c.tasks_dir = os.path.join(c.output_dir, "tasks")
-        c.log_dir = os.path.join(c.output_dir, "log")
         # pbs
         c.pbs = False
         c.node_mem = None
@@ -65,21 +62,20 @@ class PluginConfig(object):
                 c.pbs_script_lines.append(line_elem.text)
         return c
 
-    def setup_output_dirs(self):
-        # setup tasks dir
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
-        if not os.path.exists(self.tasks_dir):
-            os.makedirs(self.tasks_dir)
-        if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir)
-
-
 def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
     # setup output directories
-    config.setup_output_dirs()
+    output_dir = plugin_elem.findtext("output_dir")
+    tasks_dir = os.path.join(output_dir, "tasks")
+    log_dir = os.path.join(output_dir, "logs")
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    if not os.path.exists(tasks_dir):
+        os.makedirs(tasks_dir)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
     # htseq parameters
     num_processors = int(plugin_elem.findtext("num_processors"))
+    copy_bam = parse_bool(plugin_elem.findtext("copy_bam", "no"))
     run_as_pe = parse_bool(plugin_elem.findtext("pe", "no"))    
     gtf_file = plugin_elem.findtext("gtf_file")
     extra_args = []
@@ -104,8 +100,8 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
         # get pbs header
         #
         if config.pbs:
-            stdout_file = os.path.join(config.log_dir, "%s.stdout" % (lib.library_id))
-            stderr_file = os.path.join(config.log_dir, "%s.stderr" % (lib.library_id))
+            stdout_file = os.path.join(log_dir, "%s.stdout" % (lib.library_id))
+            stderr_file = os.path.join(log_dir, "%s.stderr" % (lib.library_id))
             pbs_commands = get_pbs_header(job_name=lib.library_id,
                                           num_processors=num_processors,
                                           node_processors=config.node_processors,
@@ -133,34 +129,45 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
         #
         # create directories
         #
-        lib_output_dir = os.path.join(config.output_dir, lib.library_id)
-        shell_commands.append(bash_log("Creating directory: %s" % (lib_output_dir), "INFO"))
+        lib_output_dir = os.path.join(output_dir, lib.library_id)
+        msg = "Creating directory: %s" % (lib_output_dir)
+        shell_commands.append(bash_log(msg, "INFO"))
         shell_commands.append("mkdir -p %s" % (lib_output_dir))
-        shell_commands.append(bash_check_retcode())  
+        shell_commands.append(bash_check_retcode(msg))  
         tmp_dir = os.path.join(lib_output_dir, "tmp")
-        shell_commands.append(bash_log("Creating directory: %s" % (tmp_dir), "INFO"))
+        msg = "Creating directory: %s" % (tmp_dir)
+        shell_commands.append(bash_log(msg, "INFO"))
         shell_commands.append("mkdir -p %s" % (tmp_dir))
-        shell_commands.append(bash_check_retcode())  
+        shell_commands.append(bash_check_retcode(msg))
+        #
+        # copy bam
+        #
+        if copy_bam:
+            inp_bam_file = os.path.join(tmp_dir, os.path.basename(lib.bam_file))
+            shell_commands.append("cp %s %s" % (lib.bam_file, inp_bam_file))
+            shell_commands.append(bash_check_retcode("Error copying BAM file"))
+        else:
+            inp_bam_file = lib.bam_file   
         #
         # run htseq-count for gene expression
         #
-        shell_commands.append(bash_log("Counting reads across genes with htseq-count", "INFO"))
+        msg = "Counting reads across genes with htseq-count"        
+        shell_commands.append(bash_log(msg, "INFO"))
         output_file = os.path.join(lib_output_dir, "htseq.txt")
-        args = [sys.executable, 
-                os.path.join(_pipeline_dir, "run_htseq_count.py"),
+        log_file = os.path.join(lib_output_dir, 'htseq.log')
+        args = ["python", os.path.join(_pipeline_dir, "run_htseq_count.py"),
                 "--tmp-dir", tmp_dir]
         if run_as_pe:
             args.append("--pe")
         for arg in extra_args:
             args.append('--arg="%s"' % arg)
         args.extend([gtf_file,
-                     lib.bam_file,
-                     output_file])                     
+                     inp_bam_file,
+                     output_file,
+                     '> %s 2>&1' % (log_file)])                     
         command = ' '.join(map(str, args))
-        log_file = os.path.join(lib_output_dir, 'htseq.log')
-        command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())
+        shell_commands.append(bash_check_retcode(msg))
         #
         # cleanup
         #
@@ -183,7 +190,7 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
                 ext = ".pbs"
             else:
                 ext = ".sh"
-            filename = os.path.join(config.tasks_dir, "%s%s" % (lib.library_id, ext))
+            filename = os.path.join(tasks_dir, "%s%s" % (lib.library_id, ext))
             f = open(filename, "w")
             for command in shell_commands:
                 print >>f, command
@@ -219,7 +226,7 @@ def main():
     libs = []
     for lib in LibraryInfo.from_file(args.library_table):
         if not lib.is_valid():
-            logging.warning("\tskipping lib=%s" % (lib.library_id)) 
+            logging.warning("\t[SKIPPED] Library %s not valid" % (lib.library_id))
             continue
         libs.append(lib)
     logging.info("\tfound %d libraries" % (len(libs)))

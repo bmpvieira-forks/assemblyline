@@ -1,40 +1,27 @@
 <plugins>
-  <!-- EXDS -->
-  <modules_init_script>/home/mkiyer/sw/rhel6/init.sh</modules_init_script>
-  <output_dir>/exds/users/mkiyer/projects/assemblyline/lung_v002_2012-Nov-08/quantify_htseq_sr</output_dir>
-  <pbs use="no"/>
-  
-  <!-- FLUX  
-  <modules_init_script>/scratch/arul_flux/med-mctp/sw/rhel6/init.sh</modules_init_script>
-  <output_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq_df1/gene_expression/lung_v002</output_dir>
+  <modules_init_script>/exds/sw/rhel6/init.sh</modules_init_script>
   <pbs use="yes">
-      <node_mem>45000</node_mem>
-      <node_processors>12</node_processors>
-      <script_line>#PBS -l qos=flux</script_line>
-      <script_line>#PBS -A arul_flux</script_line>
-      <script_line>#PBS -q flux</script_line>
-      <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
-      <script_line>#PBS -m abe</script_line>
+    <node_mem>128000</node_mem>
+    <node_processors>32</node_processors>
+    <script_line>#PBS -q batch</script_line>
+    <script_line>#PBS -m abe</script_line>
+    <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
   </pbs>
-  -->
-  
+
   <plugin name="htseq">
     <num_processors>1</num_processors>
-    <gtf_file>/exds/users/mkiyer/projects/assemblyline/lung_v002_2012-Nov-08/assemble/assembly_kmax5_utr10_intron25.gtf</gtf_file>
-    <pe>no</pe>
-    <arg>-m union</arg>
-    <arg>-s no</arg>    
     <modules>
       <module>epd</module>
+      <module>bioinfo</module>
       <module>pysam/0.6</module>
       <module>samtools/0.1.18</module>
       <module>HTSeq/0.5.3p9</module>
     </modules>
+    <gtf_file>/exds/users/mkiyer/projects/assemblyline/lung_v002_2012-Nov-08/assembly/assembly_kmax5_utr10_intron25.gtf</gtf_file>
+    <output_dir>/exds/users/mkiyer/projects/assemblyline/lung_v002_2012-Nov-08/gene_expression/results</output_dir>
+    <pe>no</pe>
+    <copy_bam>no</copy_bam>
+    <arg>-m union</arg>
+    <arg>-s no</arg>
   </plugin>
-
-  <plugin name="ucsc_tracks">
-    <!-- UCSC big data server url -->
-    <ucsc_big_data_url>http://141.214.4.250</ucsc_big_data_url>
-  </plugin>  
-
 </plugins>
