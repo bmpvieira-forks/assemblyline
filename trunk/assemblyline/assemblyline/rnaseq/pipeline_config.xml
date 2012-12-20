@@ -142,9 +142,6 @@
   <min_fragment_size>0</min_fragment_size>
   <max_fragment_size>1000</max_fragment_size>
 
-  <!-- UCSC big data server url -->
-  <ucsc_big_data_url>http://141.214.4.250</ucsc_big_data_url>
-
   <!-- tophat parameters -->
   <tophat>
     <arg>--GTF $known_genes_gtf</arg>
