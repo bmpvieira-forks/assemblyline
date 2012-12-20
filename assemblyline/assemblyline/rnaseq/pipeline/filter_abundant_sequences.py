@@ -23,7 +23,7 @@ def to_fastq(r, f):
     qual = r.qual[::-1] if r.is_reverse else r.qual 
     print >>f, "@%s\n%s\n+\n%s" % (r.qname, seq, qual)
 
-def get_fastqc_encoding(fastqc_data_files):
+def get_quality_score_encoding(fastqc_data_files):
     # get fastq format from fastqc output
     encodings = set()
     for f in fastqc_data_files:
@@ -97,7 +97,7 @@ def filter_abundant_sequences(fastqc_data_files,
     #
     # get quality scores
     #
-    retcode, quals = get_fastqc_encoding(fastqc_data_files)
+    retcode, quals = get_quality_score_encoding(fastqc_data_files)
     if retcode != 0:
         logging.error("Error reading quality score format from FASTQC output")
         return config.JOB_ERROR
@@ -145,6 +145,8 @@ def filter_abundant_sequences(fastqc_data_files,
     retcode = subprocess.call(command, shell=True)
     if retcode != 0:
         logging.error("%s FAILED" % (msg))
+        if os.path.exists(sorted_abundant_bam_file):
+            os.remove(sorted_abundant_bam_file)
         return config.JOB_ERROR
     # remove temp files
     os.remove(abundant_bam_file)
