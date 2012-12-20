@@ -233,12 +233,15 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     # validate pipeline configuration
     #
     msg = "Validating pipeline configuration"
-    logging.info(msg)
+    logging.debug(msg)
+    shell_commands.append(bash_log(msg, "INFO"))
+    log_file = os.path.join(results.log_dir, 'validate_pipeline_config.log')
     args = [sys.executable, 
             os.path.join(_pipeline_dir, "validate_pipeline_config.py"),
-            config_xml_file, server_name]
-    logging.debug("\targs: %s" % (' '.join(map(str, args))))
+            config_xml_file, server_name,
+            "> %s 2>&1" % (log_file)]
     command = ' '.join(map(str, args))
+    logging.debug("\tcommand: %s" % (command))
     shell_commands.append(command)
     shell_commands.append(bash_check_retcode())   
     #
