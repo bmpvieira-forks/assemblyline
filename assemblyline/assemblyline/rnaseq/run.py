@@ -655,17 +655,13 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     shell_commands.append(bash_log(msg, "INFO"))
     args = [sys.executable,
             os.path.join(_pipeline_dir, "coverage_maps.py"),
-            '--big-data-url', pipeline.ucsc_big_data_url,
-            '--track-name', results.library_id,
-            '--track-desc', results.library_id,
             "--scale",
             "--tmp-dir", results.tmp_dir,
             results.library_metrics_file,
             results.alignment_summary_metrics,
             genome_static.chrom_sizes,
             results.tophat_bam_file,
-            results.coverage_bigwig_prefix,
-            results.coverage_track_file]
+            results.coverage_bigwig_prefix]
     logging.debug("\targs: %s" % (' '.join(map(str, args))))
     command = ' '.join(map(str, args))
     log_file = os.path.join(results.log_dir, 'coverage_maps.log')
@@ -819,6 +815,28 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         command = ' '.join(map(str, args))
         log_file = os.path.join(results.log_dir, 'varscan.log')
         command += ' > %s 2>&1' % (log_file)
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())
+    #
+    # index varscan vcf file
+    #
+    msg = "Indexing VCF files"
+    output_files = [results.varscan_snv_bgzip_file,
+                    results.varscan_snv_tabix_file]
+    input_files = [results.varscan_snv_file]
+    skip = ((not pipeline.varscan_run) or
+            many_up_to_date(output_files, input_files))
+    if skip:
+        logging.info("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+    else:
+        logging.info(msg)
+        shell_commands.append(bash_log(msg, "INFO"))
+        command = 'bgzip -c %s > %s' % (results.varscan_snv_file, 
+                                        results.varscan_snv_bgzip_file)
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())
+        command = 'tabix -p vcf %s' % (results.varscan_snv_bgzip_file) 
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())
     #

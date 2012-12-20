@@ -16,10 +16,13 @@ def run_varscan(ref_fa,
                 varscan_func,
                 varscan_args):
     # run varscan snv
-    args = ["samtools", "mpileup", "-f", ref_fa, bam_file]
+    args = ["samtools", "mpileup", "-B", "-f", ref_fa, bam_file]
+    logging.debug("samtools args: %s" % (' '.join(map(str,args))))
     samtools_p = subprocess.Popen(args, stdout=subprocess.PIPE)
     args = ["java", "-Xmx4g", "-jar", varscan_jar, varscan_func]
-    args.extend(varscan_args)
+    for arg in varscan_args:
+        args.extend(arg.split())
+    logging.debug("varscan args: %s" % (' '.join(map(str,args))))
     outfh = open(output_file, "w")
     retcode1 = subprocess.call(args, stdin=samtools_p.stdout, stdout=outfh)
     retcode2 = samtools_p.wait()

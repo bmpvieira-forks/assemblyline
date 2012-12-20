@@ -74,7 +74,6 @@ PICARD_RNASEQ_METRICS = "picard.rnaseq_metrics"
 PICARD_RNASEQ_METRICS_PLOT_PDF = "picard.rnaseq_metrics_plot.pdf"
 # coverage bedgraph file
 COVERAGE_BIGWIG_PREFIX = "coverage"
-COVERAGE_UCSC_TRACK_FILE = "coverage.ucsc.tracks"
 # cufflinks output
 CUFFLINKS_AB_INITIO_DIR = "cufflinks_ab_initio"
 CUFFLINKS_KNOWN_DIR = "cufflinks_known"
@@ -88,6 +87,8 @@ TOPHAT_RMDUP_BAM_FILE = "accepted_hits.rmdup.bam"
 PICARD_DUPLICATE_METRICS = "picard.duplicate_metrics"
 # varscan output
 VARSCAN_SNV_FILE = "varscan_snvs.vcf"
+VARSCAN_SNV_BGZIP_FILE = "varscan_snvs.vcf.gz"
+VARSCAN_SNV_TABIX_FILE = "varscan_snvs.vcf.gz.tbi"
 # job complete
 JOB_DONE_FILE = "job.done"
 # job memory and runtime
@@ -186,7 +187,6 @@ class RnaseqResults(object):
         self.rnaseq_metrics_pdf = os.path.join(self.output_dir, PICARD_RNASEQ_METRICS_PLOT_PDF)
         # bigwig file prefix
         self.coverage_bigwig_prefix = os.path.join(self.output_dir, COVERAGE_BIGWIG_PREFIX)
-        self.coverage_track_file = os.path.join(self.output_dir, COVERAGE_UCSC_TRACK_FILE)        
         # tophat fusion results
         self.tophat_fusion_dir = os.path.join(self.output_dir, TOPHAT_FUSION_DIR)
         self.tophat_fusion_bam_file = os.path.join(self.output_dir, TOPHAT_FUSION_BAM_FILE)        
@@ -210,6 +210,8 @@ class RnaseqResults(object):
         self.tophat_rmdup_bam_file = os.path.join(self.tmp_dir, TOPHAT_RMDUP_BAM_FILE)
         self.duplicate_metrics = os.path.join(self.output_dir, PICARD_DUPLICATE_METRICS)
         self.varscan_snv_file = os.path.join(self.output_dir, VARSCAN_SNV_FILE)
+        self.varscan_snv_bgzip_file = os.path.join(self.output_dir, VARSCAN_SNV_BGZIP_FILE)
+        self.varscan_snv_tabix_file = os.path.join(self.output_dir, VARSCAN_SNV_TABIX_FILE)
         # job finished file
         self.job_done_file = os.path.join(self.output_dir, JOB_DONE_FILE)
 
@@ -309,10 +311,6 @@ class RnaseqResults(object):
                     logging.error("Library %s missing coverage bigwig file %s" % (self.library_id))
                     is_valid = False
                     missing_files.append(f)
-        if not file_exists_and_nz_size(self.coverage_track_file):
-            logging.error("Library %s missing coverage track file" % (self.library_id))
-            missing_files.append(self.coverage_track_file)
-            is_valid = False
         # check tophat fusion (optional)
         if config.tophat_fusion_run:
             # check tophat fusion bam file
@@ -359,6 +357,15 @@ class RnaseqResults(object):
             if not file_exists_and_nz_size(self.varscan_snv_file):
                 logging.error("Library %s missing varscan snv file" % (self.library_id))
                 missing_files.append(self.varscan_snv_file)
+                is_valid = False
+            # check varscan files
+            if not file_exists_and_nz_size(self.varscan_snv_bgzip_file):
+                logging.error("Library %s missing varscan snv bgzip file" % (self.library_id))
+                missing_files.append(self.varscan_snv_bgzip_file)
+                is_valid = False
+            if not file_exists_and_nz_size(self.varscan_snv_tabix_file):
+                logging.error("Library %s missing varscan snv tabix file" % (self.library_id))
+                missing_files.append(self.varscan_snv_tabix_file)
                 is_valid = False
         return is_valid, missing_files
 
@@ -558,8 +565,6 @@ class PipelineConfig(object):
         c.fragment_size_stdev_default = int(root.findtext("fragment_size_stdev_default"))
         c.min_fragment_size = int(root.findtext("min_fragment_size"))
         c.max_fragment_size = int(root.findtext("max_fragment_size"))
-        # ucsc server url parameters
-        c.ucsc_big_data_url = root.findtext("ucsc_big_data_url")
         # tophat parameters
         c.tophat_args = []
         elem = root.find("tophat")
@@ -621,8 +626,7 @@ class PipelineConfig(object):
                          "fragment_size_stdev_default",
                          "adaptor_length_default",
                          "min_fragment_size",
-                         "max_fragment_size",
-                         "ucsc_big_data_url"):
+                         "max_fragment_size"):
             elem = etree.SubElement(root, attrname)
             elem.text = str(getattr(self, attrname))
         # tophat parameters
@@ -703,27 +707,16 @@ class PipelineConfig(object):
         #
         # Check software installation
         #
-        # check fastqc
-        msg = 'fastqc'
-        if check_executable('fastqc'):
-            logging.debug("Checking for '%s' binary... found" % msg)
-        else:
-            logging.error("'%s' binary not found or not executable" % msg)
-            valid = False
-        # check samtools
-        msg = 'samtools'
-        if check_executable('samtools'):
-            logging.debug("Checking for '%s' binary... found" % msg)
-        else:
-            logging.error("'%s' binary not found or not executable" % msg)
-            valid = False
-        # java
-        msg = 'java'
-        if check_executable("java"):
-            logging.debug("Checking for '%s' binary... found" % msg)
-        else:
-            logging.error("'%s' binary not found or not executable" % msg)
-            valid = False
+        progs = ['fastqc', 'samtools', 'java', 'bowtie', 
+                 'bowtie2', 'tophat', 'bedtools',
+                 'bedGraphToBigWig', 'cufflinks', 'htseq-count',
+                 'bgzip', 'tabix', 'R', 'Rscript']
+        for prog in progs:
+            if check_executable(prog):
+                logging.debug("Checking for '%s' binary... found" % prog)
+            else:
+                logging.error("'%s' binary not found or not executable" % prog)
+                valid = False
         # picard
         if "PICARDPATH" not in os.environ:
             logging.debug("PICARDPATH environment variable not set")
@@ -748,64 +741,6 @@ class PipelineConfig(object):
             else:
                 logging.error("VarScan jarfile '%s' not found" % (jarfile))
                 valid = False
-        # check R
-        msg = 'R'
-        if check_executable('R'):
-            logging.debug("Checking for '%s' binary... found" % msg)
-        else:
-            logging.error("'%s' binary not found or not executable" % msg)
-            valid = False
-        msg = 'Rscript'
-        if check_executable("Rscript"):
-            logging.debug("Checking for '%s' binary... found" % msg)
-        else:
-            logging.error("'%s' binary not found or not executable" % msg)
-            valid = False                
-        msg = 'bowtie'
-        if check_executable('bowtie'):
-            logging.debug("Checking for '%s' binary... found" % msg)
-        else:
-            logging.error("'%s' binary not found or not executable" % msg)
-            valid = False
-        msg = 'bowtie2'
-        if check_executable('bowtie2'):
-            logging.debug("Checking for '%s' binary... found" % msg)
-        else:
-            logging.error("'%s' binary not found or not executable" % msg)
-            valid = False
-        msg = 'tophat'
-        if check_executable('tophat'):
-            logging.debug("Checking for '%s' binary... found" % msg)
-        else:
-            logging.error("'%s' binary not found or not executable" % msg)
-            valid = False
-        msg = 'cufflinks'
-        if check_executable('cufflinks'):
-            logging.debug("Checking for '%s' binary... found" % msg)
-        else:
-            logging.error("'%s' binary not found or not executable" % msg)
-            valid = False
-        # check BEDTools
-        msg = 'BEDTools'
-        if check_executable("bedtools"):
-            logging.debug("Checking for '%s' binary... found" % msg)
-        else:
-            logging.error("'%s' binary not found or not executable" % msg)
-            valid = False            
-        # check UCSC binary
-        msg = 'UCSC bedGraphToBigWig'
-        if check_executable('bedGraphToBigWig'):
-            logging.debug("Checking for '%s' binaries... found" % msg)
-        else:
-            logging.error("'%s' binaries not found or not executable" % msg)
-            valid = False
-        # check htseq-count
-        msg = 'htseq-count'
-        if check_executable("htseq-count"):
-            logging.debug("Checking for '%s' binary... found" % msg)
-        else:
-            logging.error("'%s' binary not found or not executable" % msg)
-            valid = False
         # check for bx python library
         try:
             import bx.intervals.intersection

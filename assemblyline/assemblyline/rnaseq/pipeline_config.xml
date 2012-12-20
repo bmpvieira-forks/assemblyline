@@ -133,6 +133,7 @@
     <module>ucsc/2012-Feb-08</module>
     <module>HTSeq/0.5.3p9</module>
     <module>varscan/2.3.3</module>
+    <module>tabix/0.2.6</module>
   </modules>
 
   <!-- fragment size parameters -->
@@ -205,6 +206,7 @@
     <arg>--min-freq-for-hom 0.75</arg> 
     <arg>--p-value 0.10</arg>
     <arg>--strand-filter 0</arg>
+    <!-- note: do not add the output-vcf tag here -->
     <arg>--output-vcf 1</arg>
   </varscan>
 
