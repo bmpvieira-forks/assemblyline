@@ -63,6 +63,18 @@ def main():
                                'bigDataUrl="%s"' % (ucsc_url)])
         print track_line
     #
+    # junction bigbed file
+    #
+    ucsc_url = "%s%s" % (args.baseurl, results.junctions_bigbed_file)
+    track_name = "junc_%s" % (results.library_id)
+    track_desc = "Splice junctions for %s" % (results.library_id)
+    track_line = ' '.join(['track type=bigBed',
+                           'name="%s"' % (track_name),
+                           'description="%s"' % (track_desc),
+                           'visibility=pack',
+                           'bigDataUrl="%s"' % (ucsc_url)])
+    print track_line
+    #
     # variant calls (VCF)
     #
     ucsc_url = "%s%s" % (args.baseurl, results.varscan_snv_bgzip_file)
@@ -71,6 +83,7 @@ def main():
     track_line = ' '.join(['track type=vcfTabix',
                            'name="%s"' % (track_name),
                            'description="%s"' % (track_desc),
+                           'visibility=pack',
                            'bigDataUrl="%s"' % (ucsc_url)])
     print track_line
 
