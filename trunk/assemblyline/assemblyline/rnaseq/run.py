@@ -12,7 +12,7 @@ import subprocess
 # projects
 import assemblyline.rnaseq.lib.config as config
 from assemblyline.rnaseq.lib.base import many_up_to_date, detect_format
-from assemblyline.rnaseq.lib.libtable import Library, FRAGMENT_LAYOUT_PAIRED
+from assemblyline.rnaseq.lib.libtable import Library, FRAGMENT_LAYOUT_PAIRED, FRAGMENT_LAYOUT_SINGLE
 
 import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
@@ -279,7 +279,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Converting BAM input files to FASTQ"
     if skip:
         logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
@@ -303,7 +303,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Concatenating/copying read1 sequence files"
     if skip:
         logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
@@ -320,7 +320,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         msg = "Concatenating/copying read2 sequence files"
         if skip:
             logging.info("[SKIPPED] %s" % msg)
-            shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+            shell_commands.append(bash_log(msg, "SKIPPED"))
         else:
             logging.info(msg)
             shell_commands.append(bash_log(msg, "INFO"))
@@ -336,7 +336,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Running FASTQC quality assessment"
     if skip:
         logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         logging.info("%s" % msg)    
         shell_commands.append(bash_log(msg, "INFO"))
@@ -358,7 +358,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Filtering reads that map to abundant sequences"
     if skip:
         logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
@@ -386,7 +386,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Counting abundant reads"
     if skip:
         logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
@@ -406,10 +406,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                     results.frag_size_dist_plot_file]
     skip = many_up_to_date(output_files, input_files)
     if skip:
-        logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        logging.debug("[SKIPPED] %s" % (msg))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg) 
+        logging.debug(msg) 
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable,
                 os.path.join(_pipeline_dir, "inspect_library.py"),
@@ -438,10 +438,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = ((not pipeline.tophat_fusion_run) or 
             many_up_to_date(output_files, input_files))
     if skip:
-        logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        logging.debug("[SKIPPED] %s" % (msg))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info("%s" % (msg))
+        logging.debug("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, os.path.join(_pipeline_dir, "run_tophat.py"),
                 "-p", num_processors,
@@ -474,7 +474,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
             many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         logging.info("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
@@ -494,7 +494,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
             many_up_to_date(output_files, input_files))
     if skip:
         logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         logging.info("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
@@ -524,7 +524,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = many_up_to_date(output_files, input_files)
     if skip:
         logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         logging.info("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
@@ -558,7 +558,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = many_up_to_date(output_files, input_files)
     if skip:
         logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         logging.info("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
@@ -566,7 +566,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
         shell_commands.append(command)        
-        shell_commands.append(bash_check_retcode())
+        shell_commands.append(bash_check_retcode(msg))
     #
     # run picard diagnostics for alignment results
     #
@@ -578,7 +578,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = many_up_to_date(output_files, input_files)
     if skip:
         logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
@@ -605,7 +605,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = many_up_to_date(output_files, input_files)
     if skip:    
         logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         logging.info(msg)
         shell_commands.append(bash_log(msg, "INFO"))
@@ -627,17 +627,113 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())
     #
-    # analyze repeat element content
+    # extract unmapped paired fastq files for realignment
     #
-    msg = "Aligning and counting repeat element sequences"
+    msg = "Converting unmapped BAM to paired FASTQ for realignment"
     input_files = [results.tophat_unmapped_bam_file]
-    output_files = [results.repeat_element_counts_file]
+    output_files = results.unmapped_paired_fastq_files
+    skip = many_up_to_date(output_files, input_files)
+    if skip:
+        logging.debug("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log(msg, "SKIPPED"))
+    else:
+        logging.debug(msg)
+        shell_commands.append(bash_log(msg, "INFO"))
+        # convert bam to paired fastq
+        args = ["python",
+                os.path.join(_pipeline_dir, "extract_fastq_from_bam.py"),
+                "--fragment-layout", FRAGMENT_LAYOUT_PAIRED,
+                "--tmp-dir", results.tmp_dir,
+                results.tophat_unmapped_bam_file,
+                results.unmapped_paired_fastq_prefix]
+        command = ' '.join(map(str, args))
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode(msg))
+    #
+    # map pairs to pathogen sequences
+    #
+    msg = "Aligning pathogen sequences"
+    input_files = results.unmapped_paired_fastq_files
+    output_files = [results.pathogen_bam_file]
     skip = many_up_to_date(output_files, input_files)
     if skip:
         logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         logging.info(msg) 
+        shell_commands.append(bash_log(msg, "INFO"))
+        log_file = os.path.join(results.log_dir, 'bowtie2_align_pathogens.log')        
+        args = [sys.executable,
+                os.path.join(_pipeline_dir, "bowtie2_paired_align.py"),
+                "-p", num_processors,
+                "--tmp-dir", results.tmp_dir,
+                "--max-frag-size", pipeline.max_fragment_size]
+        # extra args
+        for arg in pipeline.pathogen_screen_bt2_args:
+            args.append('--extra-arg="%s"' % arg)
+        args.extend([genome_static.pathogen_bowtie2_index,                     
+                     results.pathogen_bam_file])
+        args.extend(results.unmapped_paired_fastq_files)
+        args.append('> %s 2>&1' % (log_file))
+        command = ' '.join(map(str, args))
+        logging.debug("\tcommand: %s" % (command))
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())
+    #
+    # count pathogen sequences
+    #
+    msg = "Counting pathogen sequences"
+    input_files = [results.pathogen_bam_file]
+    output_files = [results.pathogen_counts_file]
+    skip = many_up_to_date(output_files, input_files)
+    if skip:
+        logging.debug("[SKIPPED] %s" % (msg))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
+    else:
+        logging.debug(msg)
+        shell_commands.append(bash_log(msg, "INFO"))
+        log_file = os.path.join(results.log_dir, 'pathogen_counts.log')
+        command = ("samtools idxstats %s > %s 2> %s" % 
+                   (results.pathogen_bam_file,
+                    results.pathogen_counts_file,
+                    log_file))
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())            
+    #
+    # extract unmapped unpaired fastq files for realignment
+    #
+    msg = "Converting unmapped BAM to unpaired FASTQ for realignment"
+    input_files = [results.tophat_unmapped_bam_file]
+    output_files = results.unmapped_unpaired_fastq_files
+    skip = many_up_to_date(output_files, input_files)
+    if skip:
+        logging.debug("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log(msg, "SKIPPED"))
+    else:
+        logging.debug(msg)
+        shell_commands.append(bash_log(msg, "INFO"))
+        # convert bam to paired fastq
+        args = ["python",
+                os.path.join(_pipeline_dir, "extract_fastq_from_bam.py"),
+                "--fragment-layout", FRAGMENT_LAYOUT_SINGLE,
+                "--tmp-dir", results.tmp_dir,
+                results.tophat_unmapped_bam_file,
+                results.unmapped_unpaired_fastq_prefix]
+        command = ' '.join(map(str, args))
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode(msg))
+    #
+    # analyze repeat element content
+    #
+    msg = "Aligning and counting repeat element sequences"
+    input_files = results.unmapped_unpaired_fastq_files
+    output_files = [results.repeat_element_counts_file]
+    skip = many_up_to_date(output_files, input_files)
+    if skip:
+        logging.debug("[SKIPPED] %s" % (msg))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
+    else:
+        logging.debug(msg) 
         shell_commands.append(bash_log(msg, "INFO"))
         log_file = os.path.join(results.log_dir, 'repeat_elements.log')
         args = [sys.executable,
@@ -647,43 +743,14 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         # extra args
         for arg in pipeline.repeat_elements_bt2_args:
             args.append('--extra-arg="%s"' % arg)
-        args.extend(["--bam-file", results.tophat_unmapped_bam_file,
-                     genome_static.repbase_bowtie2_index,
-                     results.repeat_element_counts_file,
-                     '> %s 2>&1' % (log_file)])
+        args.extend([genome_static.repbase_bowtie2_index,
+                     results.repeat_element_counts_file])
+        args.extend(results.unmapped_unpaired_fastq_files)
+        args.append('> %s 2>&1' % (log_file))
         command = ' '.join(map(str, args))
         logging.debug("\tcommand: %s" % (command))
         shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())
-    #
-    # analyze pathogen content
-    #
-    msg = "Aligning and counting pathogen sequences"
-    input_files = [results.tophat_unmapped_bam_file]
-    output_files = [results.pathogen_counts_file]
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.info("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
-    else:
-        logging.info(msg) 
-        shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'pathogens.log')
-        args = [sys.executable,
-                os.path.join(_pipeline_dir, "bowtie2_unpaired_align.py"),
-                "-p", num_processors,
-                "--tmp-dir", results.tmp_dir]
-        # extra args
-        for arg in pipeline.repeat_elements_bt2_args:
-            args.append('--extra-arg="%s"' % arg)
-        args.extend(["--bam-file", results.tophat_unmapped_bam_file,
-                     genome_static.pathogen_bowtie2_index,
-                     results.pathogen_counts_file,
-                     '> %s 2>&1' % (log_file)])
-        command = ' '.join(map(str, args))
-        logging.debug("\tcommand: %s" % (command))
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())
+        shell_commands.append(bash_check_retcode(msg))
     #
     # generate genome coverage maps  
     #
@@ -704,7 +771,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     log_file = os.path.join(results.log_dir, 'coverage_maps.log')
     command += ' > %s 2>&1' % (log_file)                
     shell_commands.append(command)
-    shell_commands.append(bash_check_retcode())        
+    shell_commands.append(bash_check_retcode(msg))        
     #
     # generate splice junction bigbed file  
     #

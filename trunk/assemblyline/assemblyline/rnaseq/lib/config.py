@@ -42,16 +42,23 @@ FILTERED_FASTQ_FILES = tuple(("%s%d.fq" % (FILTERED_FASTQ_PREFIX,x)) for x in (1
 # rnaseq library inspection
 LIBRARY_METRICS_FILE = "library_metrics.txt"
 FRAG_SIZE_DIST_PLOT_FILE = "frag_size_dist_plot.pdf"
-# repeat elements
-REPEAT_ELEMENT_COUNTS_FILE = "repeat_element_counts.txt"
-# pathogens
-PATHOGEN_COUNTS_FILE = "pathogen_counts.txt"
 # tophat alignment results
 TOPHAT_DIR = 'tophat'
 TOPHAT_BAM_FILE = os.path.join(TOPHAT_DIR, "accepted_hits.bam")
 TOPHAT_BAM_INDEX_FILE = TOPHAT_BAM_FILE + ".bai"
 TOPHAT_JUNCTIONS_FILE = os.path.join(TOPHAT_DIR, "junctions.bed")
 TOPHAT_UNMAPPED_BAM_FILE = os.path.join(TOPHAT_DIR, "unmapped.bam")
+# unmapped fastq files
+UNMAPPED_UNPAIRED_FASTQ_PREFIX = 'unmapped_unpaired'
+UNMAPPED_UNPAIRED_FASTQ_FILES = tuple(("%s_%d.fq" % (UNMAPPED_UNPAIRED_FASTQ_PREFIX,x)) for x in (1,2))
+UNMAPPED_PAIRED_FASTQ_PREFIX = 'unmapped_paired'
+UNMAPPED_PAIRED_FASTQ_FILES = tuple(("%s_%d.fq" % (UNMAPPED_PAIRED_FASTQ_PREFIX,x)) for x in (1,2))
+# repeat elements
+REPEAT_ELEMENT_COUNTS_FILE = "repeat_element_counts.txt"
+# pathogens
+PATHOGEN_BAM_FILE = "pathogen_hits.bam"
+PATHOGEN_BAM_INDEX_FILE = "pathogen_hits.bam.bai"
+PATHOGEN_COUNTS_FILE = "pathogen_counts.txt"
 # tophat fusion results
 TOPHAT_FUSION_DIR = 'tophatfusion'
 TOPHAT_FUSION_BAM_FILE = os.path.join(TOPHAT_FUSION_DIR, "accepted_hits.bam")
@@ -187,9 +194,21 @@ class RnaseqResults(object):
         self.quality_distribution_pdf = os.path.join(self.output_dir, PICARD_QUALITY_DISTRIBUTION_PDF)
         self.rnaseq_metrics = os.path.join(self.output_dir, PICARD_RNASEQ_METRICS)
         self.rnaseq_metrics_pdf = os.path.join(self.output_dir, PICARD_RNASEQ_METRICS_PLOT_PDF)
+        # unmapped unpaired fastq files
+        self.unmapped_unpaired_fastq_prefix = os.path.join(self.tmp_dir, UNMAPPED_UNPAIRED_FASTQ_PREFIX)
+        self.unmapped_unpaired_fastq_files = []
+        for readnum in xrange(len(self.copied_fastq_files)):
+            self.unmapped_unpaired_fastq_files.append(os.path.join(self.tmp_dir, UNMAPPED_UNPAIRED_FASTQ_FILES[readnum]))
+        # unmapped paired fastq files
+        self.unmapped_paired_fastq_prefix = os.path.join(self.tmp_dir, UNMAPPED_PAIRED_FASTQ_PREFIX)
+        self.unmapped_paired_fastq_files = []
+        for readnum in xrange(len(self.copied_fastq_files)):
+            self.unmapped_paired_fastq_files.append(os.path.join(self.tmp_dir, UNMAPPED_PAIRED_FASTQ_FILES[readnum]))
         # repeat element results
         self.repeat_element_counts_file = os.path.join(self.output_dir, REPEAT_ELEMENT_COUNTS_FILE)
         # pathogen screen results
+        self.pathogen_bam_file = os.path.join(self.output_dir, PATHOGEN_BAM_FILE)
+        self.pathogen_bam_index_file = os.path.join(self.output_dir, PATHOGEN_BAM_INDEX_FILE)
         self.pathogen_counts_file = os.path.join(self.output_dir, PATHOGEN_COUNTS_FILE)
         # bigwig file prefix
         self.coverage_bigwig_prefix = os.path.join(self.output_dir, COVERAGE_BIGWIG_PREFIX)
@@ -305,11 +324,16 @@ class RnaseqResults(object):
             logging.error("Library %s missing repeat elements file" % (self.library_id))
             missing_files.append(self.repeat_element_counts_file)
             is_valid = False   
-        # check pathogens file
+        # check pathogen bam file
+        if not check_sam_file(self.pathogen_bam_file, isbam=True):
+            logging.error("Library %s missing/corrupt pathogen BAM file" % (self.library_id))
+            missing_files.append(self.pathogen_bam_file)
+            is_valid = False
+        # check pathogen counts file
         if not file_exists_and_nz_size(self.pathogen_counts_file):
             logging.error("Library %s missing pathogen counts file" % (self.library_id))
             missing_files.append(self.pathogen_counts_file)
-            is_valid = False   
+            is_valid = False
         # check coverage files
         if not has_library_metrics:
             logging.error("Library %s missing coverage bigwig file(s)" % (self.library_id))
