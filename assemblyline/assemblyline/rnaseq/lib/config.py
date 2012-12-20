@@ -15,7 +15,6 @@ from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
 
 # default parameter values
 MIN_INSPECT_SAMPLES = 100
-MAX_INSPECT_SAMPLES = 1000000
 STRAND_SPECIFIC_CUTOFF_FRAC = 0.90
 # job return codes
 JOB_SUCCESS = 0
@@ -44,12 +43,15 @@ FILTERED_FASTQ_FILES = tuple(("%s%d.fq" % (FILTERED_FASTQ_PREFIX,x)) for x in (1
 LIBRARY_METRICS_FILE = "library_metrics.txt"
 FRAG_SIZE_DIST_PLOT_FILE = "frag_size_dist_plot.pdf"
 # repeat elements
-REPEAT_ELEMENTS_FILE = "repeat_element_counts.txt"
+REPEAT_ELEMENT_COUNTS_FILE = "repeat_element_counts.txt"
+# pathogens
+PATHOGEN_COUNTS_FILE = "pathogen_counts.txt"
 # tophat alignment results
 TOPHAT_DIR = 'tophat'
 TOPHAT_BAM_FILE = os.path.join(TOPHAT_DIR, "accepted_hits.bam")
 TOPHAT_BAM_INDEX_FILE = TOPHAT_BAM_FILE + ".bai"
 TOPHAT_JUNCTIONS_FILE = os.path.join(TOPHAT_DIR, "junctions.bed")
+TOPHAT_UNMAPPED_BAM_FILE = os.path.join(TOPHAT_DIR, "unmapped.bam")
 # tophat fusion results
 TOPHAT_FUSION_DIR = 'tophatfusion'
 TOPHAT_FUSION_BAM_FILE = os.path.join(TOPHAT_FUSION_DIR, "accepted_hits.bam")
@@ -169,13 +171,12 @@ class RnaseqResults(object):
         # Fragment size distribution
         self.library_metrics_file = os.path.join(self.output_dir, LIBRARY_METRICS_FILE)
         self.frag_size_dist_plot_file = os.path.join(self.output_dir, FRAG_SIZE_DIST_PLOT_FILE)
-        # repeat element results
-        self.repeat_elements_file = os.path.join(self.output_dir, REPEAT_ELEMENTS_FILE)
         # tophat results
         self.tophat_dir = os.path.join(self.output_dir, TOPHAT_DIR)
         self.tophat_bam_file = os.path.join(self.output_dir, TOPHAT_BAM_FILE)
         self.tophat_bam_index_file = os.path.join(self.output_dir, TOPHAT_BAM_INDEX_FILE)
         self.tophat_juncs_file = os.path.join(self.output_dir, TOPHAT_JUNCTIONS_FILE)
+        self.tophat_unmapped_bam_file = os.path.join(self.output_dir, TOPHAT_UNMAPPED_BAM_FILE)
         # Picard metrics
         self.alignment_summary_metrics = os.path.join(self.output_dir, PICARD_ALIGNMENT_SUMMARY_METRICS)
         self.insert_size_histogram_pdf = os.path.join(self.output_dir, PICARD_INSERT_SIZE_HISTOGRAM_PDF)
@@ -186,6 +187,10 @@ class RnaseqResults(object):
         self.quality_distribution_pdf = os.path.join(self.output_dir, PICARD_QUALITY_DISTRIBUTION_PDF)
         self.rnaseq_metrics = os.path.join(self.output_dir, PICARD_RNASEQ_METRICS)
         self.rnaseq_metrics_pdf = os.path.join(self.output_dir, PICARD_RNASEQ_METRICS_PLOT_PDF)
+        # repeat element results
+        self.repeat_element_counts_file = os.path.join(self.output_dir, REPEAT_ELEMENT_COUNTS_FILE)
+        # pathogen screen results
+        self.pathogen_counts_file = os.path.join(self.output_dir, PATHOGEN_COUNTS_FILE)
         # bigwig file prefix
         self.coverage_bigwig_prefix = os.path.join(self.output_dir, COVERAGE_BIGWIG_PREFIX)
         self.junctions_bigbed_file = os.path.join(self.output_dir, JUNCTIONS_BIGBED_FILE)
@@ -295,6 +300,16 @@ class RnaseqResults(object):
             logging.error("Library %s missing picard rnaseq metrics" % (self.library_id))
             missing_files.append(self.rnaseq_metrics)
             is_valid = False
+        # check repeat elements file
+        if not file_exists_and_nz_size(self.repeat_element_counts_file):
+            logging.error("Library %s missing repeat elements file" % (self.library_id))
+            missing_files.append(self.repeat_element_counts_file)
+            is_valid = False   
+        # check pathogens file
+        if not file_exists_and_nz_size(self.pathogen_counts_file):
+            logging.error("Library %s missing pathogen counts file" % (self.library_id))
+            missing_files.append(self.pathogen_counts_file)
+            is_valid = False   
         # check coverage files
         if not has_library_metrics:
             logging.error("Library %s missing coverage bigwig file(s)" % (self.library_id))
@@ -384,6 +399,7 @@ class GenomeConfig(object):
               "genome_bowtie2_index",
               "fragment_size_bowtie1_index",
               "repbase_bowtie2_index",
+              "pathogen_bowtie2_index",
               "gene_annotation_refflat",
               "gene_annotation_refgene",
               "gene_annotation_ensgene",
@@ -451,6 +467,9 @@ class GenomeConfig(object):
             valid = False
         if not os.path.exists(os.path.join(abs_root_dir, self.repbase_bowtie2_index + ".1.bt2")):
             logging.error("Repeat element bowtie2 index %s not found" % (self.repbase_bowtie2_index))
+            valid = False
+        if not os.path.exists(os.path.join(abs_root_dir, self.pathogen_bowtie2_index + ".1.bt2")):
+            logging.error("Pathogen bowtie2 index %s not found" % (self.pathogen_bowtie2_index))
             valid = False
         if not os.path.exists(os.path.join(abs_root_dir, self.transcriptome_bowtie1_index + ".1.ebwt")):
             logging.error("Transcriptome bowtie index %s not found" % (self.transcriptome_bowtie1_index))
@@ -567,11 +586,14 @@ class PipelineConfig(object):
         c.modules = []
         for elem in modules_elem.findall("module"):
             c.modules.append(elem.text)
-        # fragment size parameters
-        c.fragment_size_mean_default = int(root.findtext("fragment_size_mean_default"))
-        c.fragment_size_stdev_default = int(root.findtext("fragment_size_stdev_default"))
-        c.min_fragment_size = int(root.findtext("min_fragment_size"))
-        c.max_fragment_size = int(root.findtext("max_fragment_size"))
+        # library metrics parameters
+        inspect_elem = root.find("inspect")
+        for attrname in ("max_inspect_samples",
+                         "min_fragment_size",
+                         "max_fragment_size",
+                         "fragment_size_mean_default",
+                         "fragment_size_stdev_default"):
+            setattr(c, attrname, int(inspect_elem.findtext(attrname)))
         # tophat parameters
         c.tophat_args = []
         elem = root.find("tophat")
@@ -589,6 +611,16 @@ class PipelineConfig(object):
         c.tophat_fusion_post_run = parse_bool(elem.get("run", "no"))
         for arg_elem in elem.findall("arg"):
             c.tophat_fusion_post_args.append(arg_elem.text)
+        # repeat element parameters
+        c.repeat_elements_bt2_args = []
+        elem = root.find("repeat_elements")
+        for arg_elem in elem.findall("bt2arg"):
+            c.repeat_elements_bt2_args.append(arg_elem.text)
+        # pathogen screen parameters
+        c.pathogen_screen_bt2_args = []
+        elem = root.find("pathogens")
+        for arg_elem in elem.findall("bt2arg"):
+            c.pathogen_screen_bt2_args.append(arg_elem.text)
         # cufflinks ab initio parameters
         c.cufflinks_ab_initio_args = []
         elem = root.find("cufflinks_ab_initio")
@@ -628,13 +660,14 @@ class PipelineConfig(object):
         for m in self.modules:
             elem = etree.SubElement(modules_elem, "module")
             elem.text = m
-        # single element parameters
-        for attrname in ("fragment_size_mean_default",
+        # library metrics
+        inspect_elem = etree.SubElement("inspect")
+        for attrname in ("max_inspect_samples",
+                         "fragment_size_mean_default",
                          "fragment_size_stdev_default",
-                         "adaptor_length_default",
                          "min_fragment_size",
                          "max_fragment_size"):
-            elem = etree.SubElement(root, attrname)
+            elem = etree.SubElement(inspect_elem, attrname)
             elem.text = str(getattr(self, attrname))
         # tophat parameters
         tophat_elem = etree.SubElement(root, "tophat")
@@ -652,6 +685,16 @@ class PipelineConfig(object):
         tophat_fusion_post_elem.set("run", self.tophat_fusion_post_run)
         for arg in self.tophat_fusion_post_args:
             elem = etree.SubElement(tophat_fusion_post_elem, "arg")
+            elem.text = arg
+        # repeat elements
+        repeat_elements_elem = etree.SubElement(root, "repeat_elements")
+        for arg in self.repeat_elements_bt2_args:
+            elem = etree.SubElement(repeat_elements_elem, "bt2arg")
+            elem.text = arg
+        # pathogen screen
+        pathogen_screen_elem = etree.SubElement(root, "pathogens")
+        for arg in self.pathogen_screen_bt2_args:
+            elem = etree.SubElement(pathogen_screen_elem, "bt2arg")
             elem.text = arg
         # cufflinks ab initio parameters
         cufflinks_ab_initio_elem = etree.SubElement(root, "cufflinks_ab_initio")
