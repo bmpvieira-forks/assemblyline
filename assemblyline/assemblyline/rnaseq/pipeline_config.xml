@@ -224,6 +224,7 @@
 
   <!-- genome-specific file locations -->
   <genome name="human" root_dir="Homo_sapiens_UCSC_hg19">
+    <ucsc db="hg19" org="human"/>
     <abundant_bowtie2_index>Sequence/AbundantSequences/abundant</abundant_bowtie2_index>
     <genome_fasta_file>Sequence/Genome/genome.fa</genome_fasta_file>
     <genome_lexicographical_fasta_file>Sequence/Genome/genome_lexicographical_order.fa</genome_lexicographical_fasta_file>
