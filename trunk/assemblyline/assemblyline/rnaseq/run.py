@@ -236,7 +236,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Validating pipeline configuration"
     logging.debug(msg)
     shell_commands.append(bash_log(msg, "INFO"))
-    args = [sys.executable, 
+    args = ["python", 
             os.path.join(_pipeline_dir, "validate_pipeline_config.py"),
             config_xml_file, server_name]
     command = ' '.join(map(str, args))
@@ -283,7 +283,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         shell_commands.append(bash_log(msg, "INFO"))
         # convert bam to fastq
         for i,prefix in enumerate(results.bam_fastq_prefixes):
-            args = [sys.executable,
+            args = ["python",
                     os.path.join(_pipeline_dir, "extract_fastq_from_bam.py"),
                     "--readnum-in-qname",
                     "--tmp-dir", results.tmp_dir,
@@ -360,7 +360,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        args = [sys.executable, 
+        args = ["python", 
                 os.path.join(_pipeline_dir, "filter_abundant_sequences.py"),
                 "--num-processors", num_processors,
                 ','.join(results.fastqc_data_files),
@@ -409,7 +409,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug(msg) 
         shell_commands.append(bash_log(msg, "INFO"))
-        args = [sys.executable,
+        args = ["python",
                 os.path.join(_pipeline_dir, "inspect_library.py"),
                 "--min-frag-size", pipeline.min_fragment_size,
                 "--max-frag-size", pipeline.max_fragment_size,
@@ -441,7 +441,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
-        args = [sys.executable, os.path.join(_pipeline_dir, "run_tophat.py"),
+        args = ["python", os.path.join(_pipeline_dir, "run_tophat.py"),
                 "-p", num_processors,
                 "--library-type", library.library_type, 
                 '--rg-id', library.library_id,
@@ -496,7 +496,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
-        args = [sys.executable, os.path.join(_pipeline_dir, "tophat_fusion_post.py"),
+        args = ["python", os.path.join(_pipeline_dir, "tophat_fusion_post.py"),
                 "-p", num_processors,
                 "-o", results.tophat_fusion_dir]
         args.extend(pipeline.tophat_fusion_post_args)
@@ -526,7 +526,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
-        args = [sys.executable, os.path.join(_pipeline_dir, "run_tophat.py"),
+        args = ["python", os.path.join(_pipeline_dir, "run_tophat.py"),
                 "-p", num_processors,
                 "--library-type", library.library_type, 
                 '--rg-id', library.library_id,
@@ -607,7 +607,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        args = [sys.executable,
+        args = ["python",
                 os.path.join(_pipeline_dir, "picard_metrics.py"),
                 "--tmp-dir", results.tmp_dir,
                 "--picard-dir", "$PICARDPATH",
@@ -661,7 +661,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.debug(msg) 
         shell_commands.append(bash_log(msg, "INFO"))
         log_file = os.path.join(results.log_dir, 'bowtie2_align_pathogens.log')        
-        args = [sys.executable,
+        args = ["python",
                 os.path.join(_pipeline_dir, "bowtie2_paired_align.py"),
                 "-p", num_processors,
                 "--tmp-dir", results.tmp_dir,
@@ -734,7 +734,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.debug(msg) 
         shell_commands.append(bash_log(msg, "INFO"))
         log_file = os.path.join(results.log_dir, 'repeat_elements.log')
-        args = [sys.executable,
+        args = ["python",
                 os.path.join(_pipeline_dir, "bowtie2_unpaired_align.py"),
                 "-p", num_processors,
                 "--tmp-dir", results.tmp_dir]
@@ -755,7 +755,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Generating coverage maps"
     logging.debug(msg)
     shell_commands.append(bash_log(msg, "INFO"))
-    args = [sys.executable,
+    args = ["python",
             os.path.join(_pipeline_dir, "coverage_maps.py"),
             "--scale",
             "--tmp-dir", results.tmp_dir,
@@ -784,7 +784,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         log_file = os.path.join(results.log_dir, 'bed_to_bigbed.log')
-        args = [sys.executable,
+        args = ["python",
                 os.path.join(_pipeline_dir, "bed_to_bigbed.py"),
                 "--score-to-name",
                 "--tmp-dir", results.tmp_dir,
@@ -811,7 +811,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        args = [sys.executable, os.path.join(_pipeline_dir, "run_cufflinks.py"),
+        args = ["python", os.path.join(_pipeline_dir, "run_cufflinks.py"),
                 "-p", num_processors,
                 "-L", library.library_id,
                 "--library-type", library.library_type]
@@ -844,7 +844,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        args = [sys.executable, os.path.join(_pipeline_dir, "run_cufflinks.py"),
+        args = ["python", os.path.join(_pipeline_dir, "run_cufflinks.py"),
                 "-p", num_processors,
                 "-L", library.library_id,
                 "--library-type", library.library_type]
@@ -876,7 +876,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        args = [sys.executable, os.path.join(_pipeline_dir, "run_htseq_count.py"),
+        args = ["python", os.path.join(_pipeline_dir, "run_htseq_count.py"),
                 "--tmp-dir", results.tmp_dir]
         if pipeline.htseq_count_pe:
             args.append("--pe")
@@ -932,7 +932,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        args = [sys.executable, os.path.join(_pipeline_dir, "run_varscan.py")]
+        args = ["python", os.path.join(_pipeline_dir, "run_varscan.py")]
         for arg in pipeline.varscan_args:
             args.append('--varscan-arg="%s"' % (arg))
         args.extend(["$VARSCANPATH/VarScan.jar", "mpileup2snp",
@@ -980,7 +980,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        args = [sys.executable, 
+        args = ["python", 
                 os.path.join(_pipeline_dir, "validate_results.py"),
                 results.output_dir]
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
