@@ -223,10 +223,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     # setup environment
     #
     msg = "Setting TMPDIR environment variable to %s" % (results.tmp_dir)
-    logging.info(msg)
+    logging.debug(msg)
     shell_commands.append(bash_set_tmpdir(results.tmp_dir))
     msg = "Setting up modules environment"
-    logging.info(msg)
+    logging.debug(msg)
     commands = setup_modules_environment(pipeline, server)
     logging.debug("Commands: %s" % (commands))
     shell_commands.extend(commands)
@@ -236,35 +236,33 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Validating pipeline configuration"
     logging.debug(msg)
     shell_commands.append(bash_log(msg, "INFO"))
-    log_file = os.path.join(results.log_dir, 'validate_pipeline_config.log')
     args = [sys.executable, 
             os.path.join(_pipeline_dir, "validate_pipeline_config.py"),
-            config_xml_file, server_name,
-            "> %s 2>&1" % (log_file)]
+            config_xml_file, server_name]
     command = ' '.join(map(str, args))
     logging.debug("\tcommand: %s" % (command))
     shell_commands.append(command)
-    shell_commands.append(bash_check_retcode("[ERROR] %s" % (msg)))   
+    shell_commands.append(bash_check_retcode(msg))   
     #
     # create directories
     #
     if not os.path.exists(results.output_dir):
-        logging.info("Creating directory: %s" % (results.output_dir))
+        logging.debug("Creating directory: %s" % (results.output_dir))
         shell_commands.append("mkdir -p %s" % (results.output_dir))
         shell_commands.append(bash_check_retcode())   
     if not os.path.exists(results.tmp_dir):
-        logging.info("Creating directory: %s" % (results.tmp_dir))
+        logging.debug("Creating directory: %s" % (results.tmp_dir))
         shell_commands.append("mkdir -p %s" % (results.tmp_dir))
         shell_commands.append(bash_check_retcode())   
     if not os.path.exists(results.log_dir):
-        logging.info("Creating directory: %s" % (results.log_dir))
+        logging.debug("Creating directory: %s" % (results.log_dir))
         shell_commands.append("mkdir -p %s" % (results.log_dir))
         shell_commands.append(bash_check_retcode())
     #
     # copy xml files
     #
     msg = "Copying configuration files"    
-    logging.info(msg)
+    logging.debug(msg)
     shell_commands.append(bash_log(msg, "INFO"))
     shell_commands.append("cp %s %s" % (library_xml_file, results.library_xml_file))
     shell_commands.append(bash_check_retcode())
@@ -278,10 +276,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = many_up_to_date(output_files, input_files)
     msg = "Converting BAM input files to FASTQ"
     if skip:
-        logging.info("[SKIPPED] %s" % msg)
+        logging.debug("[SKIPPED] %s" % msg)
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         # convert bam to fastq
         for i,prefix in enumerate(results.bam_fastq_prefixes):
@@ -302,10 +300,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = many_up_to_date(output_files, input_files)
     msg = "Concatenating/copying read1 sequence files"
     if skip:
-        logging.info("[SKIPPED] %s" % msg)
+        logging.debug("[SKIPPED] %s" % msg)
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         commands = concatenate_sequences(library.read1_files + results.bam_read1_files, 
                                          results.copied_fastq_files[0])
@@ -319,10 +317,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         skip = many_up_to_date(output_files, input_files)
         msg = "Concatenating/copying read2 sequence files"
         if skip:
-            logging.info("[SKIPPED] %s" % msg)
+            logging.debug("[SKIPPED] %s" % msg)
             shell_commands.append(bash_log(msg, "SKIPPED"))
         else:
-            logging.info(msg)
+            logging.debug(msg)
             shell_commands.append(bash_log(msg, "INFO"))
             commands = concatenate_sequences(library.read2_files + results.bam_read2_files, 
                                              results.copied_fastq_files[1])
@@ -335,10 +333,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = many_up_to_date(output_files, input_files)
     msg = "Running FASTQC quality assessment"
     if skip:
-        logging.info("[SKIPPED] %s" % msg)
+        logging.debug("[SKIPPED] %s" % msg)
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info("%s" % msg)    
+        logging.debug("%s" % msg)    
         shell_commands.append(bash_log(msg, "INFO"))
         num_threads = min(num_processors, len(results.copied_fastq_files))
         args = ['fastqc', "--threads", num_threads, "-o", results.output_dir]
@@ -357,10 +355,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = many_up_to_date(output_files, input_files)
     msg = "Filtering reads that map to abundant sequences"
     if skip:
-        logging.info("[SKIPPED] %s" % (msg))
+        logging.debug("[SKIPPED] %s" % (msg))
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, 
                 os.path.join(_pipeline_dir, "filter_abundant_sequences.py"),
@@ -385,10 +383,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = many_up_to_date(output_files, input_files)
     msg = "Counting abundant reads"
     if skip:
-        logging.info("[SKIPPED] %s" % (msg))
+        logging.debug("[SKIPPED] %s" % (msg))
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         log_file = os.path.join(results.log_dir, 'abundant_counts.log')
         command = ("samtools idxstats %s > %s 2> %s" % 
@@ -473,10 +471,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = ((not pipeline.tophat_fusion_run) or
             many_up_to_date(output_files, input_files))
     if skip:
-        logging.info("[SKIPPED] %s" % (msg))
+        logging.debug("[SKIPPED] %s" % (msg))
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info("%s" % (msg))
+        logging.debug("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
         args = ["samtools", "index", results.tophat_fusion_bam_file]
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
@@ -493,10 +491,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
              (not pipeline.tophat_fusion_post_run)) or 
             many_up_to_date(output_files, input_files))
     if skip:
-        logging.info("[SKIPPED] %s" % (msg))
+        logging.debug("[SKIPPED] %s" % (msg))
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info("%s" % (msg))
+        logging.debug("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, os.path.join(_pipeline_dir, "tophat_fusion_post.py"),
                 "-p", num_processors,
@@ -523,10 +521,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Aligning reads with Tophat"
     skip = many_up_to_date(output_files, input_files)
     if skip:
-        logging.info("[SKIPPED] %s" % (msg))
+        logging.debug("[SKIPPED] %s" % (msg))
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info("%s" % (msg))
+        logging.debug("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, os.path.join(_pipeline_dir, "run_tophat.py"),
                 "-p", num_processors,
@@ -557,10 +555,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     msg = "Indexing Tophat BAM file"
     skip = many_up_to_date(output_files, input_files)
     if skip:
-        logging.info("[SKIPPED] %s" % (msg))
+        logging.debug("[SKIPPED] %s" % (msg))
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info("%s" % (msg))
+        logging.debug("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
         args = ["samtools", "index", results.tophat_bam_file]
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
@@ -577,10 +575,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
                     results.quality_distribution_metrics]
     skip = many_up_to_date(output_files, input_files)
     if skip:
-        logging.info("[SKIPPED] %s" % msg)
+        logging.debug("[SKIPPED] %s" % msg)
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         args = ["java", "-Xmx4g", "-jar", 
                 "$PICARDPATH/CollectMultipleMetrics.jar",
@@ -604,10 +602,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     output_files = [results.rnaseq_metrics]
     skip = many_up_to_date(output_files, input_files)
     if skip:    
-        logging.info("[SKIPPED] %s" % msg)
+        logging.debug("[SKIPPED] %s" % msg)
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable,
                 os.path.join(_pipeline_dir, "picard_metrics.py"),
@@ -657,10 +655,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     output_files = [results.pathogen_bam_file]
     skip = many_up_to_date(output_files, input_files)
     if skip:
-        logging.info("[SKIPPED] %s" % (msg))
+        logging.debug("[SKIPPED] %s" % (msg))
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg) 
+        logging.debug(msg) 
         shell_commands.append(bash_log(msg, "INFO"))
         log_file = os.path.join(results.log_dir, 'bowtie2_align_pathogens.log')        
         args = [sys.executable,
@@ -755,7 +753,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     # generate genome coverage maps  
     #
     msg = "Generating coverage maps"
-    logging.info(msg)
+    logging.debug(msg)
     shell_commands.append(bash_log(msg, "INFO"))
     args = [sys.executable,
             os.path.join(_pipeline_dir, "coverage_maps.py"),
@@ -775,15 +773,15 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     #
     # generate splice junction bigbed file  
     #
-    msg = "Generating splice junction bigBed file"
+    msg = "Generating splice junction bigbed file"
     input_files = [results.tophat_juncs_file] 
     output_files = [results.junctions_bigbed_file]    
     skip = many_up_to_date(output_files, input_files)
     if skip:
-        logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        logging.debug("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         log_file = os.path.join(results.log_dir, 'bed_to_bigbed.log')
         args = [sys.executable,
@@ -808,10 +806,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = ((not pipeline.cufflinks_ab_initio_run) or
             many_up_to_date(output_files, input_files))
     if skip:
-        logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        logging.debug("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, os.path.join(_pipeline_dir, "run_cufflinks.py"),
                 "-p", num_processors,
@@ -841,10 +839,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = ((not pipeline.cufflinks_known_run) or
             many_up_to_date(output_files, input_files))
     if skip:
-        logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        logging.debug("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, os.path.join(_pipeline_dir, "run_cufflinks.py"),
                 "-p", num_processors,
@@ -873,10 +871,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = ((not pipeline.htseq_count_run) or
             many_up_to_date(output_files, input_files))
     if skip:
-        logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        logging.debug("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, os.path.join(_pipeline_dir, "run_htseq_count.py"),
                 "--tmp-dir", results.tmp_dir]
@@ -902,10 +900,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = ((not pipeline.varscan_run) or
             many_up_to_date(output_files, input_files))
     if skip:
-        logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        logging.debug("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         args = ["java", "-Xmx4g", "-jar", 
                 "$PICARDPATH/MarkDuplicates.jar",
@@ -929,10 +927,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = ((not pipeline.varscan_run) or
             many_up_to_date(output_files, input_files))
     if skip:
-        logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        logging.debug("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, os.path.join(_pipeline_dir, "run_varscan.py")]
         for arg in pipeline.varscan_args:
@@ -957,10 +955,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     skip = ((not pipeline.varscan_run) or
             many_up_to_date(output_files, input_files))
     if skip:
-        logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        logging.debug("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         command = 'bgzip -c %s > %s' % (results.varscan_snv_file, 
                                         results.varscan_snv_bgzip_file)
@@ -977,10 +975,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     input_files = [results.library_xml_file, results.config_xml_file]
     skip = many_up_to_date(output_files, input_files)
     if skip:
-        logging.info("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s" % (msg), "INFO"))
+        logging.debug("[SKIPPED] %s" % msg)
+        shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         args = [sys.executable, 
                 os.path.join(_pipeline_dir, "validate_results.py"),
@@ -994,14 +992,15 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     #
     msg = "Cleaning up tmp files"
     if keep_tmp:
-        logging.info("[SKIPPED] %s because '--keep-tmp' flag set" % msg)
-        shell_commands.append(bash_log("[SKIPPED] %s because '--keep-tmp' flag set" % (msg), "INFO"))
+        skipmsg = "%s because '--keep-tmp' flag set" % msg
+        logging.debug("[SKIPPED] %s" % skipmsg)
+        shell_commands.append(bash_log(skipmsg, "SKIPPED"))
     else:
-        logging.info(msg)
+        logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         command = "rm -rf %s" % (results.tmp_dir)
         shell_commands.append(command)    
-        shell_commands.append(bash_check_retcode())   
+        shell_commands.append(bash_check_retcode(msg))   
     #
     # show commands
     # 
