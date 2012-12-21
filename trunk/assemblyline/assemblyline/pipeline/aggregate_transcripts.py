@@ -115,7 +115,7 @@ def main():
         else:
             libinfos.append(lib)
     if not valid:
-        parser.error("Invalid samples in sample table file")
+        logging.warning("Invalid samples in library table file")
     # show parameters
     logging.info("Parameters:")
     logging.info("Reference GTF file:   %s" % (args.ref_gtf_file))

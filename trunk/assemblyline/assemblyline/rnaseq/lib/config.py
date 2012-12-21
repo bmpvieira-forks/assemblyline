@@ -439,6 +439,9 @@ class GenomeConfig(object):
         g = GenomeConfig()
         g.name = elem.get("name")
         g.root_dir = elem.get("root_dir")
+        ucsc_elem = elem.find("ucsc")
+        g.ucsc_db = ucsc_elem.get("db")
+        g.ucsc_org = ucsc_elem.get("org")
         for attrname in GenomeConfig.fields:
             setattr(g, attrname, elem.findtext(attrname))
         return g
@@ -446,6 +449,9 @@ class GenomeConfig(object):
     def to_xml(self, root):
         root.set("name", self.name)
         root.set("root_dir", self.root_dir)
+        ucsc_elem = etree.SubElement(root, "ucsc")
+        ucsc_elem.set("db", self.ucsc_db)
+        ucsc_elem.set("org", self.ucsc_org)
         for attrname in GenomeConfig.fields:
             elem = etree.SubElement(root, attrname)
             elem.text = str(getattr(self, attrname))            
@@ -455,6 +461,8 @@ class GenomeConfig(object):
         g = GenomeConfig()
         g.name = self.name
         g.root_dir = self.root_dir
+        g.ucsc_db = self.ucsc_db
+        g.ucsc_org = self.ucsc_org
         # expand paths
         for attrname in GenomeConfig.fields:
             abspath = os.path.join(str(root_dir), g.root_dir, getattr(self, attrname))
