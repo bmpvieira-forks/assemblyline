@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 import os
+import logging
 
 class LibraryInfo(object):
     fields = ('cohort_id', 'patient_id', 'sample_id', 'library_id',
@@ -53,11 +54,15 @@ class LibraryInfo(object):
         
     def is_valid(self):
         if self.gtf_file is None:
+            logging.error("Library %s GTF file is None" % (self.library_id))
             return False
         if not os.path.exists(self.gtf_file):
+            logging.error("Library %s GTF file not found" % (self.library_id))
             return False
         if self.bam_file is None:
+            logging.error("Library %s BAM file is None" % (self.library_id))
             return False
         if not os.path.exists(self.bam_file):
+            logging.error("Library %s BAM file not found" % (self.library_id))
             return False
         return True
