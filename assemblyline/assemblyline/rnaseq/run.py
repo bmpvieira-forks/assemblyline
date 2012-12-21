@@ -637,13 +637,15 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
+        log_file = os.path.join(results.log_dir, 'unmapped_bam_to_paired_fastq.log')
         # convert bam to paired fastq
         args = ["python",
                 os.path.join(_pipeline_dir, "extract_fastq_from_bam.py"),
                 "--fragment-layout", FRAGMENT_LAYOUT_PAIRED,
                 "--tmp-dir", results.tmp_dir,
                 results.tophat_unmapped_bam_file,
-                results.unmapped_paired_fastq_prefix]
+                results.unmapped_paired_fastq_prefix,
+                '> %s 2>&1' % (log_file)]
         command = ' '.join(map(str, args))
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode(msg))
@@ -710,13 +712,15 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
+        log_file = os.path.join(results.log_dir, 'unmapped_bam_to_unpaired_fastq.log')
         # convert bam to paired fastq
         args = ["python",
                 os.path.join(_pipeline_dir, "extract_fastq_from_bam.py"),
                 "--fragment-layout", FRAGMENT_LAYOUT_SINGLE,
                 "--tmp-dir", results.tmp_dir,
                 results.tophat_unmapped_bam_file,
-                results.unmapped_unpaired_fastq_prefix]
+                results.unmapped_unpaired_fastq_prefix,
+                '> %s 2>&1' % (log_file)]
         command = ' '.join(map(str, args))
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode(msg))
@@ -733,7 +737,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     else:
         logging.debug(msg) 
         shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'repeat_elements.log')
+        log_file = os.path.join(results.log_dir, 'repeat_element_counts.log')
         args = ["python",
                 os.path.join(_pipeline_dir, "bowtie2_unpaired_align.py"),
                 "-p", num_processors,
