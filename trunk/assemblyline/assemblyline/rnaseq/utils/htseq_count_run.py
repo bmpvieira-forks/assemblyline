@@ -88,7 +88,7 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
         modules.append(elem.text)
     # pbs defaults
     PBS_JOB_MEM = 4000
-    PBS_JOB_WALLTIME = "10:00:00"
+    PBS_JOB_WALLTIME = "20:00:00"
     # parse library table
     for lib in libs:
         #

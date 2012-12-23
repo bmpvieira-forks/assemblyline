@@ -389,7 +389,7 @@ def add_gtf_file(gtf_file, outfh, is_ref, sample_id=None):
             print >>outfh, str(f)
 
 def compare_assembly(ref_gtf_file, test_gtf_file, output_dir, 
-                     gtf_score_attr):
+                     gtf_score_attr, tmp_dir):
     # output files
     compare_file = os.path.join(output_dir, "compare_transcripts.txt")
     global_stats_file = os.path.join(output_dir, "global_stats.txt")
@@ -405,7 +405,7 @@ def compare_assembly(ref_gtf_file, test_gtf_file, output_dir,
     add_gtf_file(test_gtf_file, outfh, is_ref=False, sample_id='assembly')
     outfh.close()
     logging.info("Sorting merged GTF file")
-    sort_gtf(tmp_gtf_file, tmp_sorted_gtf_file)
+    sort_gtf(tmp_gtf_file, tmp_sorted_gtf_file, tmp_dir=tmp_dir)
     os.remove(tmp_gtf_file)
     # compare assemblies
     logging.info("Comparing assemblies")
@@ -449,6 +449,8 @@ def main():
                         default="compare")
     parser.add_argument("--gtf-score-attr", dest="gtf_score_attr", 
                         default=None)
+    parser.add_argument('--tmp-dir', dest="tmp_dir", default=None,
+                        help="directory for sort to store temp files")
     parser.add_argument("ref_gtf_file")
     parser.add_argument("test_gtf_file")
     args = parser.parse_args()
@@ -477,7 +479,8 @@ def main():
     logging.info("output directory:      %s" % (args.output_dir))
     logging.info("test gtf score attr:   %s" % (args.gtf_score_attr))
     compare_assembly(args.ref_gtf_file, args.test_gtf_file,
-                     args.output_dir, args.gtf_score_attr)
+                     args.output_dir, args.gtf_score_attr,
+                     args.tmp_dir)
     return 0
 
 if __name__ == "__main__":

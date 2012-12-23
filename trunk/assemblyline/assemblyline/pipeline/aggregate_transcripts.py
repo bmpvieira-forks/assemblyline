@@ -93,6 +93,8 @@ def main():
                         "attributes to avoid mistaking transcripts from "
                         "different libraries as the same because of "
                         "redundant transcript ids")
+    parser.add_argument('--tmp-dir', dest="tmp_dir", default=None,
+                        help="directory for sort to store temp files")
     parser.add_argument('ref_gtf_file')
     parser.add_argument('sample_table_file')
     parser.add_argument('output_file')
@@ -135,8 +137,11 @@ def main():
         add_sample_gtf_file(lib, tmp_fh, args.rename_ids)
     tmp_fh.close()
     logging.info("Sorting GTF")
-    sort_gtf(tmp_file, args.output_file)
+    retcode = sort_gtf(tmp_file, args.output_file, tmp_dir=args.tmp_dir)
     os.remove(tmp_file)
+    if retcode != 0:
+        if os.path.exists(args.output_file):
+            os.remove(args.output_file)
     return 0
 
 if __name__ == '__main__':
