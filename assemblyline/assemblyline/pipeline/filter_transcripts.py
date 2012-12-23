@@ -320,8 +320,8 @@ def filter_transcripts(classify_dir, min_prec, min_rec, min_spec,
     logging.info("Merging filtered transcripts")
     expr_gtf_file = os.path.join(classify_dir, EXPR_GTF_FILE)
     bkgd_gtf_file = os.path.join(classify_dir, BKGD_GTF_FILE)
-    merge_sort_gtf_files(expr_gtf_files, expr_gtf_file)
-    merge_sort_gtf_files(bkgd_gtf_files, bkgd_gtf_file)
+    merge_sort_gtf_files(expr_gtf_files, expr_gtf_file, tmp_dir=tmp_dir)
+    merge_sort_gtf_files(bkgd_gtf_files, bkgd_gtf_file, tmp_dir=tmp_dir)
 
 def main():
     # parse command line

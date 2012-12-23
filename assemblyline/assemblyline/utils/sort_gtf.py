@@ -19,6 +19,8 @@ def main():
     logging.info("----------------------------------")
     # parse command line
     parser = argparse.ArgumentParser()
+    parser.add_argument('--tmp-dir', dest="tmp_dir", default=None,
+                        help="directory for sort to store temp files")
     parser.add_argument("input_gtf_file")
     parser.add_argument("output_gtf_file")
     args = parser.parse_args()
@@ -29,7 +31,8 @@ def main():
     logging.info("input gtf file:  %s" % (args.input_gtf_file))
     logging.info("output gtf file: %s" % (args.output_gtf_file))
     logging.info("Sorting")
-    sort_gtf(args.input_gtf_file, args.output_gtf_file)    
+    sort_gtf(args.input_gtf_file, args.output_gtf_file, 
+             tmp_dir=args.tmp_dir)
     logging.info("Done")
     return 0
 
