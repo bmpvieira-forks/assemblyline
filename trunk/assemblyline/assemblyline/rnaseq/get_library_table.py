@@ -43,7 +43,8 @@ def main():
         library = libraries[library_id]
         output_dir = os.path.join(args.root_dir, library.library_id)
         results = config.RnaseqResults(library, output_dir)
-        if not results.validate():
+        is_valid, missing_files = results.validate()
+        if not is_valid:
             setattr(library, 'description', 'invalid')
         else:
             setattr(library, 'description', 'valid')

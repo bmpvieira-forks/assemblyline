@@ -8,6 +8,7 @@ import os
 import logging
 import argparse
 import subprocess
+import shutil
 
 # projects
 import assemblyline.rnaseq.lib.config as config
@@ -172,7 +173,7 @@ def submit_nopbs(shell_commands,
     return retcode
 
 def run(library_xml_file, config_xml_file, server_name, num_processors,
-        stdout_file, stderr_file, dryrun, keep_tmp):
+        keep_tmp):
     #
     # read and validate configuration file
     #
@@ -180,7 +181,10 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     pipeline = config.PipelineConfig.from_xml(config_xml_file)
     if server_name not in pipeline.servers:
         logging.error("Server %s not found" % (server_name))
-    server = pipeline.servers[server_name]    
+    if not pipeline.is_valid(server_name):
+        logging.error("Pipeline config not valid")
+        return config.JOB_ERROR
+    server = pipeline.servers[server_name]
     #
     # read library file and attach to results
     #
@@ -197,28 +201,22 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     # resolve genome paths now that server is known
     genome_local = pipeline.genomes[library.species]
     genome_static = genome_local.resolve_paths(server.references_dir)    
-    # setup results    
+    # setup results
     output_dir = os.path.join(server.output_dir, library.library_id)
     results = config.RnaseqResults(library, output_dir)
+    # create output directories
+    logging.debug("Creating directory: %s" % (results.output_dir))
+    os.makedirs(results.output_dir)
+    os.makedirs(results.tmp_dir)
+    os.makedirs(results.log_dir)
+    # copy xml files
+    logging.debug("Copying configuration files")
+    shutil.copyfile(library_xml_file, results.library_xml_file)
+    shutil.copyfile(config_xml_file, results.config_xml_file)
     #
     # build up sequence of commands
     #
     shell_commands = []
-    #
-    # get pbs header
-    #
-    if server.pbs:
-        shell_commands.append("#!/bin/sh")
-        pbs_commands = get_pbs_header(job_name=library.library_id,
-                                      num_processors=num_processors,
-                                      node_processors=server.node_processors,
-                                      node_memory=server.node_mem,
-                                      pbs_script_lines=server.pbs_script_lines, 
-                                      walltime=config.PBS_JOB_WALLTIME, 
-                                      mem=config.PBS_JOB_MEM,
-                                      stdout_filename=stdout_file,
-                                      stderr_filename=stderr_file)
-        shell_commands.extend(pbs_commands)
     #
     # setup environment
     #
@@ -238,36 +236,12 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     shell_commands.append(bash_log(msg, "INFO"))
     args = ["python", 
             os.path.join(_pipeline_dir, "validate_pipeline_config.py"),
-            config_xml_file, server_name]
+            results.config_xml_file, server_name]
     command = ' '.join(map(str, args))
     logging.debug("\tcommand: %s" % (command))
     shell_commands.append(command)
     shell_commands.append(bash_check_retcode(msg))   
-    #
-    # create directories
-    #
-    if not os.path.exists(results.output_dir):
-        logging.debug("Creating directory: %s" % (results.output_dir))
-        shell_commands.append("mkdir -p %s" % (results.output_dir))
-        shell_commands.append(bash_check_retcode())   
-    if not os.path.exists(results.tmp_dir):
-        logging.debug("Creating directory: %s" % (results.tmp_dir))
-        shell_commands.append("mkdir -p %s" % (results.tmp_dir))
-        shell_commands.append(bash_check_retcode())   
-    if not os.path.exists(results.log_dir):
-        logging.debug("Creating directory: %s" % (results.log_dir))
-        shell_commands.append("mkdir -p %s" % (results.log_dir))
-        shell_commands.append(bash_check_retcode())
-    #
-    # copy xml files
-    #
-    msg = "Copying configuration files"    
-    logging.debug(msg)
-    shell_commands.append(bash_log(msg, "INFO"))
-    shell_commands.append("cp %s %s" % (library_xml_file, results.library_xml_file))
-    shell_commands.append(bash_check_retcode())
-    shell_commands.append("cp %s %s" % (config_xml_file, results.config_xml_file))
-    shell_commands.append(bash_check_retcode())
+
     #
     # extract fastq from bam input files
     #
@@ -1006,19 +980,30 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
         shell_commands.append(command)    
         shell_commands.append(bash_check_retcode(msg))   
     #
-    # show commands
+    # write shell/pbs scripts
     # 
+    if server.pbs:
+        pbsfh = open(results.pbs_script_file, "w")
+        print >>pbsfh, "#!/bin/sh"
+        pbs_commands = get_pbs_header(job_name=library.library_id,
+                                      num_processors=num_processors,
+                                      node_processors=server.node_processors,
+                                      node_memory=server.node_mem,
+                                      pbs_script_lines=server.pbs_script_lines, 
+                                      walltime=config.PBS_JOB_WALLTIME, 
+                                      mem=config.PBS_JOB_MEM,
+                                      stdout_filename=results.pbs_stdout_file,
+                                      stderr_filename=results.pbs_stderr_file)    
+        for command in pbs_commands:
+            print >>pbsfh, command
+        for command in shell_commands:
+            print >>pbsfh, command
+        pbsfh.close()
+    shellfh = open(results.shell_script_file, "w")
+    print >>shellfh, "#!/bin/sh"
     for command in shell_commands:
-        print command
-    #
-    # Execute job
-    #
-    if not dryrun:
-        if server.pbs:
-            job_id = submit_pbs(shell_commands)
-            print job_id
-        else:
-            return submit_nopbs(shell_commands, stdout_file, stderr_file)
+        print >>shellfh, command
+    shellfh.close()
     return config.JOB_SUCCESS
 
 def main():
@@ -1028,10 +1013,6 @@ def main():
     logging.info("=============================")
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", type=int, dest="num_processors", default=1)
-    parser.add_argument("--stdout", dest="stdout_file", default=None)
-    parser.add_argument("--stderr", dest="stderr_file", default=None)
-    parser.add_argument("--dryrun", dest="dryrun", action="store_true", 
-                        default=False)
     parser.add_argument("--keep-tmp", dest="keep_tmp", action="store_true", 
                         default=False)
     parser.add_argument("library_xml_file")
@@ -1040,8 +1021,7 @@ def main():
     args = parser.parse_args()
     return run(args.library_xml_file, args.config_xml_file, 
                args.server_name, args.num_processors,
-               args.stdout_file, args.stderr_file,
-               args.dryrun, args.keep_tmp)
+               args.keep_tmp)
 
 if __name__ == '__main__': 
     sys.exit(main())
