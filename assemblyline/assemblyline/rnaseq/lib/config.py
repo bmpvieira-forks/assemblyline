@@ -104,6 +104,11 @@ JOB_DONE_FILE = "job.done"
 # job memory and runtime
 PBS_JOB_MEM = 24000
 PBS_JOB_WALLTIME = "160:00:00"
+PBS_STDOUT_FILE = "pbs.stdout"
+PBS_STDERR_FILE = "pbs.stderr"
+# script files
+PBS_SCRIPT_FILE = "run.pbs"
+SHELL_SCRIPT_FILE = "run.sh"
 # quality score formats
 SANGER_FORMAT = "sanger"
 SOLEXA_FORMAT = "solexa"
@@ -145,6 +150,9 @@ class RnaseqResults(object):
         # pipeline config used to run
         self.library_xml_file = os.path.join(self.output_dir, LIBRARY_XML_FILE)
         self.config_xml_file = os.path.join(self.output_dir, CONFIG_XML_FILE)
+        # script files
+        self.pbs_script_file = os.path.join(self.output_dir, PBS_SCRIPT_FILE)
+        self.shell_script_file = os.path.join(self.output_dir, SHELL_SCRIPT_FILE)
         # BAM FASTQ files
         self.bam_fastq_prefixes = []
         self.bam_read1_files = []
@@ -240,6 +248,8 @@ class RnaseqResults(object):
         self.varscan_snv_tabix_file = os.path.join(self.output_dir, VARSCAN_SNV_TABIX_FILE)
         # job finished file
         self.job_done_file = os.path.join(self.output_dir, JOB_DONE_FILE)
+        self.pbs_stdout_file = os.path.join(self.log_dir, PBS_STDOUT_FILE)
+        self.pbs_stderr_file = os.path.join(self.log_dir, PBS_STDERR_FILE)
 
     def validate(self):
         is_valid = True
@@ -371,8 +381,8 @@ class RnaseqResults(object):
                 is_valid = False
             # check tophat fusion post result file
             if config.tophat_fusion_post_run:
-                if not file_exists_and_nz_size(self.tophat_fusion_post_result_file):
-                    logging.error("Library %s missing/corrupt tophat fusion post result file" % (self.library_id))
+                if not os.path.exists(self.tophat_fusion_post_result_file):
+                    logging.error("Library %s missing tophat fusion post result file" % (self.library_id))
                     missing_files.append(self.tophat_fusion_post_result_file)
                     is_valid = False
         # check cufflinks ab initio files
@@ -440,8 +450,12 @@ class GenomeConfig(object):
         g.name = elem.get("name")
         g.root_dir = elem.get("root_dir")
         ucsc_elem = elem.find("ucsc")
-        g.ucsc_db = ucsc_elem.get("db")
-        g.ucsc_org = ucsc_elem.get("org")
+        if ucsc_elem is None:
+            g.ucsc_db = ''
+            g.ucsc_org = ''
+        else:
+            g.ucsc_db = ucsc_elem.get("db")
+            g.ucsc_org = ucsc_elem.get("org")
         for attrname in GenomeConfig.fields:
             setattr(g, attrname, elem.findtext(attrname))
         return g
@@ -625,7 +639,10 @@ class PipelineConfig(object):
                          "max_fragment_size",
                          "fragment_size_mean_default",
                          "fragment_size_stdev_default"):
-            setattr(c, attrname, int(inspect_elem.findtext(attrname)))
+            if inspect_elem is None:
+                setattr(c, attrname, None)
+            else:
+                setattr(c, attrname, int(inspect_elem.findtext(attrname)))
         # tophat parameters
         c.tophat_args = []
         elem = root.find("tophat")
@@ -646,13 +663,15 @@ class PipelineConfig(object):
         # repeat element parameters
         c.repeat_elements_bt2_args = []
         elem = root.find("repeat_elements")
-        for arg_elem in elem.findall("bt2arg"):
-            c.repeat_elements_bt2_args.append(arg_elem.text)
+        if elem is not None:
+            for arg_elem in elem.findall("bt2arg"):
+                c.repeat_elements_bt2_args.append(arg_elem.text)
         # pathogen screen parameters
         c.pathogen_screen_bt2_args = []
         elem = root.find("pathogens")
-        for arg_elem in elem.findall("bt2arg"):
-            c.pathogen_screen_bt2_args.append(arg_elem.text)
+        if elem is not None:
+            for arg_elem in elem.findall("bt2arg"):
+                c.pathogen_screen_bt2_args.append(arg_elem.text)
         # cufflinks ab initio parameters
         c.cufflinks_ab_initio_args = []
         elem = root.find("cufflinks_ab_initio")
