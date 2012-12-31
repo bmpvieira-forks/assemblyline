@@ -1016,6 +1016,10 @@ def main():
     parser.add_argument("config_xml_file")
     parser.add_argument("server_name")
     args = parser.parse_args()
+    if not os.path.exists(args.library_xml_file):
+        parser.error("library xml file %s not found" % (args.library_xml_file))
+    if not os.path.exists(args.config_xml_file):
+        parser.error("config xml file %s not found" % (args.config_xml_file))
     return run(args.library_xml_file, args.config_xml_file, 
                args.server_name, args.num_processors,
                args.keep_tmp)
