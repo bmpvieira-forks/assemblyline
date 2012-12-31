@@ -181,9 +181,6 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     pipeline = config.PipelineConfig.from_xml(config_xml_file)
     if server_name not in pipeline.servers:
         logging.error("Server %s not found" % (server_name))
-    if not pipeline.is_valid(server_name):
-        logging.error("Pipeline config not valid")
-        return config.JOB_ERROR
     server = pipeline.servers[server_name]
     #
     # read library file and attach to results
