@@ -29,24 +29,16 @@ import collections
 import shutil
 
 import assemblyline
-from assemblyline.lib.gtf import GTFFeature, merge_sort_gtf_files
-from assemblyline.lib.base import GTFAttr
-
-from classify_transcripts import CategoryInfo, LibCounts, \
+from assemblyline.lib.gtf import GTFAttr, GTFFeature, merge_sort_gtf_files
+from assemblyline.lib.base import CategoryInfo, LibCounts, \
     LIB_COUNTS_FILE, category_int_to_str, CATEGORIES, \
-    get_classification_result_header
+    get_classification_result_header, ANN_EXPR, ANN_BKGD, UNANN_EXPR, \
+    UNANN_BKGD, SKIPPED
 
 # default parameters
 DEFAULT_MIN_PREC = 0.0
 DEFAULT_MIN_REC = 0.0
 DEFAULT_MIN_SPEC = 0.0
-
-# decision codes
-ANN_EXPR = 0
-ANN_BKGD = 1
-UNANN_EXPR = 2
-UNANN_BKGD = 3
-SKIPPED = 4
 
 # output files
 EXPR_GTF_FILE = "expressed.gtf"

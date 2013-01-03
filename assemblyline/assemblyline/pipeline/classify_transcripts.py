@@ -29,23 +29,17 @@ import shutil
 import multiprocessing
 
 import assemblyline
-from assemblyline.lib.transcript_parser import parse_gtf
-from assemblyline.lib.base import GTFAttr
+from assemblyline.lib.gtf import GTFAttr
+from assemblyline.lib.transcript import parse_gtf
 from assemblyline.lib.batch_sort import batch_sort
-
-from annotate_transcripts import LIB_COUNTS_FILE, LibCounts, CategoryInfo, \
-    CATEGORIES, category_int_to_str, ANNOTATED, CATEGORY, MEAN_SCORE, \
-    MEAN_RECURRENCE
+from assemblyline.lib.base import LIB_COUNTS_FILE, CATEGORIES, \
+    category_int_to_str, ANNOTATED, CATEGORY, MEAN_SCORE, \
+    MEAN_RECURRENCE, LibCounts, CategoryInfo, get_classification_header, \
+    get_classification_result_header
 
 # R script to call for classifying transcripts
 _module_dir = assemblyline.__path__[0]
 R_SCRIPT = os.path.join(_module_dir, "lib", "classify_transcripts.R")
-    
-def get_classification_header():
-    header = ["chrom", "start", "library_id", "t_id", "annotated", 
-              "category", "length", "num_exons", "score", 
-              "mean_score", "mean_recurrence"]
-    return header
 
 def get_classification_fields(t):
     # setup list of annotation fields
@@ -61,11 +55,6 @@ def get_classification_fields(t):
               t.attrs[MEAN_SCORE],
               t.attrs[MEAN_RECURRENCE]]
     return fields
-
-def get_classification_result_header():
-    header = get_classification_header()
-    header.append("pred")
-    return header
 
 def run_classification_r_script(args):
     library_id, filename = args

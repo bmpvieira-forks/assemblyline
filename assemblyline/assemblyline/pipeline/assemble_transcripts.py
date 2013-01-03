@@ -27,9 +27,9 @@ import collections
 import operator
 
 from assemblyline.lib.bx.cluster import ClusterTree
+from assemblyline.lib.base import float_check_nan
 from assemblyline.lib.gtf import GTFFeature
-from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
-from assemblyline.lib.transcript import strand_int_to_str, NEG_STRAND
+from assemblyline.lib.transcript import parse_gtf, strand_int_to_str, NEG_STRAND
 
 from assemblyline.lib.assemble.base import GLOBAL_LOCUS_ID, GLOBAL_GENE_ID, \
     GLOBAL_TSS_ID, GLOBAL_TRANSCRIPT_ID, NODE_SCORE
@@ -300,7 +300,10 @@ def run(gtf_file,
     else:
         bedgraph_filehs = None
     # run assembler on each locus
-    for locus_transcripts in parse_gtf(open(gtf_file), cufflinks_attr_defs):
+    gtf_attr_defs = {}
+    if scoring_mode == "gtf_attr":
+        gtf_attr_defs[gtf_score_attr] = float_check_nan
+    for locus_transcripts in parse_gtf(open(gtf_file), attr_defs=gtf_attr_defs):
         # assign scores to each transcript
         if scoring_mode == "unweighted":
             for t in locus_transcripts:

@@ -27,11 +27,8 @@ import operator
 
 from assemblyline.lib.bx.intersection import Interval, IntervalTree
 from assemblyline.lib.bx.cluster import ClusterTree
-
-from assemblyline.lib import gtf
-from assemblyline.lib.base import GTFAttr
-from assemblyline.lib.transcript import strand_int_to_str
-from assemblyline.lib.transcript_parser import parse_gtf, cufflinks_attr_defs
+from assemblyline.lib.gtf import GTFAttr, GTFFeature
+from assemblyline.lib.transcript import strand_int_to_str, parse_gtf
 
 MAX_DIST = 1000000
 CATEGORY_PROTEIN = "protein"
@@ -97,7 +94,7 @@ def get_locus_genes(features):
 def read_reference_gtf(ref_gtf_file):
     gene_map = {}
     logging.info("Reading reference GTF file")
-    for f in gtf.GTFFeature.parse(open(ref_gtf_file)):
+    for f in GTFFeature.parse(open(ref_gtf_file)):
         # get gene by id
         gene_id = f.attrs["gene_id"]
         if gene_id not in gene_map:
@@ -276,7 +273,7 @@ def categorize_gene_transcripts(transcripts, locus_trees):
 def categorize_transcripts(ref_gtf_file, gtf_file):
     locus_trees = read_reference_gtf(ref_gtf_file)
     logging.debug("Categorizing GTF file")
-    for locus_transcripts in parse_gtf(open(gtf_file), attr_defs=cufflinks_attr_defs):
+    for locus_transcripts in parse_gtf(open(gtf_file)):
         # group transcripts by gene id
         gene_transcript_map = collections.defaultdict(lambda: [])
         for t in locus_transcripts:
