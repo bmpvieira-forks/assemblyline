@@ -22,6 +22,9 @@ def main():
     if not pipeline.is_valid(args.server_name):
         logging.error("Pipeline config not valid")
         return config.JOB_ERROR
+    if not pipeline.is_software_valid():
+        logging.error("Pipeline software not valid")
+        return config.JOB_ERROR
     return config.JOB_SUCCESS
     
 if __name__ == '__main__':

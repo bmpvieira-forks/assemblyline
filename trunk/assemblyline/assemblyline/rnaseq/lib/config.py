@@ -9,7 +9,7 @@ import logging
 import collections
 import xml.etree.cElementTree as etree
 
-from assemblyline.rnaseq.lib.base import check_executable, check_sam_file, indent_xml, file_exists_and_nz_size, parse_bool
+from assemblyline.rnaseq.lib.base import check_executable, check_sam_file, indent_xml, file_exists_and_nz_size, parse_bool, bool_to_yesno
 from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUT_PAIRED, FR_UNSTRANDED
 from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
 
@@ -117,6 +117,46 @@ FASTQ_QUAL_FORMATS = (SANGER_FORMAT, SOLEXA_FORMAT, ILLUMINA_FORMAT)
 
 class PipelineConfigError(Exception):
     pass
+
+def resolve_library_sequence_files(server, library): 
+    if library.seq_repo not in server.seq_dirs:
+        logging.error("Library %s seq_repo '%s' not found" % (library.library_id, library.seq_repo))
+        return False
+    seq_dirs = server.seq_dirs[library.seq_repo]
+    for seq_dir in seq_dirs:
+        read1_files = []
+        read2_files = []
+        bam_files = []   
+        found_files = True
+        for filename in library.read1_files:
+            fullpath = os.path.join(seq_dir, filename)
+            if os.path.exists(fullpath) and os.path.isfile(fullpath):
+                read1_files.append(fullpath)
+            else:
+                found_files = False
+                break
+        if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
+            for filename in library.read2_files:
+                fullpath = os.path.join(seq_dir, filename)
+                if os.path.exists(fullpath) and os.path.isfile(fullpath):
+                    read2_files.append(fullpath)
+                else:
+                    found_files = False
+                    break
+        for filename in library.bam_files:
+            fullpath = os.path.join(seq_dir, filename)
+            if os.path.exists(fullpath) and os.path.isfile(fullpath):
+                bam_files.append(fullpath)
+            else:
+                found_files = False
+                break
+        if found_files:
+            # update library sequence files
+            library.read1_files = read1_files
+            library.read2_files = read2_files
+            library.bam_files = bam_files
+            return True
+    return False
 
 def check_tophat_juncs_file(filename):
     if not file_exists_and_nz_size(filename):
@@ -450,12 +490,8 @@ class GenomeConfig(object):
         g.name = elem.get("name")
         g.root_dir = elem.get("root_dir")
         ucsc_elem = elem.find("ucsc")
-        if ucsc_elem is None:
-            g.ucsc_db = ''
-            g.ucsc_org = ''
-        else:
-            g.ucsc_db = ucsc_elem.get("db")
-            g.ucsc_org = ucsc_elem.get("org")
+        g.ucsc_db = ucsc_elem.get("db")
+        g.ucsc_org = ucsc_elem.get("org")
         for attrname in GenomeConfig.fields:
             setattr(g, attrname, elem.findtext(attrname))
         return g
@@ -614,7 +650,7 @@ class ServerConfig(object):
         else:
             logging.error("modules init script %s not found" % (self.modules_init_script))
             valid = False
-        return valid    
+        return valid
 
 class PipelineConfig(object):
     @staticmethod
@@ -639,10 +675,8 @@ class PipelineConfig(object):
                          "max_fragment_size",
                          "fragment_size_mean_default",
                          "fragment_size_stdev_default"):
-            if inspect_elem is None:
-                setattr(c, attrname, None)
-            else:
-                setattr(c, attrname, int(inspect_elem.findtext(attrname)))
+            val = inspect_elem.findtext(attrname)
+            setattr(c, attrname, int(val))
         # tophat parameters
         c.tophat_args = []
         elem = root.find("tophat")
@@ -727,13 +761,13 @@ class PipelineConfig(object):
             elem.text = arg            
         # tophat fusion parameters
         tophat_fusion_elem = etree.SubElement(root, "tophatfusion")
-        tophat_fusion_elem.set("run", self.tophat_fusion_run)
+        tophat_fusion_elem.set("run", bool_to_yesno(self.tophat_fusion_run))
         for arg in self.tophat_fusion_args:
             elem = etree.SubElement(tophat_fusion_elem, "arg")
             elem.text = arg
         # tophat fusion post parameters
         tophat_fusion_post_elem = etree.SubElement(root, "tophatfusionpost")
-        tophat_fusion_post_elem.set("run", self.tophat_fusion_post_run)
+        tophat_fusion_post_elem.set("run", bool_to_yesno(self.tophat_fusion_post_run))
         for arg in self.tophat_fusion_post_args:
             elem = etree.SubElement(tophat_fusion_post_elem, "arg")
             elem.text = arg
@@ -749,26 +783,26 @@ class PipelineConfig(object):
             elem.text = arg
         # cufflinks ab initio parameters
         cufflinks_ab_initio_elem = etree.SubElement(root, "cufflinks_ab_initio")
-        cufflinks_ab_initio_elem.set("run", self.cufflinks_ab_initio_run)
+        cufflinks_ab_initio_elem.set("run", bool_to_yesno(self.cufflinks_ab_initio_run))
         for arg in self.cufflinks_ab_initio_args:
             elem = etree.SubElement(cufflinks_ab_initio_elem, "arg")
             elem.text = arg
         # cufflinks known parameters
         cufflinks_known_elem = etree.SubElement(root, "cufflinks_known")
-        cufflinks_known_elem.set("run", self.cufflinks_known_run)
+        cufflinks_known_elem.set("run", bool_to_yesno(self.cufflinks_known_run))
         for arg in self.cufflinks_known_args:
             elem = etree.SubElement(cufflinks_known_elem, "arg")
             elem.text = arg
         # htseq parameters
         htseq_elem = etree.SubElement(root, "htseq")
-        htseq_elem.set("run", self.htseq_count_run)
-        htseq_elem.set("pe", self.htseq_count_pe)
+        htseq_elem.set("run", bool_to_yesno(self.htseq_count_run))
+        htseq_elem.set("pe", bool_to_yesno(self.htseq_count_pe))
         for arg in self.htseq_count_args:
             elem = etree.SubElement(htseq_elem, "arg")
             elem.text = arg
         # varscan parameters
         varscan_elem = etree.SubElement(root, "varscan")
-        varscan_elem.set("run", self.varscan_run)
+        varscan_elem.set("run", bool_to_yesno(self.varscan_run))
         for arg in self.varscan_args:
             elem = etree.SubElement(varscan_elem, "arg")
             elem.text = arg
@@ -805,9 +839,13 @@ class PipelineConfig(object):
             if not genome.is_valid(server.references_dir):
                 logging.error("Genome %s missing required files" % (name))
                 valid = False
-        #
-        # Check software installation
-        #
+        return valid
+
+    def is_software_valid(self):
+        '''
+        Check software prerequisites
+        '''
+        valid = True
         progs = ['fastqc', 'samtools', 'java', 'bowtie', 
                  'bowtie2', 'tophat', 'bedtools',
                  'bedGraphToBigWig', 'bedToBigBed',
@@ -857,4 +895,4 @@ class PipelineConfig(object):
         except ImportError, e:
             logging.error("Package 'pysam' not found")
             valid = False
-        return valid
+        return valid        

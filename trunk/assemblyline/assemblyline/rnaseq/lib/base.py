@@ -265,6 +265,9 @@ def parse_bool(s):
         return True
     return False
 
+def bool_to_yesno(x):
+    return 'yes' if x else 'no'
+
 def parse_string_none(s):
     return None if s == "None" else s
 

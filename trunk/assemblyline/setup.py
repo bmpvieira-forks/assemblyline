@@ -23,7 +23,7 @@ from Cython.Distutils import build_ext
 # ---- Extension Modules ----------------------------------------------------
 def get_extension_modules():
     extensions = []
-    # Interval clustering                
+    # Interval clustering 
     extensions.append(Extension("assemblyline.lib.bx.cluster", 
                                 ["assemblyline/lib/bx/cluster.pyx", 
                                  "assemblyline/lib/bx/intervalcluster.c"], 
