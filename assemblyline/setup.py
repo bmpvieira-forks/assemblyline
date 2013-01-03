@@ -45,6 +45,7 @@ def main():
           url="http://assemblyline.googlecode.com",
           packages=['assemblyline',
                     'assemblyline.lib',
+                    'assemblyline.lib.bx',
                     'assemblyline.pipeline',
                     'assemblyline.test',
                     'assemblyline.utils',
