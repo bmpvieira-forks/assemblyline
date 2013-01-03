@@ -46,7 +46,12 @@ def main():
           packages=['assemblyline',
                     'assemblyline.lib',
                     'assemblyline.pipeline',
-                    'assemblyline.utils'],
+                    'assemblyline.test',
+                    'assemblyline.utils',
+                    'assemblyline.rnaseq',
+                    'assemblyline.rnaseq.lib',
+                    'assemblyline.rnaseq.pipeline',
+                    'assemblyline.rnaseq.utils'],
           ext_modules=get_extension_modules(),
           cmdclass= {'build_ext': build_ext})
 
