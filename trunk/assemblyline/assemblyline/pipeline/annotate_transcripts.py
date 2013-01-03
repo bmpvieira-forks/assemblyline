@@ -27,13 +27,17 @@ import collections
 import sys
 import shutil
 import numpy as np
+from multiprocessing import Process, JoinableQueue
 
 import assemblyline
 from assemblyline.lib.bx.intersection import Interval, IntervalTree
-from assemblyline.lib.base import GTFAttr
+from assemblyline.lib.gtf import GTFAttr, parse_loci, merge_sort_gtf_files
 from assemblyline.lib.librarytable import LibraryInfo
-from assemblyline.lib.transcript_parser import parse_gtf
-from assemblyline.lib.transcript import NO_STRAND, POS_STRAND, NEG_STRAND
+from assemblyline.lib.transcript import parse_gtf, \
+    transcripts_from_gtf_lines, NO_STRAND, POS_STRAND, NEG_STRAND
+from assemblyline.lib.base import LIB_COUNTS_FILE, SENSE, ANTISENSE, \
+    INTRONIC, INTERGENIC, CATEGORIES, category_int_to_str, ANNOTATED, \
+    CATEGORY, MEAN_SCORE, MEAN_RECURRENCE, LibCounts, CategoryInfo
 
 from assemblyline.lib.assemble.base import STRAND_SCORE, TRANSCRIPT_IDS
 from assemblyline.lib.assemble.transcript_graph import \
@@ -42,132 +46,8 @@ from assemblyline.lib.assemble.transcript_graph import \
 # graph attributes
 IS_REF = 'isref'
 SAMPLE_IDS = 'sids'
-
 # default parameters
 DEFAULT_ANNOTATION_FRAC_THRESHOLD = 0.9
-
-# transcript attributes
-ANNOTATED = 'ann'
-CATEGORY = 'cat'
-MEAN_SCORE = 'mean_score'
-MEAN_RECURRENCE = 'mean_recurrence'
-
-# constant attribute values
-SENSE = 0
-ANTISENSE = 1
-INTRONIC = 2
-INTERGENIC = 3
-CATEGORIES = [SENSE, ANTISENSE, INTRONIC, INTERGENIC]
-category_int_to_str = {SENSE: "sense",
-                       ANTISENSE: "antisense",
-                       INTRONIC: "intronic",
-                       INTERGENIC: "intergenic"}
-category_str_to_int = dict((v,k) for k,v in category_int_to_str.items())
-
-# decision codes
-ANN_EXPR = 0
-ANN_BKGD = 1
-UNANN_EXPR = 2
-UNANN_BKGD = 3
-SKIPPED = 4
-
-# output files
-LIB_COUNTS_FILE = "lib_counts.txt"
-
-class CategoryInfo():
-    def __init__(self):
-        self.category_key = None
-        self.category_str = None
-        self.library_ids = set()
-        self.output_dir = None
-        self.ctree_dir = None
-        self.result_file_dict = {}
-        self.result_fh_dict = {}
-        self.cutoff_file_dict = {}
-        self.output_gtf_file = None
-        self.output_gtf_fh = None
-        self.ctree_file = None
-        self.sorted_ctree_file = None
-        self.ann_expr_gtf_file = None
-        self.unann_expr_gtf_file = None
-        self.ann_bkgd_gtf_file = None
-        self.unann_bkgd_gtf_file = None
-        self.skipped_gtf_file = None
-        self.decision_file_dict = {}
-        self.decision_fh_dict = {}
-        self.pred_stats_file = None
-
-    @staticmethod
-    def create(library_ids, category_key, category_str, output_dir):
-        # make category info object
-        cinfo = CategoryInfo()
-        cinfo.category_key = category_key
-        cinfo.category_str = category_str
-        cinfo.library_ids = set(library_ids)
-        category_dir = os.path.join(output_dir, category_str)
-        if not os.path.exists(category_dir):
-            logging.debug("Creating category directory '%s'" % 
-                          (category_dir))
-            os.makedirs(category_dir)
-        cinfo.output_dir = category_dir
-        ctree_dir = os.path.join(category_dir, "ctrees")
-        if not os.path.exists(ctree_dir):
-            logging.debug("Creating classification directory '%s'" % 
-                          (ctree_dir))
-            os.makedirs(ctree_dir)
-        cinfo.ctree_dir = ctree_dir
-        result_file_dict = collections.defaultdict(lambda: {})
-        cutoff_file_dict = collections.defaultdict(lambda: {})
-        for library_id in library_ids:
-            filename = os.path.join(ctree_dir, "%s.txt" % (library_id))
-            result_file_dict[library_id] = filename
-            filename = os.path.join(ctree_dir, "%s.cutoffs.txt" % (library_id))
-            cutoff_file_dict[library_id] = filename
-        cinfo.result_file_dict = result_file_dict
-        cinfo.cutoff_file_dict = cutoff_file_dict
-        cinfo.output_gtf_file = os.path.join(category_dir, "transcripts.gtf")
-        cinfo.ctree_file = os.path.join(category_dir, "transcripts.classify.txt")
-        cinfo.sorted_ctree_file = os.path.join(category_dir, "transcripts.classify.srt.txt")
-        # filtered result files
-        cinfo.ann_expr_gtf_file = os.path.join(category_dir, "ann_expr.gtf")
-        cinfo.unann_expr_gtf_file = os.path.join(category_dir, "unann_expr.gtf")
-        cinfo.ann_bkgd_gtf_file = os.path.join(category_dir, "ann_bkgd.gtf")
-        cinfo.unann_bkgd_gtf_file = os.path.join(category_dir, "unann_bkgd.gtf")
-        cinfo.skipped_gtf_file = os.path.join(category_dir, "skipped.gtf")
-        cinfo.decision_file_dict = {ANN_EXPR: cinfo.ann_expr_gtf_file,
-                                    ANN_BKGD: cinfo.ann_bkgd_gtf_file,
-                                    UNANN_EXPR: cinfo.unann_expr_gtf_file,
-                                    UNANN_BKGD: cinfo.unann_bkgd_gtf_file,
-                                    SKIPPED: cinfo.skipped_gtf_file}
-        cinfo.pred_stats_file = os.path.join(category_dir, "pred_stats.txt") 
-        return cinfo
-
-class LibCounts(object):
-    def __init__(self):
-        self.library_id = None
-        self.annotated_counts = [0, 0]
-        self.category_counts = [0] * len(CATEGORIES)
-    @staticmethod
-    def header_fields():
-        fields = ["library_id", "unannotated", "annotated"]
-        fields.extend([category_int_to_str[k] for k in CATEGORIES])
-        return fields
-    def to_fields(self):
-        return [self.library_id] + self.annotated_counts + self.category_counts
-    @staticmethod
-    def from_line(line):
-        fields = line.strip().split('\t')
-        c = LibCounts()
-        c.library_id = fields[0]
-        c.annotated_counts = map(int, fields[1:3])
-        c.category_counts = map(int, fields[3:])
-        return c
-    @staticmethod
-    def from_file(filename):
-        f = open(filename)
-        f.next()
-        for line in f:
-            yield LibCounts.from_line(line)
 
 def get_strand_score_fraction(G, nodes):
     # sum the coverage score across the transcript
@@ -362,11 +242,71 @@ def annotate_locus(transcripts,
             t.attrs[MEAN_RECURRENCE] = mean_recur
     return inp_transcripts
 
-def annotate_transcripts(gtf_file, sample_infos, output_dir, tmp_dir,
-                         gtf_sample_attr, gtf_score_attr,
-                         annotation_frac_threshold):
+def annotate_gtf_worker(input_queue, gtf_file, gtf_sample_attr, 
+                        gtf_score_attr, 
+                        annotation_frac_threshold):
+    fileh = open(gtf_file, 'w')
+    while True:
+        lines = input_queue.get()
+        if len(lines) == 0:
+            break
+        transcripts = transcripts_from_gtf_lines(lines)
+        annotated_transcripts = annotate_locus(transcripts, 
+                                               gtf_sample_attr, 
+                                               gtf_score_attr,
+                                               annotation_frac_threshold) 
+        for t in annotated_transcripts:
+            features = t.to_gtf_features()
+            for f in features:
+                print >>fileh, str(f) 
+        input_queue.task_done()
+    fileh.close()
+    input_queue.task_done()
+
+def annotate_gtf_parallel(input_gtf_file,
+                          output_gtf_file, 
+                          gtf_sample_attr, 
+                          gtf_score_attr, 
+                          annotation_frac_threshold,                          
+                          num_processors, 
+                          tmp_dir):
+    # create queue
+    input_queue = JoinableQueue(maxsize=num_processors*3)
+    # start worker processes
+    procs = []
+    worker_gtf_files = []
+    for i in xrange(num_processors):
+        worker_gtf_file = os.path.join(tmp_dir, "annotate_worker%03d.gtf" % (i))
+        worker_gtf_files.append(worker_gtf_file)
+        args = (input_queue, worker_gtf_file, gtf_sample_attr, gtf_score_attr, 
+                annotation_frac_threshold)
+        p = Process(target=annotate_gtf_worker, args=args)
+        p.daemon = True
+        p.start()
+        procs.append(p)
+    fileh = open(input_gtf_file)
+    for lines in parse_loci(fileh):
+        input_queue.put(lines)
+    fileh.close()
+    # stop workers
+    for p in procs:
+        input_queue.put([])
+    # close queue
+    input_queue.join()
+    input_queue.close()
+    # join worker processes
+    for p in procs:
+        p.join()
+    # merge/sort worker gtf files
+    logging.info("Merging %d worker GTF files" % (num_processors))
+    merge_sort_gtf_files(worker_gtf_files, output_gtf_file, tmp_dir=tmp_dir)
+    # remove worker gtf files
+    for filename in worker_gtf_files:
+        if os.path.exists(filename):
+            os.remove(filename)
+
+def output_by_category(gtf_file, library_ids, output_dir):
     # setup output by category
-    library_ids = [s.library_id for s in sample_infos]
     category_info_dict = {}
     for category_key, category_str in category_int_to_str.iteritems():
         cinfo = CategoryInfo.create(library_ids, category_key, 
@@ -374,23 +314,17 @@ def annotate_transcripts(gtf_file, sample_infos, output_dir, tmp_dir,
         cinfo.output_gtf_fh = open(cinfo.output_gtf_file, "w")
         category_info_dict[category_key] = cinfo
     # function to gather transcript attributes
-    logging.info("Annotating transcripts gtf_file=%s" % (gtf_file))
     lib_counts_dict = collections.defaultdict(lambda: LibCounts())
     for locus_transcripts in parse_gtf(open(gtf_file)):
-        locus_chrom = locus_transcripts[0].chrom
-        locus_start = locus_transcripts[0].start
-        locus_end = max(t.end for t in locus_transcripts)
-        logging.debug("[LOCUS] %s:%d-%d %d transcripts" % 
-                      (locus_chrom, locus_start, locus_end, 
-                       len(locus_transcripts)))
-        # adds attributes to each transcript
-        inp_transcripts = annotate_locus(locus_transcripts, 
-                                         gtf_sample_attr, 
-                                         gtf_score_attr,
-                                         annotation_frac_threshold)
+#        locus_chrom = locus_transcripts[0].chrom
+#        locus_start = locus_transcripts[0].start
+#        locus_end = max(t.end for t in locus_transcripts)
+#        logging.debug("[LOCUS] %s:%d-%d %d transcripts" % 
+#                      (locus_chrom, locus_start, locus_end, 
+#                       len(locus_transcripts)))
         # write classification table files
         category_features = collections.defaultdict(lambda: [])
-        for t in inp_transcripts:
+        for t in locus_transcripts:
             library_id = t.attrs[GTFAttr.LIBRARY_ID]
             category = int(t.attrs[CATEGORY])
             is_annotated = int(t.attrs[ANNOTATED])
@@ -418,7 +352,7 @@ def annotate_transcripts(gtf_file, sample_infos, output_dir, tmp_dir,
                 print >>output_gtf_fh, str(f) 
     # close open file handles
     for category_key, cinfo in category_info_dict.iteritems():
-        cinfo.output_gtf_fh.close() 
+        cinfo.output_gtf_fh.close()
     # write library category statistics
     logging.info("Writing library transcript count statistics")
     lib_counts_file = os.path.join(output_dir, LIB_COUNTS_FILE)
@@ -434,6 +368,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", action="store_true", 
                         dest="verbose", default=False)
+    parser.add_argument("-p", type=int, dest="num_processors", default=1,
+                        help="Number of processes to run in parallel "
+                        "[default=%(default)s]")
     parser.add_argument("--gtf-sample-attr", dest="gtf_sample_attr", 
                         default="sample_id", metavar="ATTR",
                         help="GTF attribute field used to distinguish "
@@ -455,13 +392,13 @@ def main():
                         default="transcripts",
                         help="output directory [default=%(default)s]")
     parser.add_argument("gtf_file")
-    parser.add_argument("sample_table_file")
+    parser.add_argument("library_table_file")
     args = parser.parse_args()
     # check command line parameters
     if not os.path.exists(args.gtf_file):
         parser.error("Reference GTF file %s not found" % (args.ref_gtf_file))
-    if not os.path.exists(args.sample_table_file):
-        parser.error("Sample table file %s not found" % (args.sample_table_file))
+    if not os.path.exists(args.library_table_file):
+        parser.error("Library table file %s not found" % (args.library_table_file))
     # set logging level
     if args.verbose:
         level = logging.DEBUG
@@ -472,12 +409,13 @@ def main():
     logging.info("AssemblyLine %s" % (assemblyline.__version__))
     logging.info("----------------------------------")   
     # show parameters
-    logging.info("Parameters:")
-    logging.info("gtf sample attribute:  %s" % (args.gtf_sample_attr))
-    logging.info("gtf score attribute:   %s" % (args.gtf_score_attr))
-    logging.info("gtf file:              %s" % (args.gtf_file))
-    logging.info("sample table file:     %s" % (args.sample_table_file))
-    logging.info("output directory:      %s" % (args.output_dir))
+    logging.info("num processors:       %d" % (args.num_processors))
+    logging.info("gtf sample attribute: %s" % (args.gtf_sample_attr))
+    logging.info("gtf score attribute:  %s" % (args.gtf_score_attr))
+    logging.info("output directory:     %s" % (args.output_dir))
+    logging.info("gtf file:             %s" % (args.gtf_file))
+    logging.info("library table file:   %s" % (args.library_table_file))
+    logging.info("----------------------------------")   
     if not os.path.exists(args.output_dir):
         logging.debug("Creating output directory '%s'" % (args.output_dir))
         os.makedirs(args.output_dir)
@@ -485,28 +423,24 @@ def main():
     if not os.path.exists(tmp_dir):
         logging.info("Creating tmp directory '%s'" % (tmp_dir))
         os.makedirs(tmp_dir)
-    # parse sample table
-    logging.info("Parsing sample table")
-    libinfos = []
-    valid = True
-    for lib in LibraryInfo.from_file(args.sample_table_file):
-        # exclude samples
-        if not lib.is_valid():
-            logging.error("\tcohort=%s patient=%s sample=%s library=%s not valid" % 
-                          (lib.cohort_id, lib.patient_id, lib.sample_id, lib.library_id))
-            valid = False
-        else:
-            libinfos.append(lib)
-    if not valid:
-        parser.error("Invalid samples in sample table file")
-    # run annotation procedure        
-    annotate_transcripts(args.gtf_file,
-                         libinfos, 
-                         args.output_dir, 
-                         tmp_dir,
-                         args.gtf_sample_attr,
-                         args.gtf_score_attr,
-                         args.annotation_frac_threshold)
+    # parse library table
+    logging.info("Parsing library table")
+    library_ids = []
+    for lib in LibraryInfo.from_file(args.library_table_file):
+        library_ids.append(lib.library_id)
+    # function to gather transcript attributes
+    logging.info("Annotating GTF file")
+    annotated_gtf_file = os.path.join(args.output_dir, "annotated_transcripts.gtf")
+    annotate_gtf_parallel(args.gtf_file,
+                          annotated_gtf_file,
+                          args.gtf_sample_attr, 
+                          args.gtf_score_attr, 
+                          args.annotation_frac_threshold,                          
+                          args.num_processors, 
+                          tmp_dir)
+    # output annotated transcripts by category
+    logging.info("Outputting transcripts by category")
+    output_by_category(annotated_gtf_file, library_ids, args.output_dir)
     # cleanup
     if os.path.exists(tmp_dir):
         shutil.rmtree(tmp_dir)

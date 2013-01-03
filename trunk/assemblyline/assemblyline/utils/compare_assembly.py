@@ -28,10 +28,8 @@ import operator
 import collections
 
 import assemblyline
-from assemblyline.lib.base import GTFAttr
-from assemblyline.lib.gtf import GTFFeature, sort_gtf
-from assemblyline.lib.transcript_parser import parse_gtf
-from assemblyline.lib.transcript import NO_STRAND, POS_STRAND, NEG_STRAND
+from assemblyline.lib.gtf import GTFAttr, GTFFeature, sort_gtf
+from assemblyline.lib.transcript import parse_gtf, NO_STRAND, POS_STRAND, NEG_STRAND
 from assemblyline.lib.assemble.transcript_graph import create_undirected_transcript_graph, get_transcript_node_map
 
 TEST_IDS = 'test_ids'

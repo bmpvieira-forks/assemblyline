@@ -20,7 +20,8 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
-from gtf import GTFFeature
+import collections
+from gtf import parse_loci, GTFFeature, GTFError
 
 # attributes
 TRANSCRIPT_ID = "transcript_id"
@@ -169,3 +170,35 @@ class Transcript(object):
             f.attrs["exon_number"] = i
             features.append(f)
         return features
+    
+def transcripts_from_gtf_lines(lines, attr_defs=None):
+    transcripts = collections.OrderedDict()
+    for line in lines:
+        feature = GTFFeature.from_string(line, attr_defs)
+        t_id = feature.attrs["transcript_id"]
+        if t_id not in transcripts:            
+            if feature.feature_type != "transcript":
+                raise GTFError("Feature type '%s' found before 'transcript' record: %s" % 
+                               (feature.feature_type, str(feature)))
+            t = Transcript()
+            t.chrom = feature.seqid
+            t.start = feature.start
+            t.end = feature.end
+            # convert from string strand notation ("+", "-", ".") 
+            # to integer (0, 1)
+            t.strand = strand_str_to_int(feature.strand)
+            t.exons = []
+            t.attrs = feature.attrs
+            transcripts[t_id] = t
+        else:
+            t = transcripts[t_id]
+        if feature.feature_type == "exon":
+            t.exons.append(Exon(feature.start, feature.end))
+    # sort transcript exons by genomic position
+    for t in transcripts.itervalues():
+        t.exons.sort()
+    return transcripts.values()
+
+def parse_gtf(fileh, attr_defs=None):
+    for locus_features in parse_loci(fileh):
+        yield transcripts_from_gtf_lines(locus_features, attr_defs)

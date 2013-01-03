@@ -6,7 +6,7 @@ Created on Aug 17, 2012
 import logging
 import argparse
 
-from assemblyline.lib.transcript_parser import parse_gtf
+from assemblyline.lib.transcript import parse_gtf
 
 IGNORE_SOURCES = set(["IG_C_gene",
                       "IG_C_pseudogene",

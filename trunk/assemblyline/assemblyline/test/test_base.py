@@ -5,7 +5,7 @@ Created on Nov 8, 2012
 '''
 import os
 
-from assemblyline.lib.transcript_parser import parse_gtf
+from assemblyline.lib.transcript import parse_gtf
 from assemblyline.lib.assemble.transcript_graph import create_transcript_graphs
 
 GTF_DIR = "gtf_files"

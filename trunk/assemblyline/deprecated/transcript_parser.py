@@ -29,15 +29,9 @@ import math
 import gtf
 from transcript import Exon, Transcript, strand_str_to_int
 
-def float_check_nan(x):
-    x = float(x)
-    if math.isnan(x):
-        return 0.0
-    return x
 
-cufflinks_attr_defs = {"FPKM": float_check_nan,
-                       "cov": float_check_nan,
-                       "frac": float_check_nan}
+
+
 
 def separate_transcripts(gtf_features):
     transcripts = collections.defaultdict(lambda: Transcript())

@@ -29,8 +29,7 @@ import operator
 
 import assemblyline
 from assemblyline.lib.librarytable import LibraryInfo
-from assemblyline.lib.gtf import GTFFeature, sort_gtf
-from assemblyline.lib.base import GTFAttr
+from assemblyline.lib.gtf import GTFAttr, GTFFeature, sort_gtf
 
 def add_reference_gtf_file(ref_gtf_file, outfh):
     transcript_dict = collections.defaultdict(lambda: [])

@@ -24,6 +24,21 @@ import os
 import subprocess
 import shutil
 
+GTF_EMPTY_FIELD = '.'
+GTF_ATTR_SEP = ';'
+GTF_ATTR_TAGVALUE_SEP = ' '
+
+class GTFAttr:
+    GENE_ID = 'gene_id'
+    TRANSCRIPT_ID = 'transcript_id'
+    COHORT_ID = 'cohort_id'
+    SAMPLE_ID = 'sample_id'
+    LIBRARY_ID = 'library_id'
+    REF = 'ref'
+
+class GTFError(Exception):
+    pass
+
 def sort_gtf(filename, output_file, tmp_dir=None):
     args = ["sort"]
     if tmp_dir is not None:
@@ -42,9 +57,54 @@ def merge_sort_gtf_files(gtf_files, output_file, tmp_dir=None):
     sort_gtf(tmp_file, output_file, tmp_dir)
     os.remove(tmp_file)
 
-GTF_EMPTY_FIELD = '.'
-GTF_ATTR_SEP = ';'
-GTF_ATTR_TAGVALUE_SEP = ' '
+def parse_loci(line_iter):
+    '''
+    requires that GTF file has been sorted and formatted such that a
+    single 'transcript' feature appears before individual 'exon' 
+    features such that transcript boundaries can be ascertained. this
+    greatly simplifies parsing. using this function without appropriately 
+    formatted GTF files will result in undefined behavior
+    '''
+    def window_overlap(a, b):
+        if a[0] != b[0]:
+            return False
+        return (a[1] <= b[2]) and (b[1] <= a[2])
+    def get_intervals(line_iter):
+        for line in line_iter:
+            # read the essential part of the GTF line
+            line = line.rstrip()
+            fields = line.split('\t', 5)
+            seqid = fields[0]
+            start = int(fields[3])-1
+            end = int(fields[4])
+            yield seqid, start, end, line
+    try:
+        interval_iter = get_intervals(line_iter)
+        # initialize window
+        seqid, start, end, line = interval_iter.next()
+        window = [line]
+        window_range = (seqid, start, end)
+        # separate into loci
+        for seqid, start, end, line in interval_iter:
+            # check if next transcript is outside current window
+            interval = (seqid, start, end)
+            if not window_overlap(interval, window_range):
+                # yield current window
+                yield window
+                # reset window
+                window = [line]
+                window_range = (seqid, start, end)
+            else:
+                # add transcript to window
+                window.append(line)
+                newstart = (start if start < window_range[1] else window_range[1])
+                newend = (end if end > window_range[2] else window_range[2])
+                window_range = (seqid, newstart, newend)
+    except StopIteration:
+        pass
+    # yield last window
+    if len(window) > 0:
+        yield window
 
 class GTFFeature(object):
     '''
