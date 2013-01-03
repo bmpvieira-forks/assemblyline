@@ -9,11 +9,12 @@ import logging
 import argparse
 import subprocess
 import shutil
+import xml.etree.cElementTree as etree
 
 # projects
 import assemblyline.rnaseq.lib.config as config
-from assemblyline.rnaseq.lib.base import many_up_to_date, detect_format
-from assemblyline.rnaseq.lib.libtable import Library, FRAGMENT_LAYOUT_PAIRED, FRAGMENT_LAYOUT_SINGLE
+from assemblyline.rnaseq.lib.base import indent_xml, many_up_to_date, detect_format
+from assemblyline.rnaseq.lib.libtable import Library, read_library_table_xls, FRAGMENT_LAYOUT_PAIRED, FRAGMENT_LAYOUT_SINGLE
 
 import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
@@ -172,27 +173,20 @@ def submit_nopbs(shell_commands,
             errfh.close()
     return retcode
 
-def run(library_xml_file, config_xml_file, server_name, num_processors,
-        keep_tmp):
-    #
-    # read and validate configuration file
-    #
-    logging.info("Reading pipeline configuration file")
-    pipeline = config.PipelineConfig.from_xml(config_xml_file)
-    if server_name not in pipeline.servers:
-        logging.error("Server %s not found" % (server_name))
-    server = pipeline.servers[server_name]
-    #
-    # read library file and attach to results
-    #
-    library = Library.from_xml_file(library_xml_file)
-    if not library.is_valid():
-        logging.error("Library not valid")
+def create_job(library, pipeline, server, config_xml_file, 
+               num_processors, keep_tmp):
+    # search for library sequence files
+    success = config.resolve_library_sequence_files(server, library)
+    if not success:
+        logging.error("Library %s sequence files not found" % (library.library_id))
         return config.JOB_ERROR
-    logging.info("Analyzing library: %s" % (library.library_id)) 
+    # check for valid data structure
+    if not library.is_valid():
+        logging.error("Library %s not valid" % (library.library_id))
+        return config.JOB_ERROR
     # check genome
     if library.species not in pipeline.genomes:
-        logging.error("Library %s genome %s not found" % 
+        logging.error("Library %s species %s not supported" % 
                       (library.library_id, library.species))
         return config.JOB_ERROR
     # resolve genome paths now that server is known
@@ -206,9 +200,22 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     os.makedirs(results.output_dir)
     os.makedirs(results.tmp_dir)
     os.makedirs(results.log_dir)
-    # copy xml files
-    logging.debug("Copying configuration files")
-    shutil.copyfile(library_xml_file, results.library_xml_file)
+    #
+    # format library information as xml
+    #
+    logging.debug("Writing library information to XML")
+    root = etree.Element("library")
+    library.to_xml(root)
+    # indent for pretty printing
+    indent_xml(root)
+    # write to file
+    f = open(results.library_xml_file, "w")
+    print >>f, etree.tostring(root)
+    f.close()
+    #
+    # copy configuration xml file
+    #
+    logging.debug("Copying configuration file")
     shutil.copyfile(config_xml_file, results.config_xml_file)
     #
     # build up sequence of commands
@@ -233,7 +240,7 @@ def run(library_xml_file, config_xml_file, server_name, num_processors,
     shell_commands.append(bash_log(msg, "INFO"))
     args = ["python", 
             os.path.join(_pipeline_dir, "validate_pipeline_config.py"),
-            results.config_xml_file, server_name]
+            results.config_xml_file, server.name]
     command = ' '.join(map(str, args))
     logging.debug("\tcommand: %s" % (command))
     shell_commands.append(command)
@@ -1009,20 +1016,68 @@ def main():
     logging.info("Assemblyline version %s" % (assemblyline.__version__))
     logging.info("=============================")
     parser = argparse.ArgumentParser()
-    parser.add_argument("-p", type=int, dest="num_processors", default=1)
-    parser.add_argument("--keep-tmp", dest="keep_tmp", action="store_true", 
-                        default=False)
-    parser.add_argument("library_xml_file")
+    parser.add_argument("-p", type=int, dest="num_processors", 
+                        default=1,
+                        help="Number of processors per job")
+    parser.add_argument("--keep-tmp", dest="keep_tmp", 
+                        action="store_true", default=False,
+                        help="Retain intermediate files generated during "
+                        "analysis (warning: may consume large amounts of "
+                        "disk space, only recommended for debugging "
+                        "purposes")
+    inp_group = parser.add_mutually_exclusive_group(required=True)
+    inp_group.add_argument("--xls", dest="library_xls_file", 
+                           default=None,
+                           help="Excel (.xls/.xlsx) spreadsheet "
+                           "containing RNA-Seq library information")
+    inp_group.add_argument("--xml", dest="library_xml_file", 
+                           default=None,
+                           help="XML formatted file containing RNA-Seq "
+                           "library information")
     parser.add_argument("config_xml_file")
     parser.add_argument("server_name")
     args = parser.parse_args()
-    if not os.path.exists(args.library_xml_file):
-        parser.error("library xml file %s not found" % (args.library_xml_file))
+    #
+    # read and validate configuration file
+    #
     if not os.path.exists(args.config_xml_file):
-        parser.error("config xml file %s not found" % (args.config_xml_file))
-    return run(args.library_xml_file, args.config_xml_file, 
-               args.server_name, args.num_processors,
-               args.keep_tmp)
+        parser.error("Configuration XML file %s not found" % 
+                     (args.config_xml_file))
+    logging.info("Reading pipeline configuration file")
+    pipeline = config.PipelineConfig.from_xml(args.config_xml_file)
+    if not pipeline.is_valid(args.server_name):
+        logging.error("Pipeline config not valid")
+        return config.JOB_ERROR
+    server = pipeline.servers[args.server_name]
+    #
+    # read libraries
+    #
+    if args.library_xml_file is not None:
+        if not os.path.exists(args.library_xml_file):
+            parser.error("XML file %s not found" % (args.library_xml_file))
+        # read library from XML
+        library = Library.from_xml_file(args.library_xml_file)
+        libraries = {library.library_id: library}
+    elif args.library_xls_file is not None:                
+        if not os.path.exists(args.library_xls_file):
+            parser.error("Excel file %s not found" % (args.library_xls_file))
+        # read libraries from XLS/XLSX
+        logging.info("Reading library table '%s'" % (args.library_xls_file))
+        libraries = read_library_table_xls(args.library_xls_file)
+    #
+    # Process each library
+    #
+    logging.info("Generating jobs")
+    for library in libraries.itervalues():
+        logging.info("Library: %s" % (library.library_id)) 
+        retcode = create_job(library, pipeline, server, 
+                             args.config_xml_file, 
+                             args.num_processors, 
+                             args.keep_tmp)
+        if retcode != 0:
+            logging.error("Library %s error" % (library.library_id))
+    logging.info("Done")
+    return config.JOB_SUCCESS
 
 if __name__ == '__main__': 
     sys.exit(main())
