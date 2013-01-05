@@ -12,7 +12,6 @@ import os
 # project imports
 from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
 from assemblyline.rnaseq.lib.base import detect_read_length
-import assemblyline.rnaseq.lib.config as config
 
 def run_tophat(output_dir, fastq_files, library_metrics_file,
                bowtie_index, library_type, num_processors,
@@ -20,25 +19,20 @@ def run_tophat(output_dir, fastq_files, library_metrics_file,
                rg_platform_unit, rg_center, rg_platform,
                tophat_args):
     # read library characteristics information
-    obj = RnaseqLibraryMetrics.from_file(open(library_metrics_file))
+    obj = RnaseqLibraryMetrics.from_file(library_metrics_file)
+    library_type = obj.predict_library_type()
+    frag_size_mean = int(round(obj.tlen_at_percentile(50.0),0))
+    frag_size_stdev = int(round(obj.std(),0))    
     # get fragment size parameters for tophat
     read_length = detect_read_length(fastq_files[0])
-    obj = RnaseqLibraryMetrics.from_file(open(library_metrics_file))
-    mean_inner_dist = int(obj.tlen_at_percentile(50.0) - (2*read_length))
-    mate_stdev = int(round(obj.std(),0))
+    mean_inner_dist = int(frag_size_mean - 2*read_length)
+    mate_stdev = frag_size_stdev
     logging.info("Tophat mean_inner_dist=%d and mate_stdev=%d" % 
                  (mean_inner_dist, mate_stdev))
-    # predict library type
-    predicted_library_type = obj.predict_library_type(config.STRAND_SPECIFIC_CUTOFF_FRAC)
-    if library_type != predicted_library_type:
-        logging.warning("Library type %s does not agree with prediction %s" % 
-                        (library_type, predicted_library_type))
-    #
     # setup run
-    #
     args = ['tophat',
             "-o", output_dir,
-            "--library-type", predicted_library_type,
+            "--library-type", library_type,
             "-p", num_processors,
             "-r", mean_inner_dist,
             "--mate-std-dev", mate_stdev,
@@ -64,7 +58,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--tophat-arg", dest="tophat_args", action="append", default=[])
     parser.add_argument("-p", type=int, dest="num_processors", default=1)
-    parser.add_argument("--library-type", dest="library_type", default="fr-unstranded")
     parser.add_argument("--rg-id", dest="rg_id")
     parser.add_argument("--rg-sample", dest="rg_sample")
     parser.add_argument("--rg-library", dest="rg_library")

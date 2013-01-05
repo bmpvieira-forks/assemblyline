@@ -174,7 +174,7 @@ def submit_nopbs(shell_commands,
     return retcode
 
 def create_job(library, pipeline, server, config_xml_file, 
-               num_processors, keep_tmp):
+               num_processors, keep_tmp, overwrite):
     # search for library sequence files
     success = config.resolve_library_sequence_files(server, library)
     if not success:
@@ -196,10 +196,19 @@ def create_job(library, pipeline, server, config_xml_file,
     output_dir = os.path.join(server.output_dir, library.library_id)
     results = config.RnaseqResults(library, output_dir)
     # create output directories
-    logging.debug("Creating directory: %s" % (results.output_dir))
-    os.makedirs(results.output_dir)
-    os.makedirs(results.tmp_dir)
-    os.makedirs(results.log_dir)
+    if os.path.exists(results.output_dir):
+        if not overwrite:
+            logging.error("Library %s output dir %s exists and --overwrite "
+                          "option not set" % 
+                          (library.library_id, results.output_dir))
+            return config.JOB_ERROR
+    else:
+        logging.debug("Creating directory: %s" % (results.output_dir))
+        os.makedirs(results.output_dir)
+    if not os.path.exists(results.tmp_dir):
+        os.makedirs(results.tmp_dir)
+    if not os.path.exists(results.log_dir):
+        os.makedirs(results.log_dir)
     #
     # format library information as xml
     #
@@ -221,6 +230,13 @@ def create_job(library, pipeline, server, config_xml_file,
     # build up sequence of commands
     #
     shell_commands = []
+    #
+    # tmp directory may have been removed at end of a previous run
+    #
+    if not os.path.exists(results.tmp_dir):
+        logging.debug("Creating directory: %s" % (results.tmp_dir))
+        shell_commands.append("mkdir -p %s" % (results.tmp_dir))
+        shell_commands.append(bash_check_retcode())   
     #
     # setup environment
     #
@@ -389,15 +405,12 @@ def create_job(library, pipeline, server, config_xml_file,
         shell_commands.append(bash_log(msg, "INFO"))
         args = ["python",
                 os.path.join(_pipeline_dir, "inspect_library.py"),
-                "--min-frag-size", pipeline.min_fragment_size,
-                "--max-frag-size", pipeline.max_fragment_size,
-                "--frag-size-mean", pipeline.fragment_size_mean_default,
-                "--frag-size-stdev", pipeline.fragment_size_stdev_default,
-                "-n", pipeline.max_inspect_samples,
-                "-p", num_processors,
-                genome_static.fragment_size_bowtie1_index,
-                results.library_metrics_file,
-                results.frag_size_dist_plot_file]
+                "-p", num_processors]
+        for arg in pipeline.inspect_args:
+            args.extend(arg.split())
+        args.extend([genome_static.fragment_size_bowtie1_index,
+                     results.library_metrics_file,
+                     results.frag_size_dist_plot_file])
         args.extend(results.filtered_fastq_files)
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
@@ -421,7 +434,6 @@ def create_job(library, pipeline, server, config_xml_file,
         shell_commands.append(bash_log(msg, "INFO"))
         args = ["python", os.path.join(_pipeline_dir, "run_tophat.py"),
                 "-p", num_processors,
-                "--library-type", library.library_type, 
                 '--rg-id', library.library_id,
                 '--rg-sample="%s"' % library.sample_id,
                 '--rg-library="%s"' % library.library_id,
@@ -506,7 +518,6 @@ def create_job(library, pipeline, server, config_xml_file,
         shell_commands.append(bash_log(msg, "INFO"))
         args = ["python", os.path.join(_pipeline_dir, "run_tophat.py"),
                 "-p", num_processors,
-                "--library-type", library.library_type, 
                 '--rg-id', library.library_id,
                 '--rg-sample="%s"' % library.sample_id,
                 '--rg-library="%s"' % library.library_id,
@@ -576,7 +587,8 @@ def create_job(library, pipeline, server, config_xml_file,
     # run picard for rna-seq diagnostics
     #
     msg = "Collecting RNA-Seq metrics with Picard"
-    input_files = [results.tophat_bam_file]
+    input_files = [results.tophat_bam_file,
+                   results.library_metrics_file]
     output_files = [results.rnaseq_metrics]
     skip = many_up_to_date(output_files, input_files)
     if skip:    
@@ -644,8 +656,7 @@ def create_job(library, pipeline, server, config_xml_file,
         args = ["python",
                 os.path.join(_pipeline_dir, "bowtie2_paired_align.py"),
                 "-p", num_processors,
-                "--tmp-dir", results.tmp_dir,
-                "--max-frag-size", pipeline.max_fragment_size]
+                "--tmp-dir", results.tmp_dir]
         # extra args
         for arg in pipeline.pathogen_screen_bt2_args:
             args.append('--extra-arg="%s"' % arg)
@@ -795,16 +806,15 @@ def create_job(library, pipeline, server, config_xml_file,
         shell_commands.append(bash_log(msg, "INFO"))
         args = ["python", os.path.join(_pipeline_dir, "run_cufflinks.py"),
                 "-p", num_processors,
-                "-L", library.library_id,
-                "--library-type", library.library_type]
+                "-L", library.library_id]
         if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
             args.append("--learn-frag-size")
         # resolve genome-specific args
         for arg in pipeline.cufflinks_ab_initio_args:
             args.append('--cufflinks-arg="%s"' % genome_static.resolve_arg(arg))
         args.extend([results.tophat_bam_file,
-                     results.cufflinks_ab_initio_dir,
-                     results.library_metrics_file])
+                     results.library_metrics_file,
+                     results.cufflinks_ab_initio_dir])
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
         log_file = os.path.join(results.log_dir, 'cufflinks_ab_initio.log')
@@ -828,16 +838,15 @@ def create_job(library, pipeline, server, config_xml_file,
         shell_commands.append(bash_log(msg, "INFO"))
         args = ["python", os.path.join(_pipeline_dir, "run_cufflinks.py"),
                 "-p", num_processors,
-                "-L", library.library_id,
-                "--library-type", library.library_type]
+                "-L", library.library_id]
         if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
             args.append("--learn-frag-size")
         # resolve genome-specific args
         for arg in pipeline.cufflinks_known_args:
             args.append('--cufflinks-arg="%s"' % genome_static.resolve_arg(arg))
         args.extend([results.tophat_bam_file,
-                     results.cufflinks_known_dir,
-                     results.library_metrics_file])
+                     results.library_metrics_file,                     
+                     results.cufflinks_known_dir])
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
         log_file = os.path.join(results.log_dir, 'cufflinks_known.log')
@@ -950,6 +959,51 @@ def create_job(library, pipeline, server, config_xml_file,
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())
     #
+    # convert VCF to annovar input format
+    #
+    msg = "Converting VCF to Annovar format"
+    output_files = [results.varscan_snv_file]
+    input_files = [results.annovar_input_file]
+    skip = (((not pipeline.varscan_run) and 
+             (not pipeline.annovar_var)) or
+            many_up_to_date(output_files, input_files))
+    if skip:
+        shell_commands.append(bash_log(msg, "SKIPPED"))
+    else:
+        shell_commands.append(bash_log(msg, "INFO"))
+        log_file = os.path.join(results.log_dir, 'convert2annovar.log')
+        args = ["perl", "$ANNOVARPATH/convert2annovar.pl",
+                "-format", "vcf4", "-filter", "pass", 
+                "--includeinfo", "--withzyg", 
+                results.varscan_snv_file,
+                '> %s 2> %s' % (results.annovar_input_file, log_file)]
+        command = ' '.join(map(str, args))
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())    
+    #
+    # run annovar to filter variant calls
+    #
+    msg = "Annotation variants with Annovar"
+    output_files = [results.annovar_input_file]
+    input_files = [results.annovar_genome_summary_file]
+    skip = (((not pipeline.varscan_run) and 
+             (not pipeline.annovar_var)) or
+            many_up_to_date(output_files, input_files))
+    if skip:
+        shell_commands.append(bash_log(msg, "SKIPPED"))
+    else:
+        shell_commands.append(bash_log(msg, "INFO"))
+        log_file = os.path.join(results.log_dir, 'summarize_annovar.log')
+        args = ["perl $ANNOVARPATH/summarize_annovar.pl",
+                genome_static.annovar_args,
+                "--outfile", results.annovar_output_prefix,
+                results.annovar_input_file,
+                genome_static.annovar_db,
+                '> %s 2>&1' % (log_file)]
+        command = ' '.join(map(str, args))
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())  
+    #
     # write job finished file
     #
     msg = "Validating results"
@@ -1011,11 +1065,11 @@ def create_job(library, pipeline, server, config_xml_file,
     return config.JOB_SUCCESS
 
 def main():
-    logging.basicConfig(level=logging.DEBUG,
-                        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    logging.info("Assemblyline version %s" % (assemblyline.__version__))
-    logging.info("=============================")
     parser = argparse.ArgumentParser()
+    parser.add_argument("-v", "--verbose", action="store_true", 
+                        dest="verbose", default=False,
+                        help="show debugging logging messages "
+                        "[default=%(default)s]")
     parser.add_argument("-p", type=int, dest="num_processors", 
                         default=1,
                         help="Number of processors per job")
@@ -1025,6 +1079,10 @@ def main():
                         "analysis (warning: may consume large amounts of "
                         "disk space, only recommended for debugging "
                         "purposes")
+    parser.add_argument("-f", "--overwrite", action="store_true",
+                        default=False,
+                        help="overwrite existing job files "
+                        "[default=%(default)s]")
     inp_group = parser.add_mutually_exclusive_group(required=True)
     inp_group.add_argument("--xls", dest="library_xls_file", 
                            default=None,
@@ -1037,6 +1095,15 @@ def main():
     parser.add_argument("config_xml_file")
     parser.add_argument("server_name")
     args = parser.parse_args()
+    # set logging level
+    if args.verbose:
+        level = logging.DEBUG
+    else:
+        level = logging.INFO
+    logging.basicConfig(level=level,
+                        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logging.info("Assemblyline version %s" % (assemblyline.__version__))
+    logging.info("=============================")
     #
     # read and validate configuration file
     #
@@ -1065,7 +1132,7 @@ def main():
         logging.info("Reading library table '%s'" % (args.library_xls_file))
         libraries = read_library_table_xls(args.library_xls_file)
     #
-    # Process each library
+    # process each library
     #
     logging.info("Generating jobs")
     for library in libraries.itervalues():
@@ -1073,7 +1140,8 @@ def main():
         retcode = create_job(library, pipeline, server, 
                              args.config_xml_file, 
                              args.num_processors, 
-                             args.keep_tmp)
+                             args.keep_tmp,
+                             args.overwrite)
         if retcode != 0:
             logging.error("Library %s error" % (library.library_id))
     logging.info("Done")

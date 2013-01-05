@@ -20,6 +20,8 @@ def main():
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser()
     parser.add_argument("-n", dest="n", type=int, default=1000000)
+    parser.add_argument("--strand-spec-frac", dest="strand_spec_frac",
+                        type=float, default=0.90)
     parser.add_argument("--fragment-layout", dest="fragment_layout", 
                         default=FRAGMENT_LAYOUT_PAIRED)
     parser.add_argument("--min-frag-size", dest="min_frag_size", 
@@ -35,7 +37,8 @@ def main():
     args = parser.parse_args()
     samfh = pysam.Samfile(args.sam_file, "r")
     obj = RnaseqLibraryMetrics(args.min_frag_size, 
-                               args.max_frag_size)
+                               args.max_frag_size,
+                               args.strand_spec_frac)
     if args.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
         obj.from_stream(inspect_pe_sam(samfh, args.n))
     else:

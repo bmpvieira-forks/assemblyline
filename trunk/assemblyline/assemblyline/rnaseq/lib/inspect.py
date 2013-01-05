@@ -70,12 +70,13 @@ def inspect_pe_sam(samfh, max_frags=None):
     logging.debug("Useable fragments: %d" % (useable))
 
 class RnaseqLibraryMetrics(object):
-    def __init__(self, min_frag_size=0, max_frag_size=0):
+    def __init__(self, min_frag_size=0, max_frag_size=0, cutoff_frac=0.90):
         self.min_frag_size = max(0, min_frag_size)
         self.max_frag_size = max(0, max_frag_size)
         self.arr = array.array('L', (0 for x in xrange(self.min_frag_size, self.max_frag_size+1)))
         self.read1_rev_count = 0
         self.read1_count = 0
+        self.cutoff_frac = min(1.0, max(0.0, cutoff_frac))
 
     def clear_frag_size(self):
         self.arr = array.array('L', (0 for x in xrange(self.min_frag_size, self.max_frag_size+1)))
@@ -121,11 +122,11 @@ class RnaseqLibraryMetrics(object):
     def read1_strand_fraction(self):
         return self.read1_rev_count / float(self.read1_count)
 
-    def predict_library_type(self, cutoff_frac=0.90):
+    def predict_library_type(self):
         frac = self.read1_rev_count / float(self.read1_count)
-        if frac >= cutoff_frac:
+        if frac >= self.cutoff_frac:
             return 'fr-firststrand'
-        elif frac <= (1.0 - cutoff_frac):
+        elif frac <= (1.0 - self.cutoff_frac):
             return 'fr-secondstrand'
         else:
             return 'fr-unstranded'
@@ -199,19 +200,29 @@ class RnaseqLibraryMetrics(object):
     def to_file(self, fileh):
         print >>fileh, '\t'.join(["#read1_rev_count", "read1_count"])
         print >>fileh, '\t'.join(map(str, [self.read1_rev_count, self.read1_count]))
+        print >>fileh, '\t'.join(["#frac", "cutoff_frac", "library_type"])
+        print >>fileh, '\t'.join(map(str, [self.read1_strand_fraction(),
+                                           self.cutoff_frac,
+                                           self.predict_library_type()]))
         print >>fileh, '\t'.join(["#insert_size", "num_samples"])
         for i,x in enumerate(self.arr):
             print >>fileh, '\t'.join([str(i + self.min_frag_size), str(x)])        
 
     @staticmethod
-    def from_file(fileh):
+    def from_file(filename):
         res = RnaseqLibraryMetrics()
         # skip first comment
+        fileh = open(filename)
         fileh.next()
         # read strandedness
         fields = map(int, fileh.next().strip().split('\t'))
         res.read1_rev_count = fields[0]
         res.read1_count = fields[1]
+        # skip comment
+        fileh.next()
+        # read cutoff frac
+        fields = fileh.next().strip().split('\t')
+        res.cutoff_frac = float(fields[1])
         # read frag size distribution
         tlens = []
         counts = []
@@ -225,4 +236,5 @@ class RnaseqLibraryMetrics(object):
         res.min_frag_size = tlens[0]
         res.max_frag_size = tlens[-1]
         res.arr = array.array('L', counts)
+        fileh.close()
         return res

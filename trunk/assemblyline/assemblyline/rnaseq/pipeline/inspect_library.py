@@ -26,6 +26,7 @@ def inspect_rnaseq_library(bowtie_index,
                            result_file,
                            frag_size_dist_plot_file,
                            fastq_files,
+                           strand_spec_frac,
                            frag_size_mean_default,
                            frag_size_stdev_default,
                            max_num_samples,
@@ -55,6 +56,7 @@ def inspect_rnaseq_library(bowtie_index,
     # setup inspection process
     args = [sys.executable, 
             os.path.join(_pipeline_dir, "inspect_library_analysis.py"),
+            "--strand-spec-frac", strand_spec_frac,
             "--fragment-layout", fragment_layout,
             "-n", max_num_samples,
             "--min-frag-size", min_frag_size,
@@ -73,15 +75,15 @@ def inspect_rnaseq_library(bowtie_index,
             os.remove(result_file)
         return config.JOB_ERROR
     # plot fragment size distribution
-    obj = RnaseqLibraryMetrics.from_file(open(result_file))
-    obj.to_file(open(result_file, "w"))
+    obj = RnaseqLibraryMetrics.from_file(result_file)
     logging.info("Fragment size samples=%d mean=%f std=%f median=%d mode=%d" % 
                  (obj.num_frag_size_samples(), obj.mean(), obj.std(), 
                   obj.tlen_at_percentile(50.0), obj.mode()))    
     logging.info("Strandedness frac=%f samples=%d rev=%d predicted library type=%s" %
                  (obj.read1_rev_count / float(obj.read1_count), 
-                  obj.read1_count, obj.read1_rev_count,
-                  obj.predict_library_type(config.STRAND_SPECIFIC_CUTOFF_FRAC)))
+                  obj.read1_count, obj.read1_rev_count, obj.predict_library_type()))
+    logging.info("Writing metrics file")
+    obj.to_file(open(result_file, "w"))
     logging.info("Plotting fragment size distribution")
     obj.plot_frag_size_dist(frag_size_dist_plot_file, max_percentile=99.9)
     logging.info("Done")
@@ -91,6 +93,8 @@ def main():
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser()
+    parser.add_argument("--strand-spec-frac", dest="strand_spec_frac",
+                        type=float, default=0.90)
     parser.add_argument("--min-frag-size", dest="min_frag_size", 
                         type=int, default=0)
     parser.add_argument("--max-frag-size", dest="max_frag_size", 
@@ -110,6 +114,7 @@ def main():
                                   args.result_file,
                                   args.frag_size_dist_plot_file,
                                   args.fastq_files,
+                                  strand_spec_frac=args.strand_spec_frac,
                                   frag_size_mean_default=args.frag_size_mean_default,
                                   frag_size_stdev_default=args.frag_size_stdev_default,
                                   max_num_samples=args.max_num_samples,

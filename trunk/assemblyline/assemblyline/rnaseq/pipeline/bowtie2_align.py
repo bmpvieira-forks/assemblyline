@@ -14,25 +14,26 @@ import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
 
 def bowtie2_paired_align(bowtie2_index,
-                         fastq_files,
                          bam_file,
+                         read1_files,
+                         read2_files,
+                         unpaired_files,
                          extra_args,
                          num_processors,
                          tmp_dir):
     num_threads = max(1, num_processors-1)
+    # align with bowtie2
     bam_prefix = os.path.splitext(bam_file)[0]
     unsorted_bam_file = os.path.join(tmp_dir, os.path.basename(bam_prefix) + ".bam")
-    # start bowtie2
     args = ["bowtie2"]
     for arg in extra_args:        
         args.extend(arg.split())    
     args.extend(["-p", num_threads,
                  "--no-unal",
-                 "--no-mixed",
-                 "--no-discordant",
                  "-x", bowtie2_index,
-                 "-1", fastq_files[0],
-                 "-2", fastq_files[1]])
+                 "-1", ','.join(read1_files),
+                 "-2", ','.join(read2_files),
+                 "-U", ','.join(unpaired_files)])
     args = map(str, args)
     logging.debug("bowtie2 args: %s" % (' '.join(args)))
     aln_p = subprocess.Popen(args, stdout=subprocess.PIPE)
@@ -76,19 +77,46 @@ def main():
     parser.add_argument("-p", dest="num_processors", type=int, default=1)
     parser.add_argument("--tmp-dir", dest="tmp_dir", default="/tmp")
     parser.add_argument("--extra-arg", dest="extra_args", action="append", default=[])
+    parser.add_argument("-1", dest="read1_files", default=None)
+    parser.add_argument("-2", dest="read2_files", default=None)
+    parser.add_argument("-U", dest="unpaired_files", default=None)
     parser.add_argument("bowtie2_index")
     parser.add_argument("bam_file")
-    parser.add_argument("fastq_files", nargs="+")
     args = parser.parse_args()
-    for filename in args.fastq_files:
-        if not os.path.exists(filename):
-            parser.error("fastq file %s not found" % (filename))
-    bowtie2_paired_align(args.bowtie2_index,
-                         args.fastq_files,
-                         args.bam_file,
-                         args.extra_args,
-                         args.num_processors,
-                         args.tmp_dir)
+    read1_files = []
+    read2_files = []
+    unpaired_files = []
+    if args.read1_files is not None:
+        read1_files = args.read1_files.split(',')
+        for f in read1_files:
+            if not os.path.exists(f):
+                parser.error("fastq file %s not found" % (f))
+    if args.read2_files is not None:
+        read2_files = args.read2_files.split(',')
+        for f in read2_files:
+            if not os.path.exists(f):
+                parser.error("fastq file %s not found" % (f))
+    if args.unpaired_files is not None:
+        unpaired_files = args.unpaired_files.split(',')
+        for f in unpaired_files:
+            if not os.path.exists(f):
+                parser.error("fastq file %s not found" % (f))
+    if len(read1_files) != len(read2_files):
+        parser.error("number of read1 files != number of read2 files")
+    if not os.path.exists(args.tmp_dir):
+        parser.error("tmp dir %s not found" % (args.tmp_dir))
+    suffix = os.path.splitext(args.bam_file)[-1]
+    if suffix != ".bam":
+        parser.error("bam file %s must have .bam suffix" % (args.bam_file))    
+    tmp_dir = os.path.abspath(args.tmp_dir)
+    return bowtie2_paired_align(args.bowtie2_index,
+                                args.bam_file,
+                                read1_files,
+                                read2_files,
+                                unpaired_files,
+                                args.extra_args,
+                                args.num_processors,
+                                tmp_dir)
 
 if __name__ == '__main__': 
     sys.exit(main())

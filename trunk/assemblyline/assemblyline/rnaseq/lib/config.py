@@ -9,13 +9,14 @@ import logging
 import collections
 import xml.etree.cElementTree as etree
 
-from assemblyline.rnaseq.lib.base import check_executable, check_sam_file, indent_xml, file_exists_and_nz_size, parse_bool, bool_to_yesno
+from assemblyline.rnaseq.lib.base import check_executable, check_sam_file, \
+    indent_xml, file_exists_and_nz_size, parse_bool, bool_to_yesno, \
+    make_pe_files
 from assemblyline.rnaseq.lib.libtable import FRAGMENT_LAYOUT_PAIRED, FR_UNSTRANDED
 from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
 
 # default parameter values
 MIN_INSPECT_SAMPLES = 100
-STRAND_SPECIFIC_CUTOFF_FRAC = 0.90
 # job return codes
 JOB_SUCCESS = 0
 JOB_ERROR = 1
@@ -25,20 +26,18 @@ DEFAULT_COMPRESS_LEVEL = 5
 LIBRARY_XML_FILE = "library.xml"
 CONFIG_XML_FILE = "config.xml"
 # fastq file names
-FASTQ_PREFIXES = ("read1", "read2")
-FASTQ_FILES = [("%s.fq" % x) for x in FASTQ_PREFIXES] 
+FASTQ_FILES = make_pe_files('read','.fq')
 # fastqc
 FASTQC_DIR_EXTENSION = "_fastqc"
 FASTQC_DATA_FILE = "fastqc_data.txt"
 FASTQC_REPORT_FILE = "fastqc_report.html"
 # abundant sequence mapping
-ABUNDANT_SAM_FILES = ('abundant_hits_read1.sam', 'abundant_hits_read2.sam')
+ABUNDANT_SAM_FILES = make_pe_files('abundant_hits','.sam')
 ABUNDANT_BAM_FILE = 'abundant_hits.bam'
 SORTED_ABUNDANT_BAM_FILE = 'abundant_hits.srt.bam'
 ABUNDANT_COUNTS_FILE = 'abundant_counts.txt'
 # filtered fastq files
-FILTERED_FASTQ_PREFIX = 'filtered_read'
-FILTERED_FASTQ_FILES = tuple(("%s%d.fq" % (FILTERED_FASTQ_PREFIX,x)) for x in (1,2)) 
+FILTERED_FASTQ_FILES = make_pe_files('filtered_read','.fq')
 # rnaseq library inspection
 LIBRARY_METRICS_FILE = "library_metrics.txt"
 FRAG_SIZE_DIST_PLOT_FILE = "frag_size_dist_plot.pdf"
@@ -50,9 +49,9 @@ TOPHAT_JUNCTIONS_FILE = os.path.join(TOPHAT_DIR, "junctions.bed")
 TOPHAT_UNMAPPED_BAM_FILE = os.path.join(TOPHAT_DIR, "unmapped.bam")
 # unmapped fastq files
 UNMAPPED_UNPAIRED_FASTQ_PREFIX = 'unmapped_unpaired'
-UNMAPPED_UNPAIRED_FASTQ_FILES = tuple(("%s_%d.fq" % (UNMAPPED_UNPAIRED_FASTQ_PREFIX,x)) for x in (1,2))
+UNMAPPED_UNPAIRED_FASTQ_FILES = make_pe_files(UNMAPPED_UNPAIRED_FASTQ_PREFIX, '.fq')
 UNMAPPED_PAIRED_FASTQ_PREFIX = 'unmapped_paired'
-UNMAPPED_PAIRED_FASTQ_FILES = tuple(("%s_%d.fq" % (UNMAPPED_PAIRED_FASTQ_PREFIX,x)) for x in (1,2))
+UNMAPPED_PAIRED_FASTQ_FILES = make_pe_files(UNMAPPED_PAIRED_FASTQ_PREFIX, '.fq')
 # repeat elements
 REPEAT_ELEMENT_COUNTS_FILE = "repeat_element_counts.txt"
 # pathogens
@@ -83,6 +82,7 @@ PICARD_RNASEQ_METRICS = "picard.rnaseq_metrics"
 PICARD_RNASEQ_METRICS_PLOT_PDF = "picard.rnaseq_metrics_plot.pdf"
 # coverage bedgraph file
 COVERAGE_BIGWIG_PREFIX = "coverage"
+STRAND_SUFFIX_DICT = {"+": "pos", "-": "neg", ".": "none"}
 JUNCTIONS_BIGBED_FILE = "junctions.bb"
 # cufflinks output
 CUFFLINKS_AB_INITIO_DIR = "cufflinks_ab_initio"
@@ -99,6 +99,11 @@ PICARD_DUPLICATE_METRICS = "picard.duplicate_metrics"
 VARSCAN_SNV_FILE = "varscan_snvs.vcf"
 VARSCAN_SNV_BGZIP_FILE = "varscan_snvs.vcf.gz"
 VARSCAN_SNV_TABIX_FILE = "varscan_snvs.vcf.gz.tbi"
+# annovar output
+ANNOVAR_INPUT_FILE = "annovar_input.txt"
+ANNOVAR_OUTPUT_PREFIX = "annovar"
+ANNOVAR_EXOME_SUMMARY_FILE = "annovar.exome_summary.csv"
+ANNOVAR_GENOME_SUMMARY_FILE = "annovar.genome_summary.csv"
 # job complete
 JOB_DONE_FILE = "job.done"
 # job memory and runtime
@@ -176,7 +181,7 @@ def check_library_metrics(filename):
         is_valid = False
     else:
         try:
-            obj = RnaseqLibraryMetrics.from_file(open(filename))
+            obj = RnaseqLibraryMetrics.from_file(filename)
         except:
             is_valid = False    
     return is_valid
@@ -200,9 +205,9 @@ class RnaseqResults(object):
         for i in xrange(1,len(library.bam_files)+1):
             prefix = os.path.join(self.tmp_dir, "bam_file%03d" % (i))
             self.bam_fastq_prefixes.append(prefix)
-            self.bam_read1_files.append(prefix + "_1.fq")
+            self.bam_read1_files.append(prefix + "1.fq")
             if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
-                self.bam_read2_files.append(prefix + "_2.fq")
+                self.bam_read2_files.append(prefix + "2.fq")
         # FASTQ files
         self.copied_fastq_files = []
         if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
@@ -223,7 +228,7 @@ class RnaseqResults(object):
         # sorted abundant reads bam file
         self.sorted_abundant_bam_file = os.path.join(self.output_dir, SORTED_ABUNDANT_BAM_FILE)
         self.abundant_counts_file = os.path.join(self.output_dir, ABUNDANT_COUNTS_FILE)
-        # Fragment size distribution
+        # library metrics
         self.library_metrics_file = os.path.join(self.output_dir, LIBRARY_METRICS_FILE)
         self.frag_size_dist_plot_file = os.path.join(self.output_dir, FRAG_SIZE_DIST_PLOT_FILE)
         # tophat results
@@ -276,8 +281,6 @@ class RnaseqResults(object):
         self.cufflinks_known_gtf_file = os.path.join(self.cufflinks_known_dir, CUFFLINKS_TRANSCRIPTS_GTF_FILE)
         self.cufflinks_known_genes_fpkm_file = os.path.join(self.cufflinks_known_dir, CUFFLINKS_GENES_FILE)
         self.cufflinks_known_isoforms_fpkm_file = os.path.join(self.cufflinks_known_dir, CUFFLINKS_ISOFORMS_FILE)
-        # TODO: maintain backwards compatibility
-        self.cufflinks_gtf_file = os.path.join(self.output_dir, "cufflinks", "transcripts.gtf")
         # htseq-count output files
         self.htseq_count_known_file = os.path.join(self.output_dir, HTSEQ_COUNT_KNOWN_OUTPUT_FILE)
         # variant calling output
@@ -286,6 +289,10 @@ class RnaseqResults(object):
         self.varscan_snv_file = os.path.join(self.output_dir, VARSCAN_SNV_FILE)
         self.varscan_snv_bgzip_file = os.path.join(self.output_dir, VARSCAN_SNV_BGZIP_FILE)
         self.varscan_snv_tabix_file = os.path.join(self.output_dir, VARSCAN_SNV_TABIX_FILE)
+        # annovar
+        self.annovar_input_file = os.path.join(self.tmp_dir, ANNOVAR_INPUT_FILE)
+        self.annovar_output_prefix = os.path.join(self.output_dir, ANNOVAR_OUTPUT_PREFIX)
+        self.annovar_genome_summary_file = os.path.join(self.output_dir, ANNOVAR_GENOME_SUMMARY_FILE)
         # job finished file
         self.job_done_file = os.path.join(self.output_dir, JOB_DONE_FILE)
         self.pbs_stdout_file = os.path.join(self.log_dir, PBS_STDOUT_FILE)
@@ -389,14 +396,14 @@ class RnaseqResults(object):
             logging.error("Library %s missing coverage bigwig file(s)" % (self.library_id))
             missing_files.append(self.coverage_bigwig_prefix + ".bw")
             is_valid = False
-        else:            
-            obj = RnaseqLibraryMetrics.from_file(open(self.library_metrics_file))
-            predicted_library_type = obj.predict_library_type(STRAND_SPECIFIC_CUTOFF_FRAC)
+        else:
+            obj = RnaseqLibraryMetrics.from_file(self.library_metrics_file)
+            predicted_library_type = obj.predict_library_type()
             if predicted_library_type == FR_UNSTRANDED:
                 bigwig_files = [self.coverage_bigwig_prefix + ".bw"]
             else:
                 bigwig_files = [self.coverage_bigwig_prefix + "_pos.bw",
-                                self.coverage_bigwig_prefix + "_neg.bw"]
+                                self.coverage_bigwig_prefix + "_neg.bw"]                                 
             for f in bigwig_files:
                 if not file_exists_and_nz_size(f):
                     logging.error("Library %s missing coverage bigwig file %s" % (self.library_id))
@@ -463,6 +470,11 @@ class RnaseqResults(object):
                 logging.error("Library %s missing varscan snv tabix file" % (self.library_id))
                 missing_files.append(self.varscan_snv_tabix_file)
                 is_valid = False
+            if config.annovar_run:
+                if not file_exists_and_nz_size(self.annovar_genome_summary_file):
+                    logging.error("Library %s missing annovar genome summary csv file" % (self.library_id))
+                    missing_files.append(self.annovar_genome_summary_file)
+                    is_valid = False
         return is_valid, missing_files
 
 class GenomeConfig(object):
@@ -482,7 +494,8 @@ class GenomeConfig(object):
               "known_genes_gtf",
               "transcriptome_bowtie1_index",
               "transcriptome_bowtie2_index",
-              "cufflinks_mask_genes")
+              "cufflinks_mask_genes",
+              "annovar_db")
     
     @staticmethod
     def from_xml_elem(elem):
@@ -492,6 +505,7 @@ class GenomeConfig(object):
         ucsc_elem = elem.find("ucsc")
         g.ucsc_db = ucsc_elem.get("db")
         g.ucsc_org = ucsc_elem.get("org")
+        g.annovar_args = elem.findtext("annovar_args")
         for attrname in GenomeConfig.fields:
             setattr(g, attrname, elem.findtext(attrname))
         return g
@@ -502,6 +516,8 @@ class GenomeConfig(object):
         ucsc_elem = etree.SubElement(root, "ucsc")
         ucsc_elem.set("db", self.ucsc_db)
         ucsc_elem.set("org", self.ucsc_org)
+        elem = etree.SubElement(root, "annovar_args")
+        elem.text = self.annovar_args
         for attrname in GenomeConfig.fields:
             elem = etree.SubElement(root, attrname)
             elem.text = str(getattr(self, attrname))            
@@ -513,6 +529,7 @@ class GenomeConfig(object):
         g.root_dir = self.root_dir
         g.ucsc_db = self.ucsc_db
         g.ucsc_org = self.ucsc_org
+        g.annovar_args = self.annovar_args
         # expand paths
         for attrname in GenomeConfig.fields:
             abspath = os.path.join(str(root_dir), g.root_dir, getattr(self, attrname))
@@ -527,37 +544,38 @@ class GenomeConfig(object):
         return newtxt
 
     def is_valid(self, references_dir=""):
-        valid = True
         abs_root_dir = os.path.join(references_dir, self.root_dir)
         if not os.path.exists(abs_root_dir):
             logging.error("genome root directory %s not found" % (self.root_dir))
-            valid = False            
-        if not os.path.exists(os.path.join(abs_root_dir, self.abundant_bowtie2_index + ".1.bt2")):
-            logging.error("Abundant bowtie2 index %s not found" % (self.abundant_bowtie2_index))
+            return False
+        valid = True
+        g = self.resolve_paths(references_dir)
+        if not os.path.exists(g.abundant_bowtie2_index + ".1.bt2"):
+            logging.error("Abundant bowtie2 index %s not found" % (g.abundant_bowtie2_index))
             valid = False
-        if not os.path.exists(os.path.join(abs_root_dir, self.abundant_bowtie2_index + ".fa")):
-            logging.error("Abundant sequences fasta file %s not found" % (self.abundant_bowtie2_index))
+        if not os.path.exists(g.abundant_bowtie2_index + ".fa"):
+            logging.error("Abundant sequences fasta file %s not found" % (g.abundant_bowtie2_index))
             valid = False
-        if not os.path.exists(os.path.join(abs_root_dir, self.genome_bowtie1_index + ".1.ebwt")):
-            logging.error("Genome bowtie index %s not found" % (self.genome_bowtie1_index))
+        if not os.path.exists(g.genome_bowtie1_index + ".1.ebwt"):
+            logging.error("Genome bowtie index %s not found" % (g.genome_bowtie1_index))
             valid = False
-        if not os.path.exists(os.path.join(abs_root_dir, self.genome_bowtie2_index + ".1.bt2")):
-            logging.error("Genome bowtie2 index %s not found" % (self.genome_bowtie2_index))
+        if not os.path.exists(g.genome_bowtie2_index + ".1.bt2"):
+            logging.error("Genome bowtie2 index %s not found" % (g.genome_bowtie2_index))
             valid = False
-        if not os.path.exists(os.path.join(abs_root_dir, self.fragment_size_bowtie1_index + ".1.ebwt")):
-            logging.error("Fragment size bowtie index %s not found" % (self.fragment_size_bowtie1_index))
+        if not os.path.exists(g.fragment_size_bowtie1_index + ".1.ebwt"):
+            logging.error("Fragment size bowtie index %s not found" % (g.fragment_size_bowtie1_index))
             valid = False
-        if not os.path.exists(os.path.join(abs_root_dir, self.repbase_bowtie2_index + ".1.bt2")):
-            logging.error("Repeat element bowtie2 index %s not found" % (self.repbase_bowtie2_index))
+        if not os.path.exists(g.repbase_bowtie2_index + ".1.bt2"):
+            logging.error("Repeat element bowtie2 index %s not found" % (g.repbase_bowtie2_index))
             valid = False
-        if not os.path.exists(os.path.join(abs_root_dir, self.pathogen_bowtie2_index + ".1.bt2")):
-            logging.error("Pathogen bowtie2 index %s not found" % (self.pathogen_bowtie2_index))
+        if not os.path.exists(g.pathogen_bowtie2_index + ".1.bt2"):
+            logging.error("Pathogen bowtie2 index %s not found" % (g.pathogen_bowtie2_index))
             valid = False
-        if not os.path.exists(os.path.join(abs_root_dir, self.transcriptome_bowtie1_index + ".1.ebwt")):
-            logging.error("Transcriptome bowtie index %s not found" % (self.transcriptome_bowtie1_index))
+        if not os.path.exists(g.transcriptome_bowtie1_index + ".1.ebwt"):
+            logging.error("Transcriptome bowtie index %s not found" % (g.transcriptome_bowtie1_index))
             valid = False
-        if not os.path.exists(os.path.join(abs_root_dir, self.transcriptome_bowtie2_index + ".1.bt2")):
-            logging.error("Transcriptome bowtie2 index %s not found" % (self.transcriptome_bowtie2_index))
+        if not os.path.exists(g.transcriptome_bowtie2_index + ".1.bt2"):
+            logging.error("Transcriptome bowtie2 index %s not found" % (g.transcriptome_bowtie2_index))
             valid = False
         for attrname in ("genome_fasta_file",
                          "genome_lexicographical_fasta_file",
@@ -567,8 +585,9 @@ class GenomeConfig(object):
                          "picard_ribosomal_intervals",
                          "chrom_sizes",
                          "known_genes_gtf",
-                         "cufflinks_mask_genes"):
-            if not os.path.exists(os.path.join(abs_root_dir, getattr(self, attrname))):
+                         "cufflinks_mask_genes",
+                         "annovar_db"):
+            if not os.path.exists(getattr(g, attrname)):
                 logging.error("Annotation file '%s' not found" % (getattr(self, attrname)))
                 valid = False
         return valid
@@ -658,25 +677,26 @@ class PipelineConfig(object):
         tree = etree.parse(xmlfile)  
         root = tree.getroot()
         c = PipelineConfig()
-        # genome config
-        c.genomes = {}
-        for elem in root.findall("genome"):
-            g = GenomeConfig.from_xml_elem(elem)
-            c.genomes[g.name] = g
         # modules
         modules_elem = root.find("modules")
         c.modules = []
         for elem in modules_elem.findall("module"):
-            c.modules.append(elem.text)
+            c.modules.append(elem.text)            
+        # server setup
+        c.servers = {}
+        for elem in root.findall("server"):
+            server = ServerConfig.from_xml_elem(elem)
+            c.servers[server.name] = server
+        # genome config
+        c.genomes = {}
+        for elem in root.findall("genome"):
+            g = GenomeConfig.from_xml_elem(elem)
+            c.genomes[g.name] = g            
         # library metrics parameters
-        inspect_elem = root.find("inspect")
-        for attrname in ("max_inspect_samples",
-                         "min_fragment_size",
-                         "max_fragment_size",
-                         "fragment_size_mean_default",
-                         "fragment_size_stdev_default"):
-            val = inspect_elem.findtext(attrname)
-            setattr(c, attrname, int(val))
+        c.inspect_args = []
+        elem = root.find("inspect")
+        for arg_elem in elem.findall("arg"):
+            c.inspect_args.append(arg_elem.text)
         # tophat parameters
         c.tophat_args = []
         elem = root.find("tophat")
@@ -731,11 +751,9 @@ class PipelineConfig(object):
         c.varscan_run = parse_bool(elem.get("run", "no"))
         for arg_elem in elem.findall("arg"):
             c.varscan_args.append(arg_elem.text)
-        # server setup
-        c.servers = {}
-        for elem in root.findall("server"):
-            server = ServerConfig.from_xml_elem(elem)
-            c.servers[server.name] = server
+        # annovar parameters
+        elem = root.find("annovar")
+        c.annovar_run = parse_bool(elem.get("run", "no"))
         return c
 
     def to_xml(self, output_file):
@@ -745,15 +763,19 @@ class PipelineConfig(object):
         for m in self.modules:
             elem = etree.SubElement(modules_elem, "module")
             elem.text = m
+        # servers
+        for server in self.servers.itervalues():            
+            elem = etree.SubElement(root, "server")
+            server.to_xml(elem)
+        # genomes
+        for genome in self.genomes.itervalues():
+            elem = etree.SubElement(root, "genome")
+            genome.to_xml(elem)
         # library metrics
         inspect_elem = etree.SubElement("inspect")
-        for attrname in ("max_inspect_samples",
-                         "fragment_size_mean_default",
-                         "fragment_size_stdev_default",
-                         "min_fragment_size",
-                         "max_fragment_size"):
-            elem = etree.SubElement(inspect_elem, attrname)
-            elem.text = str(getattr(self, attrname))
+        for arg in self.inspect_args:
+            elem = etree.SubElement(inspect_elem, "arg")
+            elem.text = arg
         # tophat parameters
         tophat_elem = etree.SubElement(root, "tophat")
         for arg in self.tophat_args:
@@ -806,14 +828,9 @@ class PipelineConfig(object):
         for arg in self.varscan_args:
             elem = etree.SubElement(varscan_elem, "arg")
             elem.text = arg
-        # servers
-        for server in self.servers.itervalues():            
-            elem = etree.SubElement(root, "server")
-            server.to_xml(elem)
-        # genomes
-        for genome in self.genomes.itervalues():
-            elem = etree.SubElement(root, "genome")
-            genome.to_xml(elem)
+        # annovar parameters
+        annovar_elem = etree.SubElement(root, "annovar")
+        annovar_elem.set("run", bool_to_yesno(self.annovar_run))
         # output files
         f = open(output_file, "w")
         # indent for pretty printing
@@ -881,6 +898,20 @@ class PipelineConfig(object):
             else:
                 logging.error("VarScan jarfile '%s' not found" % (jarfile))
                 valid = False
+        # annovar
+        if "ANNOVARPATH" not in os.environ:
+            logging.debug("ANNOVARPATH environment variable not set")
+            valid = False
+        else:
+            swdir = os.environ["ANNOVARPATH"]
+            scripts = [os.path.join(swdir, "convert2annovar.pl"),
+                       os.path.join(swdir, "summarize_annovar.pl")]
+            for script in scripts:
+                if os.path.exists(script):
+                    logging.error("Checking for Annovar script '%s'... found" % (script))
+                else:
+                    logging.error("Annovar script '%s' not found" % (script))
+                    valid = False
         # check for bx python library
         try:
             import bx.intervals.intersection

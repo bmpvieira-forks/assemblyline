@@ -82,13 +82,14 @@ def main():
         parser.error("library_dir '%s' not found" % (args.library_dir))
     if not os.path.isdir(args.library_dir):
         parser.error("library_dir '%s' not a directory" % (args.library_dir))
-    if args.httplink:
-        if (args.scratch_dir is None):
-            parser.error("specify '--scratch-dir' to write temporary track file")
-        if not os.path.exists(args.scratch_dir):
-            parser.error("scratch_dir '%s' not found" % (args.scratch_dir))
-        if not os.path.isdir(args.scratch_dir):
-            parser.error("scratch_dir '%s' not not a directory" % (args.scratch_dir))
+    if args.scratch_dir is None:
+        scratch_dir = os.getcwd()
+    elif not os.path.exists(args.scratch_dir):
+        parser.error("scratch_dir '%s' not found" % (args.scratch_dir))
+    elif not os.path.isdir(args.scratch_dir):
+        parser.error("scratch_dir '%s' not not a directory" % (args.scratch_dir))
+    else:
+        scratch_dir = os.path.abspath(args.scratch_dir)
     if not args.baseurl:
         parser.error("--baseurl not specified")
     if args.position is not None:
@@ -111,8 +112,8 @@ def main():
     # get results
     results = config.RnaseqResults(library, library_dir)
     # predict library type
-    obj = RnaseqLibraryMetrics.from_file(open(results.library_metrics_file))
-    library_type = obj.predict_library_type(config.STRAND_SPECIFIC_CUTOFF_FRAC)    
+    obj = RnaseqLibraryMetrics.from_file(results.library_metrics_file)
+    library_type = obj.predict_library_type()
     # build track lines
     track_lines = []
     #
@@ -124,7 +125,7 @@ def main():
     track_line = ' '.join(['track type=bam',
                            'name="%s"' % (track_name),
                            'description="%s"' % (track_desc),
-                           'visibility=pack',
+                           'visibility=hide',
                            'pairEndsByName=.',
                            'pairSearchRange=%d' % (args.pairSearchRange),
                            'bamColorMode=strand',
@@ -141,7 +142,7 @@ def main():
     track_line = ' '.join(['track type=bam',
                            'name="%s"' % (track_name),
                            'description="%s"' % (track_desc),
-                           'visibility=pack',
+                           'visibility=hide',
                            'pairEndsByName=.',
                            'pairSearchRange=%d' % (args.maxWindowToDraw),
                            'bamColorMode=strand',
@@ -197,7 +198,7 @@ def main():
     #
     # http links
     #
-    track_file = os.path.abspath(os.path.join(args.scratch_dir, "%s.ucsc_tracks.txt" % (results.library_id)))
+    track_file = os.path.abspath(os.path.join(scratch_dir, "%s.ucsc_tracks.txt" % (results.library_id)))
     track_file_url = "%s%s" % (args.baseurl, urllib.pathname2url(track_file))
     url_params = ['%sdb=%s' % (UCSC_BASEURL, genome.ucsc_db)]
     if position is not None:
@@ -220,11 +221,6 @@ def main():
             print "browser position %s" % (position)
         for line in track_lines:
             print line
-
-#function getTinyUrl($url) { 
-#    $tinyurl = file_get_contents("http://tinyurl.com/api-create.php?url=".$url); 
-#    return $tinyurl; 
-#}
 
 if __name__ == '__main__':
     sys.exit(main())

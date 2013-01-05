@@ -284,10 +284,8 @@ def annotate_gtf_parallel(input_gtf_file,
         p.daemon = True
         p.start()
         procs.append(p)
-    fileh = open(input_gtf_file)
-    for lines in parse_loci(fileh):
+    for lines in parse_loci(open(input_gtf_file)):
         input_queue.put(lines)
-    fileh.close()
     # stop workers
     for p in procs:
         input_queue.put([])
@@ -316,12 +314,6 @@ def output_by_category(gtf_file, library_ids, output_dir):
     # function to gather transcript attributes
     lib_counts_dict = collections.defaultdict(lambda: LibCounts())
     for locus_transcripts in parse_gtf(open(gtf_file)):
-#        locus_chrom = locus_transcripts[0].chrom
-#        locus_start = locus_transcripts[0].start
-#        locus_end = max(t.end for t in locus_transcripts)
-#        logging.debug("[LOCUS] %s:%d-%d %d transcripts" % 
-#                      (locus_chrom, locus_start, locus_end, 
-#                       len(locus_transcripts)))
         # write classification table files
         category_features = collections.defaultdict(lambda: [])
         for t in locus_transcripts:
@@ -444,6 +436,8 @@ def main():
     # cleanup
     if os.path.exists(tmp_dir):
         shutil.rmtree(tmp_dir)
+    logging.info("Done")
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main())

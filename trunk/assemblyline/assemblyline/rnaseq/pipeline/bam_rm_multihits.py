@@ -70,7 +70,7 @@ def parse_pe_readnum_in_flags(bamfh, fix_qname=True):
     if num_reads > 0:
         yield pe_reads
 
-def bam_pe_rm_multihits(bamfh, outfh, readnum_in_qname):
+def bam_pe_rm_multihits(bamfh, outfh, unpairedfh, readnum_in_qname):
     num_frags = 0
     orphan_frags = 0
     if readnum_in_qname:
@@ -80,20 +80,29 @@ def bam_pe_rm_multihits(bamfh, outfh, readnum_in_qname):
     for pe_reads in parse_pe_reads_iter:
         n1 = len(pe_reads[0])
         n2 = len(pe_reads[1])
-        if (n1 == 0 or n2 == 0):
+        assert (n1 > 0 or n2 > 0)
+        if (n1 == 0):
+            r2 = pe_reads[1][0]
+            r2.is_secondary = False
             orphan_frags += 1
-            continue
-        r1 = pe_reads[0][0]
-        r2 = pe_reads[1][0]
-        r1.is_secondary = False
-        r2.is_secondary = False
-        outfh.write(r1)
-        outfh.write(r2)
-        num_frags += 1
-    outfh.close()
-    bamfh.close()
-    logging.info("Found %d fragments" % (num_frags))
-    logging.info("Skipped %d orphan fragments" % (orphan_frags))
+            if unpairedfh is not None:
+                unpairedfh.write(r2)
+        elif (n2 == 0):
+            r1 = pe_reads[0][0]
+            r1.is_secondary = False
+            orphan_frags += 1
+            if unpairedfh is not None:
+                unpairedfh.write(r1)
+        else:
+            r1 = pe_reads[0][0]
+            r2 = pe_reads[1][0]
+            r1.is_secondary = False
+            r2.is_secondary = False
+            outfh.write(r1)
+            outfh.write(r2)
+            num_frags += 1            
+    logging.info("Found %d paired fragments" % (num_frags))
+    logging.info("Found %d orphan fragments" % (orphan_frags))
 
 def parse_sr_reads(bamfh, fix_qname=True):
     reads = []
@@ -128,6 +137,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--fragment-layout', dest="fragment_layout", default="paired")
     parser.add_argument('--readnum-in-qname', dest="readnum_in_qname", action="store_true", default=False)
+    parser.add_argument('--unpaired-bam', dest="unpaired_bam", default=None)
     parser.add_argument('bam_file')
     parser.add_argument('output_file')
     args = parser.parse_args()
@@ -137,13 +147,17 @@ def main():
     bamfh = pysam.Samfile(args.bam_file, "rb")
     sam = (args.output_file == "-" or 
            os.path.splitext(args.output_file)[-1] == ".sam")
-    if sam:
-        outfh = pysam.Samfile(args.output_file, "wh", template=bamfh)
-    else:
-        outfh = pysam.Samfile(args.output_file, "wb", template=bamfh)
+    mode = "wh" if sam else "wb"
+    # output files
+    outfh = pysam.Samfile(args.output_file, mode, template=bamfh)
+    unpairedfh = None    
     try:
         if args.fragment_layout == "paired":
-            bam_pe_rm_multihits(bamfh, outfh, args.readnum_in_qname)
+            if args.unpaired_bam is not None:
+                unpairedfh = pysam.Samfile(args.unpaired_bam, mode, template=bamfh)
+            bam_pe_rm_multihits(bamfh, outfh, unpairedfh, args.readnum_in_qname)
+            if unpairedfh is not None:
+                unpairedfh.close()
         else:
             bam_sr_rm_multihits(bamfh, outfh)
     except Exception as inst:
