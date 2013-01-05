@@ -135,15 +135,17 @@
     <module>HTSeq/0.5.3p9</module>
     <module>varscan/2.3.3</module>
     <module>tabix/0.2.6</module>
+    <module>annovar/0.11.12</module>
   </modules>
 
   <!-- library inspection parameters -->
   <inspect>
-    <max_inspect_samples>1000000</max_inspect_samples>
-    <min_fragment_size>0</min_fragment_size>
-    <max_fragment_size>1000</max_fragment_size>
-    <fragment_size_mean_default>200</fragment_size_mean_default>
-    <fragment_size_stdev_default>40</fragment_size_stdev_default>
+    <arg>-n 1000000</arg>
+    <arg>--strand-spec-frac 0.90</arg>
+    <arg>--min-frag-size 0</arg>
+    <arg>--max-frag-size 1000</arg>
+    <arg>--frag-size-mean 200</arg>
+    <arg>--frag-size-stdev 40</arg>
   </inspect>
 
   <!-- tophat parameters -->
@@ -160,7 +162,10 @@
   
   <!-- pathogen screen parameters -->
   <pathogens>
+    <bt2arg>-I 0</bt2arg>
+    <bt2arg>-X 1000</bt2arg>
     <bt2arg>--end-to-end</bt2arg>
+    <bt2arg>--very-sensitive</bt2arg>
   </pathogens>
 
   <!-- tophat-fusion parameters -->
@@ -222,6 +227,9 @@
     <arg>--strand-filter 0</arg>
   </varscan>
 
+  <!-- annovar parameters -->
+  <annovar run="yes"/>
+
   <!-- genome-specific file locations -->
   <genome name="human" root_dir="Homo_sapiens_UCSC_hg19">
     <ucsc db="hg19" org="human"/>
@@ -242,5 +250,7 @@
     <transcriptome_bowtie1_index>Sequence/Transcriptome/Bowtie1Index/transcriptome</transcriptome_bowtie1_index>
     <transcriptome_bowtie2_index>Sequence/Transcriptome/Bowtie2Index/transcriptome</transcriptome_bowtie2_index>
     <cufflinks_mask_genes>Annotation/cufflinks_mask_genes.gtf</cufflinks_mask_genes>
+    <annovar_db>Annotation/annovardb</annovar_db>
+    <annovar_args>--buildver hg19 --remove --verdbsnp 135 --ver1000g 1000g2012apr --veresp 6500 --genetype ensgene --alltranscript</annovar_args>
   </genome>
 </rnaseq>

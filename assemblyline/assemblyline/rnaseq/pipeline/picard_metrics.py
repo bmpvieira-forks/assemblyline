@@ -9,7 +9,6 @@ import argparse
 import logging
 import subprocess
 
-import assemblyline.rnaseq.lib.config as config
 from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
 
 def get_picard_strand_specificity(library_type):
@@ -35,8 +34,8 @@ def main():
     parser.add_argument("chart_file")
     args = parser.parse_args()    
     logging.debug("Predicting library type from metrics file")
-    obj = RnaseqLibraryMetrics.from_file(open(args.library_metrics_file))
-    predicted_library_type = obj.predict_library_type(config.STRAND_SPECIFIC_CUTOFF_FRAC)
+    obj = RnaseqLibraryMetrics.from_file(args.library_metrics_file)
+    predicted_library_type = obj.predict_library_type()
     logging.debug("Predicted library type: %s" % (predicted_library_type))
     picard_args = ["java", "-Xmx4g", "-jar", 
                    os.path.join(args.picard_dir, "CollectRnaSeqMetrics.jar"),

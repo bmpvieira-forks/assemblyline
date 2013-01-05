@@ -223,6 +223,9 @@ def parse_pe_reads(bamfh):
     if num_reads > 0:
         yield pe_reads
 
+def make_pe_files(prefix,suffix='.fq'):
+    return tuple(("%s%d%s" % (prefix,x,suffix)) for x in (1,2)) 
+
 def check_executable(filename):
     # check that samtools binary exists
     devnullfh = open(os.devnull, 'w')        

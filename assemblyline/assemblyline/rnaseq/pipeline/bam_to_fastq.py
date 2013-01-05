@@ -10,11 +10,10 @@ import sys
 
 import pysam
 
-from assemblyline.rnaseq.lib.base import DNA_reverse_complement
+from assemblyline.rnaseq.lib.base import DNA_reverse_complement, make_pe_files
 
 def bam_to_fastq(input_file, fastq_prefix):
-    fastq_files = [fastq_prefix + "_1.fq", 
-                   fastq_prefix + "_2.fq"]
+    fastq_files = make_pe_files(fastq_prefix,'.fq')
     fastq_fhs = [open(f, "w") for f in fastq_files]
     if (input_file == "-" or os.path.splitext(input_file)[-1] == ".sam"): 
         mode = "r"
