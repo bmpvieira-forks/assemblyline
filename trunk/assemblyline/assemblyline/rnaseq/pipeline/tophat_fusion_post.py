@@ -467,8 +467,15 @@ def filter_fusion(bwt_idx_prefix, refgene_file, ensgene_file, params, fusion_inp
                 continue
 
             if (chr1 != chr2 and num_unsupport_reads > num_reads) or \
-                    (chr1 == chr2 and num_unsupport_reads > all + num_pair_ends + 5):
+                (chr1 == chr2 and num_unsupport_reads > all + num_pair_ends + 5):
                 continue
+
+            if (chr1 != chr2 and num_unsupport_reads > num_reads) or \
+                (chr1 == chr2 and num_unsupport_reads > all + num_pair_ends + 5):
+                ###PATCH shanker originally added this if statement and 
+                ###mkiyer incorporated 1/5/2013
+                if (chr1 != chr2 and num_reads < num_unsupport_reads * 0.05):
+                    continue
 
             pairs = []
             if num_pair_ends >= 1:
