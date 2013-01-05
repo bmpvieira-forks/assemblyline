@@ -48,11 +48,17 @@ TOPHAT_BAM_INDEX_FILE = TOPHAT_BAM_FILE + ".bai"
 TOPHAT_JUNCTIONS_FILE = os.path.join(TOPHAT_DIR, "junctions.bed")
 TOPHAT_UNMAPPED_BAM_FILE = os.path.join(TOPHAT_DIR, "unmapped.bam")
 # unmapped fastq files
-UNMAPPED_UNPAIRED_FASTQ_PREFIX = 'unmapped_unpaired'
-UNMAPPED_UNPAIRED_FASTQ_FILES = make_pe_files(UNMAPPED_UNPAIRED_FASTQ_PREFIX, '.fq')
-UNMAPPED_PAIRED_FASTQ_PREFIX = 'unmapped_paired'
-UNMAPPED_PAIRED_FASTQ_FILES = make_pe_files(UNMAPPED_PAIRED_FASTQ_PREFIX, '.fq')
+UNMAPPED_FASTQ_PREFIX = 'unmapped'
+UNMAPPED_UNPAIRED_FASTQ_FILES = []
+UNMAPPED_PAIRED_FASTQ_FILES = []
+for x in (1,2):
+    filename = "%s.paired.%d.fq" % (UNMAPPED_FASTQ_PREFIX, x)
+    UNMAPPED_PAIRED_FASTQ_FILES.append(filename)
+    filename = "%s.unpaired.%d.fq" % (UNMAPPED_FASTQ_PREFIX, x)
+    UNMAPPED_UNPAIRED_FASTQ_FILES.append(filename)
 # repeat elements
+REPEAT_ELEMENT_BAM_FILE = "repeat_element_hits.bam"
+REPEAT_ELEMENT_BAM_INDEX_FILE = "repeat_element_hits.bam.bai"
 REPEAT_ELEMENT_COUNTS_FILE = "repeat_element_counts.txt"
 # pathogens
 PATHOGEN_BAM_FILE = "pathogen_hits.bam"
@@ -208,13 +214,13 @@ class RnaseqResults(object):
             self.bam_read1_files.append(prefix + "1.fq")
             if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
                 self.bam_read2_files.append(prefix + "2.fq")
-        # FASTQ files
+        # fastq files
         self.copied_fastq_files = []
         if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
             self.copied_fastq_files = [os.path.join(self.tmp_dir, x) for x in FASTQ_FILES]
         else:
             self.copied_fastq_files = [os.path.join(self.tmp_dir, FASTQ_FILES[0])]
-        # FASTQC results
+        # fastqc results
         self.fastqc_data_files = []
         self.fastqc_report_files = []
         for readnum in xrange(len(self.copied_fastq_files)):
@@ -237,7 +243,7 @@ class RnaseqResults(object):
         self.tophat_bam_index_file = os.path.join(self.output_dir, TOPHAT_BAM_INDEX_FILE)
         self.tophat_juncs_file = os.path.join(self.output_dir, TOPHAT_JUNCTIONS_FILE)
         self.tophat_unmapped_bam_file = os.path.join(self.output_dir, TOPHAT_UNMAPPED_BAM_FILE)
-        # Picard metrics
+        # picard metrics
         self.alignment_summary_metrics = os.path.join(self.output_dir, PICARD_ALIGNMENT_SUMMARY_METRICS)
         self.insert_size_histogram_pdf = os.path.join(self.output_dir, PICARD_INSERT_SIZE_HISTOGRAM_PDF)
         self.insert_size_metrics = os.path.join(self.output_dir, PICARD_INSERT_SIZE_METRICS)
@@ -247,22 +253,21 @@ class RnaseqResults(object):
         self.quality_distribution_pdf = os.path.join(self.output_dir, PICARD_QUALITY_DISTRIBUTION_PDF)
         self.rnaseq_metrics = os.path.join(self.output_dir, PICARD_RNASEQ_METRICS)
         self.rnaseq_metrics_pdf = os.path.join(self.output_dir, PICARD_RNASEQ_METRICS_PLOT_PDF)
-        # unmapped unpaired fastq files
-        self.unmapped_unpaired_fastq_prefix = os.path.join(self.tmp_dir, UNMAPPED_UNPAIRED_FASTQ_PREFIX)
-        self.unmapped_unpaired_fastq_files = []
-        for readnum in xrange(len(self.copied_fastq_files)):
-            self.unmapped_unpaired_fastq_files.append(os.path.join(self.tmp_dir, UNMAPPED_UNPAIRED_FASTQ_FILES[readnum]))
-        # unmapped paired fastq files
-        self.unmapped_paired_fastq_prefix = os.path.join(self.tmp_dir, UNMAPPED_PAIRED_FASTQ_PREFIX)
+        # unmapped fastq files
+        self.unmapped_fastq_prefix = os.path.join(self.tmp_dir, UNMAPPED_FASTQ_PREFIX)
         self.unmapped_paired_fastq_files = []
-        for readnum in xrange(len(self.copied_fastq_files)):
+        self.unmapped_unpaired_fastq_files = []
+        for readnum in xrange(2):
+            self.unmapped_unpaired_fastq_files.append(os.path.join(self.tmp_dir, UNMAPPED_UNPAIRED_FASTQ_FILES[readnum]))
             self.unmapped_paired_fastq_files.append(os.path.join(self.tmp_dir, UNMAPPED_PAIRED_FASTQ_FILES[readnum]))
-        # repeat element results
-        self.repeat_element_counts_file = os.path.join(self.output_dir, REPEAT_ELEMENT_COUNTS_FILE)
         # pathogen screen results
         self.pathogen_bam_file = os.path.join(self.output_dir, PATHOGEN_BAM_FILE)
         self.pathogen_bam_index_file = os.path.join(self.output_dir, PATHOGEN_BAM_INDEX_FILE)
         self.pathogen_counts_file = os.path.join(self.output_dir, PATHOGEN_COUNTS_FILE)
+        # repeat element results
+        self.repeat_element_bam_file = os.path.join(self.output_dir, REPEAT_ELEMENT_BAM_FILE)
+        self.repeat_element_bam_index_file = os.path.join(self.output_dir, REPEAT_ELEMENT_BAM_INDEX_FILE)
+        self.repeat_element_counts_file = os.path.join(self.output_dir, REPEAT_ELEMENT_COUNTS_FILE)
         # bigwig file prefix
         self.coverage_bigwig_prefix = os.path.join(self.output_dir, COVERAGE_BIGWIG_PREFIX)
         self.junctions_bigbed_file = os.path.join(self.output_dir, JUNCTIONS_BIGBED_FILE)
@@ -375,6 +380,11 @@ class RnaseqResults(object):
         if not file_exists_and_nz_size(self.rnaseq_metrics):
             logging.error("Library %s missing picard rnaseq metrics" % (self.library_id))
             missing_files.append(self.rnaseq_metrics)
+            is_valid = False
+        # check repeat elements bam file
+        if not check_sam_file(self.repeat_element_bam_file, isbam=True):
+            logging.error("Library %s missing/corrupt repeat element BAM file" % (self.library_id))
+            missing_files.append(self.repeat_element_bam_file)
             is_valid = False
         # check repeat elements file
         if not file_exists_and_nz_size(self.repeat_element_counts_file):
