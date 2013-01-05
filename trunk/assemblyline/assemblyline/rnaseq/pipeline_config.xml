@@ -153,12 +153,6 @@
     <arg>--GTF $known_genes_gtf</arg>
     <arg>--transcriptome-index $transcriptome_bowtie2_index</arg>
   </tophat>
-
-  <!-- repeat element parameters -->
-  <repeat_elements>
-    <bt2arg>--local</bt2arg>
-    <bt2arg>--very-sensitive-local</bt2arg>
-  </repeat_elements>
   
   <!-- pathogen screen parameters -->
   <pathogens>
@@ -167,6 +161,14 @@
     <bt2arg>--end-to-end</bt2arg>
     <bt2arg>--very-sensitive</bt2arg>
   </pathogens>
+
+  <!-- repeat element parameters -->
+  <repeat_elements>
+    <bt2arg>-I 0</bt2arg>
+    <bt2arg>-X 1000</bt2arg>
+    <bt2arg>--local</bt2arg>
+    <bt2arg>--very-sensitive-local</bt2arg>
+  </repeat_elements>
 
   <!-- tophat-fusion parameters -->
   <tophatfusion run="yes">

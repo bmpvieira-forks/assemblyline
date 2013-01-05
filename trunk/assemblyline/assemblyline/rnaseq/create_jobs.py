@@ -281,7 +281,6 @@ def create_job(library, pipeline, server, config_xml_file,
                     os.path.join(_pipeline_dir, "extract_fastq_from_bam.py"),
                     "--readnum-in-qname",
                     "--tmp-dir", results.tmp_dir,
-                    "--fragment-layout", library.fragment_layout,
                     library.bam_files[i], prefix] 
             command = ' '.join(map(str, args))
             shell_commands.append(command)
@@ -802,7 +801,7 @@ def create_job(library, pipeline, server, config_xml_file,
     msg = "Assembling transcriptome with Cufflinks"
     input_files = [results.library_metrics_file, 
                    results.tophat_bam_file]
-    output_files = [results.cufflinks_ab_initio_gtf_file]    
+    output_files = [results.cufflinks_ab_initio_gtf_file]  
     skip = ((not pipeline.cufflinks_ab_initio_run) or
             many_up_to_date(output_files, input_files))
     if skip:
