@@ -617,9 +617,10 @@ def create_job(library, pipeline, server, config_xml_file,
     #
     # extract unmapped paired fastq files for realignment
     #
-    msg = "Converting unmapped BAM to paired FASTQ for realignment"
+    msg = "Converting unmapped BAM to FASTQ for realignment"
     input_files = [results.tophat_unmapped_bam_file]
-    output_files = results.unmapped_paired_fastq_files
+    output_files = (results.unmapped_paired_fastq_files + 
+                    results.unmapped_unpaired_fastq_files)
     skip = many_up_to_date(output_files, input_files)
     if skip:
         logging.debug("[SKIPPED] %s" % msg)
@@ -627,23 +628,23 @@ def create_job(library, pipeline, server, config_xml_file,
     else:
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'unmapped_bam_to_paired_fastq.log')
+        log_file = os.path.join(results.log_dir, 'unmapped_bam_to_fastq.log')
         # convert bam to paired fastq
         args = ["python",
                 os.path.join(_pipeline_dir, "extract_fastq_from_bam.py"),
-                "--fragment-layout", FRAGMENT_LAYOUT_PAIRED,
                 "--tmp-dir", results.tmp_dir,
                 results.tophat_unmapped_bam_file,
-                results.unmapped_paired_fastq_prefix,
+                results.unmapped_fastq_prefix,
                 '> %s 2>&1' % (log_file)]
         command = ' '.join(map(str, args))
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode(msg))
     #
-    # map pairs to pathogen sequences
+    # align to pathogen sequences
     #
-    msg = "Aligning pathogen sequences"
-    input_files = results.unmapped_paired_fastq_files
+    msg = "Aligning to pathogen sequences"
+    input_files = (results.unmapped_paired_fastq_files + 
+                   results.unmapped_unpaired_fastq_files)
     output_files = [results.pathogen_bam_file]
     skip = many_up_to_date(output_files, input_files)
     if skip:
@@ -654,15 +655,17 @@ def create_job(library, pipeline, server, config_xml_file,
         shell_commands.append(bash_log(msg, "INFO"))
         log_file = os.path.join(results.log_dir, 'bowtie2_align_pathogens.log')        
         args = ["python",
-                os.path.join(_pipeline_dir, "bowtie2_paired_align.py"),
+                os.path.join(_pipeline_dir, "bowtie2_align.py"),
                 "-p", num_processors,
-                "--tmp-dir", results.tmp_dir]
+                "--tmp-dir", results.tmp_dir,
+                "-1", results.unmapped_paired_fastq_files[0],
+                "-2", results.unmapped_paired_fastq_files[1],
+                "-U", ','.join(results.unmapped_unpaired_fastq_files)]
         # extra args
         for arg in pipeline.pathogen_screen_bt2_args:
             args.append('--extra-arg="%s"' % arg)
         args.extend([genome_static.pathogen_bowtie2_index,                     
                      results.pathogen_bam_file])
-        args.extend(results.unmapped_paired_fastq_files)
         args.append('> %s 2>&1' % (log_file))
         command = ' '.join(map(str, args))
         logging.debug("\tcommand: %s" % (command))
@@ -671,7 +674,7 @@ def create_job(library, pipeline, server, config_xml_file,
     #
     # count pathogen sequences
     #
-    msg = "Counting pathogen sequences"
+    msg = "Counting pathogen alignments"
     input_files = [results.pathogen_bam_file]
     output_files = [results.pathogen_counts_file]
     skip = many_up_to_date(output_files, input_files)
@@ -682,43 +685,22 @@ def create_job(library, pipeline, server, config_xml_file,
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         log_file = os.path.join(results.log_dir, 'pathogen_counts.log')
-        command = ("samtools idxstats %s > %s 2> %s" % 
-                   (results.pathogen_bam_file,
-                    results.pathogen_counts_file,
-                    log_file))
+        args = ["python",
+                os.path.join(_pipeline_dir, "bowtie2_quantify.py"),
+                results.pathogen_bam_file,
+                results.pathogen_counts_file,
+                '> %s 2>&1' % (log_file)]
+        command = ' '.join(map(str, args))
+        logging.debug("\tcommand: %s" % (command))
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())            
     #
-    # extract unmapped unpaired fastq files for realignment
+    # align to repeat elements
     #
-    msg = "Converting unmapped BAM to unpaired FASTQ for realignment"
-    input_files = [results.tophat_unmapped_bam_file]
-    output_files = results.unmapped_unpaired_fastq_files
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.debug("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg)
-        shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'unmapped_bam_to_unpaired_fastq.log')
-        # convert bam to paired fastq
-        args = ["python",
-                os.path.join(_pipeline_dir, "extract_fastq_from_bam.py"),
-                "--fragment-layout", FRAGMENT_LAYOUT_SINGLE,
-                "--tmp-dir", results.tmp_dir,
-                results.tophat_unmapped_bam_file,
-                results.unmapped_unpaired_fastq_prefix,
-                '> %s 2>&1' % (log_file)]
-        command = ' '.join(map(str, args))
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode(msg))
-    #
-    # analyze repeat element content
-    #
-    msg = "Aligning and counting repeat element sequences"
-    input_files = results.unmapped_unpaired_fastq_files
-    output_files = [results.repeat_element_counts_file]
+    msg = "Aligning to repeat element sequences"
+    input_files = (results.unmapped_paired_fastq_files + 
+                   results.unmapped_unpaired_fastq_files)
+    output_files = [results.repeat_element_bam_file]
     skip = many_up_to_date(output_files, input_files)
     if skip:
         logging.debug("[SKIPPED] %s" % (msg))
@@ -726,22 +708,47 @@ def create_job(library, pipeline, server, config_xml_file,
     else:
         logging.debug(msg) 
         shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'repeat_element_counts.log')
+        log_file = os.path.join(results.log_dir, 'bowtie2_align_repeats.log')        
         args = ["python",
-                os.path.join(_pipeline_dir, "bowtie2_unpaired_align.py"),
+                os.path.join(_pipeline_dir, "bowtie2_align.py"),
                 "-p", num_processors,
-                "--tmp-dir", results.tmp_dir]
+                "--tmp-dir", results.tmp_dir,
+                "-1", results.unmapped_paired_fastq_files[0],
+                "-2", results.unmapped_paired_fastq_files[1],
+                "-U", ','.join(results.unmapped_unpaired_fastq_files)]
         # extra args
         for arg in pipeline.repeat_elements_bt2_args:
             args.append('--extra-arg="%s"' % arg)
-        args.extend([genome_static.repbase_bowtie2_index,
-                     results.repeat_element_counts_file])
-        args.extend(results.unmapped_unpaired_fastq_files)
+        args.extend([genome_static.repbase_bowtie2_index,                     
+                     results.repeat_element_bam_file])
         args.append('> %s 2>&1' % (log_file))
         command = ' '.join(map(str, args))
         logging.debug("\tcommand: %s" % (command))
         shell_commands.append(command)
-        shell_commands.append(bash_check_retcode(msg))
+        shell_commands.append(bash_check_retcode())
+    #
+    # count repeat elements
+    #
+    msg = "Counting repeat element alignments"
+    input_files = [results.repeat_element_bam_file]
+    output_files = [results.repeat_element_counts_file]
+    skip = many_up_to_date(output_files, input_files)
+    if skip:
+        logging.debug("[SKIPPED] %s" % (msg))
+        shell_commands.append(bash_log(msg, "SKIPPED"))
+    else:
+        logging.debug(msg)
+        shell_commands.append(bash_log(msg, "INFO"))
+        log_file = os.path.join(results.log_dir, 'repeat_element_counts.log')
+        args = ["python",
+                os.path.join(_pipeline_dir, "bowtie2_quantify.py"),
+                results.repeat_element_bam_file,
+                results.repeat_element_counts_file,
+                '> %s 2>&1' % (log_file)]
+        command = ' '.join(map(str, args))
+        logging.debug("\tcommand: %s" % (command))
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode()) 
     #
     # generate genome coverage maps  
     #
