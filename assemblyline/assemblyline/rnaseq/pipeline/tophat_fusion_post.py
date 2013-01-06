@@ -304,15 +304,16 @@ def map_fusion_kmer(bwt_idx_prefix, params, fusion_input_file):
         convert_bowtie()
 
     
-def filter_fusion(bwt_idx_prefix, refgene_file, ensgene_file, params, fusion_input_file, sample_name):
+def filter_fusion(bwt_idx_prefix, refgene_file, ensgene_file, params, 
+                  fusion_input_file, sample_name):
     chrs = []
     get_chromosome_order(bwt_idx_prefix, chrs)
-
     chr_order = {}
-    for chr in chrs:
-        chr_order[chr] = len(chr_order)
+    for chrom in chrs:
+        chr_order[chrom] = len(chr_order)
 
-    def filter_fusion_impl(fusion, sample_name, refGene_list, ensGene_list, seq_chr_dic, fusion_gene_list):
+    def filter_fusion_impl(fusion, sample_name, refGene_list, ensGene_list, 
+                           seq_chr_dic, fusion_gene_list, single=False):
         def gene_exists(gene_list, chr, coord, dir, is_left):
             min = 0
             max = len(gene_list) - 1
@@ -412,10 +413,14 @@ def filter_fusion(bwt_idx_prefix, refgene_file, ensgene_file, params, fusion_inp
             return min_value
 
         kmer_len = len(seq_chr_dic.keys()[0])
-        data = os.getcwd().split('/')[-1]
+        ##PATCH 1/6/2013 mkiyer
+        # don't need to know current dir anymore (used for 'maher' hack)
+        #data = os.getcwd().split('/')[-1]
 
         fusion_file = open(fusion, 'r')
-        fusion_file.readline()
+        ##PATCH 1/6/2013 mkiyer
+        # for some reason program skips first line in file
+        #fusion_file.readline()
         for line in fusion_file:
             info, sim, left_seq_org, right_seq_org, left_dist, right_dist, pair_list = line[:-1].split('\t@\t')[:7]
 
@@ -438,44 +443,57 @@ def filter_fusion(bwt_idx_prefix, refgene_file, ensgene_file, params, fusion_inp
             coord1, coord2 = int(info[1]), int(info[2])
             dir = info[3]
 
-            if string.find(sample_name, "single") != -1:
-                single = True
-            else:
-                single = False
+            ##PATCH by mkiyer 1/6/2013
+            # using the word 'single' in sample name makes no sense,
+            # made this a function argument instead
+            #if string.find(sample_name, "single") != -1:
+            #    single = True
+            #else:
+            #    single = False
 
-            if string.find(data, "maher") != -1:
-                extent = min(10, num_reads)
-                if single:
-                    if left_ext < 25 + extent * 2 or right_ext < 25 + extent * 2:
-                        continue
-                else:
-                    if left_ext < 14 + extent or right_ext < 14 + extent:
-                        continue
-            else:
-                if left_ext < 16 or right_ext < 16:
-                    continue
-
+            ##PATCH by mkiyer 1/6/2013
+            # strange code detects the word 'maher' in data directory
+            # makes no sense. removed. 
+            #if string.find(data, "maher") != -1:
+            #    extent = min(10, num_reads)
+            #    if single:
+            #        if left_ext < 25 + extent * 2 or right_ext < 25 + extent * 2:
+            #            continue
+            #    else:
+            #        if left_ext < 14 + extent or right_ext < 14 + extent:
+            #            continue
+            #else:
+            #TODO: mkiyer completely arbitrary threshold of 16, should 
+            # replace or parameterize
+            if left_ext < 16 or right_ext < 16:
+                continue
             both = num_reads + num_pair_ends_both
-            all = both
+            ##PATCH mkiyer 1/6/2013
+            # confusing to have two variables that mean the same thing
+            #all = both
 
+            #TODO: completely arbitrary threshold of 50, should replace
             if num_pair_ends > num_reads * 50:
                 continue
 
-            if num_reads < params.num_fusion_reads or \
-                    num_pair_ends < params.num_fusion_pairs or \
-                    both < params.num_fusion_both:
+            if ((num_reads < params.num_fusion_reads) or
+                (num_pair_ends < params.num_fusion_pairs) or
+                (both < params.num_fusion_both)):
                 continue
 
-            if (chr1 != chr2 and num_unsupport_reads > num_reads) or \
-                (chr1 == chr2 and num_unsupport_reads > all + num_pair_ends + 5):
+            ##PATCH mkiyer 1/6/2013
+            #if (chr1 != chr2 and num_unsupport_reads > num_reads) or \
+            #    (chr1 == chr2 and num_unsupport_reads > all + num_pair_ends + 5):
+            #    continue
+            # change filter code to be less stringent
+            # now filter when number of reads contradicting the fusion is 
+            # much greater than the number of reads supporting the fusion. 
+            # this is Shanker's fix to be less stringent
+            supporting_reads = (num_reads + num_pair_ends + 
+                                num_pair_ends_fusion * 0.5)
+            if ((chr1 != chr2 and num_reads < (num_unsupport_reads * 0.05)) or
+                (chr1 == chr2 and supporting_reads < (num_unsupport_reads * 0.05))):
                 continue
-
-            if (chr1 != chr2 and num_unsupport_reads > num_reads) or \
-                (chr1 == chr2 and num_unsupport_reads > all + num_pair_ends + 5):
-                ###PATCH shanker originally added this if statement and 
-                ###mkiyer incorporated 1/5/2013
-                if (chr1 != chr2 and num_reads < num_unsupport_reads * 0.05):
-                    continue
 
             pairs = []
             if num_pair_ends >= 1:
