@@ -7,14 +7,13 @@ import argparse
 import logging
 import subprocess
 import sys
-import os
 
 # project imports
 from assemblyline.rnaseq.lib.inspect import RnaseqLibraryMetrics
 from assemblyline.rnaseq.lib.base import detect_read_length
 
 def run_tophat(output_dir, fastq_files, library_metrics_file,
-               bowtie_index, library_type, num_processors,
+               bowtie_index, num_processors,
                rg_id, rg_sample, rg_library, rg_description, 
                rg_platform_unit, rg_center, rg_platform,
                tophat_args):
@@ -74,7 +73,6 @@ def main():
                       fastq_files=args.fastq_files,
                       library_metrics_file=args.library_metrics_file,
                       bowtie_index=args.bowtie_index,
-                      library_type=args.library_type,
                       num_processors=args.num_processors, 
                       rg_id=args.rg_id,
                       rg_sample=args.rg_sample, 
