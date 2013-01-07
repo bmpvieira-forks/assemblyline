@@ -59,7 +59,6 @@ def main():
                          library_metrics_file=args.library_metrics_file,
                          output_dir=args.output_dir,
                          output_label=args.output_label,
-                         library_type=args.library_type,
                          cufflinks_args=args.cufflinks_args,
                          num_processors=args.num_processors,
                          learn_frag_size_dist=args.learn_frag_size)
