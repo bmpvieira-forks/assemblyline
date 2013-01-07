@@ -571,7 +571,7 @@ def create_job(library, pipeline, server, config_xml_file,
         args = ["java", "-Xmx4g", "-jar", 
                 "$PICARDPATH/CollectMultipleMetrics.jar",
                 "INPUT=%s" % (results.tophat_bam_file),
-                "REFERENCE_SEQUENCE=%s" % genome_static.genome_lexicographical_fasta_file,
+                "REFERENCE_SEQUENCE=%s" % genome_static.genome_fasta_file,
                 "OUTPUT=%s" % (os.path.join(results.output_dir, "picard")),
                 "ASSUME_SORTED=TRUE",
                 "TMP_DIR=%s" % results.tmp_dir,
@@ -604,7 +604,7 @@ def create_job(library, pipeline, server, config_xml_file,
                 results.library_metrics_file,
                 genome_static.gene_annotation_refflat,
                 genome_static.picard_ribosomal_intervals,
-                genome_static.genome_lexicographical_fasta_file,   
+                genome_static.genome_fasta_file,   
                 results.rnaseq_metrics,
                 results.rnaseq_metrics_pdf]
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
@@ -933,7 +933,7 @@ def create_job(library, pipeline, server, config_xml_file,
         for arg in pipeline.varscan_args:
             args.append('--varscan-arg="%s"' % (arg))
         args.extend(["$VARSCANPATH/VarScan.jar", "mpileup2snp",
-                     genome_static.genome_lexicographical_fasta_file,
+                     genome_static.genome_fasta_file,
                      results.tophat_rmdup_bam_file,
                      results.varscan_snv_file])
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
