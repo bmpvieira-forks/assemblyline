@@ -490,7 +490,6 @@ class RnaseqResults(object):
 class GenomeConfig(object):
     fields = ("abundant_bowtie2_index",
               "genome_fasta_file",
-              "genome_lexicographical_fasta_file",
               "genome_bowtie1_index",
               "genome_bowtie2_index",
               "fragment_size_bowtie1_index",
@@ -588,7 +587,6 @@ class GenomeConfig(object):
             logging.error("Transcriptome bowtie2 index %s not found" % (g.transcriptome_bowtie2_index))
             valid = False
         for attrname in ("genome_fasta_file",
-                         "genome_lexicographical_fasta_file",
                          "gene_annotation_refflat",
                          "gene_annotation_refgene",
                          "gene_annotation_ensgene",

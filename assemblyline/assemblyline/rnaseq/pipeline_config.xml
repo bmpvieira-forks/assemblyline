@@ -237,7 +237,6 @@
     <ucsc db="hg19" org="human"/>
     <abundant_bowtie2_index>Sequence/AbundantSequences/abundant</abundant_bowtie2_index>
     <genome_fasta_file>Sequence/Genome/genome.fa</genome_fasta_file>
-    <genome_lexicographical_fasta_file>Sequence/Genome/genome_lexicographical_order.fa</genome_lexicographical_fasta_file>
     <genome_bowtie1_index>Sequence/Genome/Bowtie1Index/genome</genome_bowtie1_index>
     <genome_bowtie2_index>Sequence/Genome/Bowtie2Index/genome</genome_bowtie2_index>
     <fragment_size_bowtie1_index>Sequence/Transcriptome/FragSizeBowtie1Index/fragsize</fragment_size_bowtie1_index>
