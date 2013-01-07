@@ -211,9 +211,9 @@ class RnaseqResults(object):
         for i in xrange(1,len(library.bam_files)+1):
             prefix = os.path.join(self.tmp_dir, "bam_file%03d" % (i))
             self.bam_fastq_prefixes.append(prefix)
-            self.bam_read1_files.append(prefix + "1.fq")
-            if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
-                self.bam_read2_files.append(prefix + "2.fq")
+            for x in (1,2):
+                self.bam_read1_files.append("%s.paired.1.fq" % (prefix))
+                self.bam_read1_files.append("%s.paired.2.fq" % (prefix))                
         # fastq files
         self.copied_fastq_files = []
         if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:

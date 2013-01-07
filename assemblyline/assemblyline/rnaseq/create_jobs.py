@@ -11,11 +11,9 @@ import subprocess
 import shutil
 import xml.etree.cElementTree as etree
 
-# projects
 import assemblyline.rnaseq.lib.config as config
 from assemblyline.rnaseq.lib.base import indent_xml, many_up_to_date, detect_format
-from assemblyline.rnaseq.lib.libtable import Library, read_library_table_xls, FRAGMENT_LAYOUT_PAIRED, FRAGMENT_LAYOUT_SINGLE
-
+from assemblyline.rnaseq.lib.libtable import Library, read_library_table_xls, FRAGMENT_LAYOUT_PAIRED
 import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
 
