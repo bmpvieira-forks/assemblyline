@@ -46,6 +46,7 @@ def main():
           packages=['assemblyline',
                     'assemblyline.lib',
                     'assemblyline.lib.bx',
+                    'assemblyline.lib.assemble',
                     'assemblyline.pipeline',
                     'assemblyline.test',
                     'assemblyline.utils',
@@ -53,6 +54,7 @@ def main():
                     'assemblyline.rnaseq.lib',
                     'assemblyline.rnaseq.pipeline',
                     'assemblyline.rnaseq.utils'],
+          package_data={'assemblyline.lib': ['classify_transcripts.R']},                             
           ext_modules=get_extension_modules(),
           cmdclass= {'build_ext': build_ext})
 
