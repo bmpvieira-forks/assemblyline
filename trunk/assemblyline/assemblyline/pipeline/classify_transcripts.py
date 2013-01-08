@@ -35,7 +35,7 @@ from assemblyline.lib.batch_sort import batch_sort
 from assemblyline.lib.base import LIB_COUNTS_FILE, CATEGORIES, \
     category_int_to_str, ANNOTATED, CATEGORY, MEAN_SCORE, \
     MEAN_RECURRENCE, LibCounts, CategoryInfo, get_classification_header, \
-    get_classification_result_header
+    get_classification_result_header, check_executable
 
 # R script to call for classifying transcripts
 _module_dir = assemblyline.__path__[0]
@@ -167,6 +167,10 @@ def main():
     # check command line parameters
     if not os.path.exists(args.classify_dir):
         parser.error("Classification directory %s not found" % (args.classify_dir))
+    if not os.path.exists(R_SCRIPT):
+        parser.error("Classification R script not found")
+    if not check_executable("Rscript"):
+        parser.error("Rscript binary not found")        
     # set logging level
     if args.verbose:
         level = logging.DEBUG
