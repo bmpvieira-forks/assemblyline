@@ -549,8 +549,9 @@ def run_parallel(config):
                          sort_func=sort_bed, 
                          tmp_dir=tmp_dir)
         # write bed file track description line
-        track_line = ' '.join(['track name="%s"' % (config.output_dir),
-                               'description="%s"' % (config.output_dir),
+        track_name = os.path.basename(config.output_dir)
+        track_line = ' '.join(['track name="%s"' % (track_name),
+                               'description="%s"' % (track_name),
                                'visibility=pack',
                                'useScore=1'])
         track_file = os.path.join(config.output_dir, 
@@ -571,7 +572,8 @@ def run_parallel(config):
             merge_sort_files(bgfiles, output_file, 
                              sort_func=sort_bed, 
                              tmp_dir=tmp_dir)
-            track_name = '%s_%s' % (config.output_dir, strand_name)
+            track_name = '%s_%s' % (os.path.basename(config.output_dir), 
+                                    strand_name)
             track_line = ' '.join(['track type=bedGraph',
                                    'name="%s"' % (track_name),
                                    'description="%s"' % (track_name),
@@ -606,6 +608,7 @@ def main():
     # log run configuration
     config.log()
     # create output directory
+    config.output_dir = os.path.abspath(config.output_dir)
     if not os.path.exists(config.output_dir):
         logging.debug("Creating output directory '%s'" % (config.output_dir))
         os.makedirs(config.output_dir)
