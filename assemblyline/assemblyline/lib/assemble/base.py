@@ -39,9 +39,4 @@ CHAIN_EDGES = 'chain_edges'
 # constant minimum path score
 MIN_SCORE = 1.0e-8
 
-# global variables for current locus, gene, tss, transcript id
-GLOBAL_LOCUS_ID = 1
-GLOBAL_GENE_ID = 1
-GLOBAL_TSS_ID = 1
-GLOBAL_TRANSCRIPT_ID = 1
 

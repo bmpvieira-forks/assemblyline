@@ -359,6 +359,7 @@ def main():
                        args.min_spec, args.opt_variable, tmp_dir) 
     if os.path.exists(tmp_dir):
         shutil.rmtree(tmp_dir)
+    logging.info("Done")
     return 0
 
 if __name__ == '__main__':
