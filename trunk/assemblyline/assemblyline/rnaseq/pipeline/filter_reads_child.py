@@ -65,7 +65,7 @@ def main():
                 if not r.is_unmapped:
                     altype = r.opt('YT')
                     counts[altype][r.tid] += 1            
-                    bamfh.write(r)
+                bamfh.write(r)
     # cleanup
     for f in fastq_fhs:
         f.close()

@@ -367,52 +367,6 @@ def create_job(library, pipeline, server, config_xml_file,
         command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())
-
-#    input_files = results.fastqc_data_files + results.copied_fastq_files
-#    output_files = results.filtered_fastq_files + [results.sorted_abundant_bam_file]
-#    skip = many_up_to_date(output_files, input_files)
-#    msg = "Filtering reads that map to abundant sequences"
-#    if skip:
-#        logging.debug("[SKIPPED] %s" % (msg))
-#        shell_commands.append(bash_log(msg, "SKIPPED"))
-#    else:
-#        logging.debug(msg)
-#        shell_commands.append(bash_log(msg, "INFO"))
-#        args = ["python", 
-#                os.path.join(_pipeline_dir, "filter_abundant_sequences.py"),
-#                "--num-processors", num_processors,
-#                ','.join(results.fastqc_data_files),
-#                ','.join(results.copied_fastq_files),
-#                ','.join(results.filtered_fastq_files),
-#                results.sorted_abundant_bam_file,
-#                genome_static.abundant_bowtie2_index,
-#                results.tmp_dir]
-#        logging.debug("\targs: %s" % (' '.join(map(str, args))))
-#        command = ' '.join(map(str, args))
-#        log_file = os.path.join(results.log_dir, 'filter_abundant_sequences.log')
-#        command += ' > %s 2>&1' % (log_file)
-#        shell_commands.append(command)
-#        shell_commands.append(bash_check_retcode())
-#    #
-#    # Count abundant reads
-#    #
-#    input_files = [results.sorted_abundant_bam_file]
-#    output_files = [results.abundant_counts_file]
-#    skip = many_up_to_date(output_files, input_files)
-#    msg = "Counting abundant reads"
-#    if skip:
-#        logging.debug("[SKIPPED] %s" % (msg))
-#        shell_commands.append(bash_log(msg, "SKIPPED"))
-#    else:
-#        logging.debug(msg)
-#        shell_commands.append(bash_log(msg, "INFO"))
-#        log_file = os.path.join(results.log_dir, 'abundant_counts.log')
-#        command = ("samtools idxstats %s > %s 2> %s" % 
-#                   (results.sorted_abundant_bam_file,
-#                    results.abundant_counts_file,
-#                    log_file))
-#        shell_commands.append(command)
-#        shell_commands.append(bash_check_retcode())    
     #
     # inspect the library and determine characteristics
     #
