@@ -11,54 +11,9 @@ import subprocess
 
 import pysam
 
-from assemblyline.rnaseq.lib.base import DNA_reverse_complement
+from assemblyline.rnaseq.lib.base import DNA_reverse_complement, parse_sam, remove_multihits
 import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
-
-def parse_bam(bamfh, readnum_in_qname, remove_suffix):
-    '''
-    reads must be sorted by queryname 
-    '''
-    pe_reads = ([], [])
-    num_reads = 0
-    prev_qname = None    
-    for r in bamfh:
-        suffix = r.qname[-2:]
-        # determine whether this is read1 or read2
-        if readnum_in_qname:
-            # use "/1" or "/2" suffix to determine read number
-            if (suffix == "/1"):
-                readnum = 0
-            elif (suffix == "/2"):
-                readnum = 1
-            else:
-                raise Exception("suffix /1 or /2 not found in qname")
-        else:
-            readnum = 1 if r.is_read2 else 0
-        # optionally remove the /1 or /2 suffix
-        if (remove_suffix and 
-            (suffix == "/1" or suffix == "/2")):
-            r.qname = r.qname[:-2]
-        # if query name changes we have completely finished
-        # the fragment and can reset the read data
-        if (num_reads > 0) and (r.qname != prev_qname):
-            yield pe_reads
-            # reset state variables
-            pe_reads = ([], [])
-            num_reads = 0
-        pe_reads[readnum].append(r)
-        prev_qname = r.qname
-        num_reads += 1
-    if num_reads > 0:
-        yield pe_reads
-
-def remove_multihits(pe_reads):
-    r1,r2 = None,None
-    if len(pe_reads[0]) > 0:
-        r1 = pe_reads[0][0]
-    if len(pe_reads[1]) > 0:
-        r2 = pe_reads[1][0]
-    return r1,r2
 
 def to_fastq(r, readnum):
     seq = DNA_reverse_complement(r.seq) if r.is_reverse else r.seq
@@ -114,7 +69,7 @@ def bam_to_fastq(bam_file, fastq_prefix, assume_sorted,
     # parse bam
     logging.debug("writing fastq files")
     bamfh = pysam.Samfile(sorted_bam_file, 'rb')
-    for pe_reads in parse_bam(bamfh, readnum_in_qname, 
+    for pe_reads in parse_sam(bamfh, readnum_in_qname, 
                               remove_suffix=True):
         r1, r2 = remove_multihits(pe_reads)
         if (r1 is not None) and (r2 is not None):
