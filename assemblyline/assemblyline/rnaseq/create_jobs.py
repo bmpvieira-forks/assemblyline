@@ -9,10 +9,9 @@ import logging
 import argparse
 import subprocess
 import shutil
-import xml.etree.cElementTree as etree
 
 import assemblyline.rnaseq.lib.config as config
-from assemblyline.rnaseq.lib.base import indent_xml, many_up_to_date, detect_format
+from assemblyline.rnaseq.lib.base import many_up_to_date, detect_format
 from assemblyline.rnaseq.lib.libtable import Library, read_library_table_xls, FRAGMENT_LAYOUT_PAIRED
 import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
@@ -211,14 +210,7 @@ def create_job(library, pipeline, server, config_xml_file,
     # format library information as xml
     #
     logging.debug("Writing library information to XML")
-    root = etree.Element("library")
-    library.to_xml(root)
-    # indent for pretty printing
-    indent_xml(root)
-    # write to file
-    f = open(results.library_xml_file, "w")
-    print >>f, etree.tostring(root)
-    f.close()
+    library.to_xml_file(results.library_xml_file)
     #
     # copy configuration xml file
     #
@@ -1077,6 +1069,11 @@ def main():
                            default=None,
                            help="XML formatted file containing RNA-Seq "
                            "library information")
+    parser.add_argument("--library-id", dest="input_library_ids",
+                        action="append", default=None,
+                        help="specific library identifier(s) "
+                        "to process [entire XML/Excel files processed "
+                        "by default]")
     parser.add_argument("config_xml_file")
     parser.add_argument("server_name")
     args = parser.parse_args()
@@ -1101,6 +1098,11 @@ def main():
         logging.error("Pipeline config not valid")
         return config.JOB_ERROR
     server = pipeline.servers[args.server_name]
+    # sublist of library ids
+    if args.input_library_ids is None:
+        input_library_ids = None
+    else:
+        input_library_ids = set(args.input_library_ids)
     #
     # read libraries
     #
@@ -1110,13 +1112,17 @@ def main():
         # read library from XML
         libraries = {}
         for library in Library.from_xml_file(args.library_xml_file):
-            libraries[library.library_id] = library
+            if ((input_library_ids is None) or 
+                (library.library_id in input_library_ids)):
+                libraries[library.library_id] = library
     elif args.library_xls_file is not None:                
         if not os.path.exists(args.library_xls_file):
             parser.error("Excel file %s not found" % (args.library_xls_file))
         # read libraries from XLS/XLSX
         logging.info("Reading library table '%s'" % (args.library_xls_file))
         libraries = read_library_table_xls(args.library_xls_file)
+        if input_library_ids is not None:            
+            libraries = dict((x,libraries[x]) for x in input_library_ids)
     #
     # process each library
     #
