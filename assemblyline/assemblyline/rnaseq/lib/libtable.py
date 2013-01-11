@@ -42,9 +42,8 @@ class LibraryTableError(Exception):
 
 class Library(object):
     fields = ('study_id', 'cohort_id', 'patient_id', 'sample_id', 'library_id',
-              'description', 'species', 'library_type', 'seq_repo',
-              'read1_files', 'read2_files', 'bam_files', 
-              'fragment_layout')  
+              'description', 'species', 'library_type', 'fragment_layout', 
+              'seq_repo', 'read1_files', 'read2_files', 'bam_files')  
 
     def __init__(self, **kwargs):
         # basic parameters
@@ -101,10 +100,12 @@ class Library(object):
     def from_xml_file(xmlfile):
         tree = etree.parse(xmlfile)        
         root = tree.getroot()
-        return Library.from_xml(root)
+        assert root.tag == "libraries"
+        for elem in root.find("library"):
+            yield Library.from_xml(elem)
     
     @staticmethod
-    def from_xml(elem):
+    def from_xml_elem(elem):
         kwargs = {}
         for f in Library.fields:
             kwargs[f] = elem.findtext(f)
@@ -115,14 +116,15 @@ class Library(object):
         return Library(**kwargs)
 
     def to_xml(self, parent):
+        root = etree.SubElement(parent, "library")
         self.read1_files = ','.join(self.read1_files)
         self.read2_files = ','.join(self.read2_files)
         self.bam_files = ','.join(self.bam_files)
         for f in Library.fields:
-            elem = etree.SubElement(parent, f)
+            elem = etree.SubElement(root, f)
             elem.text = getattr(self,f)
         for k,v in self.params.iteritems():
-            elem = etree.SubElement(parent, "param", name=k)
+            elem = etree.SubElement(root, "param", name=k)
             elem.text = v
         self.read1_files = self.read1_files.split(',')
         self.read2_files = self.read2_files.split(',')

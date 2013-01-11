@@ -682,9 +682,11 @@ class ServerConfig(object):
 class PipelineConfig(object):
     @staticmethod
     def from_xml(xmlfile):
+        c = PipelineConfig()
         tree = etree.parse(xmlfile)  
         root = tree.getroot()
-        c = PipelineConfig()
+        # version
+        c.version = root.findtext("version")
         # modules
         modules_elem = root.find("modules")
         c.modules = []
@@ -765,7 +767,10 @@ class PipelineConfig(object):
         return c
 
     def to_xml(self, output_file):
-        root = etree.Element("pipeline")
+        root = etree.Element("rnaseq")
+        # version
+        elem = etree.SubElement(root, "version")
+        elem.text = self.version
         # modules
         modules_elem = etree.SubElement(root, "modules")
         for m in self.modules:

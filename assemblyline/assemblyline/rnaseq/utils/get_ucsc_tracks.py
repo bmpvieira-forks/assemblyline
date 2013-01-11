@@ -99,7 +99,7 @@ def main():
     # read library file
     library_dir = os.path.abspath(args.library_dir)
     library_xml_file = os.path.join(library_dir, config.LIBRARY_XML_FILE)
-    library = Library.from_xml_file(library_xml_file)
+    library = list(Library.from_xml_file(library_xml_file))[0]
     # read pipeline config file
     pipeline_xml_file = os.path.join(library_dir, config.CONFIG_XML_FILE)
     pipeline = config.PipelineConfig.from_xml(pipeline_xml_file)

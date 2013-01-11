@@ -21,7 +21,7 @@ def main():
     if not os.path.exists(library_xml_file):
         logging.error("Library xml file not found")
         return config.JOB_ERROR
-    library = Library.from_xml_file(library_xml_file)
+    library = list(Library.from_xml_file(library_xml_file))[0]
     if not library.is_valid():
         logging.error("Library not valid")
         return config.JOB_ERROR
