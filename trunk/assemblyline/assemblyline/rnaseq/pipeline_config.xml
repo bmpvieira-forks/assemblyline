@@ -1,4 +1,4 @@
-<rnaseq>
+<rnaseq version="0.1.8">
   <!-- server setup -->
   <server name="mkiyer_rhel6">
     <modules_init_script>/home/mkiyer/sw/rhel6/init.sh</modules_init_script>
@@ -13,6 +13,7 @@
        <dir name="encode">/exds/flux/mkiyer/seq/encode</dir>
        <dir name="phs000310">/exds/flux/mkiyer/seq/phs000310</dir>
        <dir name="30HJDAAXX">/exds/solexa/runs/090130_PATHBIO-SOLEXA1_30HJDAAXX/Data/IPAR_1.01/Bustard1.9.6_05-02-2009_root/GERALD_05-02-2009_root</dir>
+       <dir name="tcga">/tcga/bam_files/rnaseq</dir>
     </seq_repos>
     <pbs use="no"/>
   </server>

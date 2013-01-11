@@ -686,7 +686,7 @@ class PipelineConfig(object):
         tree = etree.parse(xmlfile)  
         root = tree.getroot()
         # version
-        c.version = root.findtext("version")
+        c.version = root.get("version")
         # modules
         modules_elem = root.find("modules")
         c.modules = []
@@ -769,8 +769,7 @@ class PipelineConfig(object):
     def to_xml(self, output_file):
         root = etree.Element("rnaseq")
         # version
-        elem = etree.SubElement(root, "version")
-        elem.text = self.version
+        root.set("version", self.version)
         # modules
         modules_elem = etree.SubElement(root, "modules")
         for m in self.modules:

@@ -19,13 +19,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--species", dest="species", default="human")
     parser.add_argument("--library-type", dest="library_type", default="fr-unstranded")
-    parser.add_argument("--sample-type", dest="sample_type", default="tissue")
+    parser.add_argument("--param", dest="param_list", action="append", default=None)
     parser.add_argument("--seq-repo", dest="seq_repo", default="tcga")
     parser.add_argument("--xls", dest="write_xls", action="store_true", default=False)
     parser.add_argument("--xml", dest="write_xml", action="store_true", default=False)
     parser.add_argument("xml_file")
     parser.add_argument("root_dir")
     args = parser.parse_args()
+    # parse param list
+    default_params = {}
+    if args.param_list is not None:
+        for param in args.param_list:
+            k,v = param.split("=")
+            default_params[k] = v
     # read libraries
     libraries = []
     tree = etree.parse(args.xml_file)  
@@ -83,8 +89,8 @@ def main():
                   'read2_files': '',
                   'bam_files': bam_files[0]}
         kwargs['params'] = {'cancer_type': disease_abbr,
-                            'sample_type': args.sample_type,
                             'legacy_sample_id': legacy_sample_id}
+        kwargs['params'].update(default_params)
         library = Library(**kwargs)
         libraries.append(library)
     # write

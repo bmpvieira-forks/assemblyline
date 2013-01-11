@@ -26,6 +26,8 @@ import xlrd
 import xml.etree.cElementTree as etree
 import collections
 
+from assemblyline.rnaseq.lib.base import indent_xml
+
 # fragment layouts
 FRAGMENT_LAYOUT_SINGLE = "single"
 FRAGMENT_LAYOUT_PAIRED = "paired"
@@ -36,6 +38,9 @@ FRAGMENT_LAYOUTS = (FRAGMENT_LAYOUT_SINGLE, FRAGMENT_LAYOUT_PAIRED)
 FR_FIRSTSTRAND = 'fr-firststrand'
 FR_UNSTRANDED = 'fr-unstranded'
 LIBRARY_TYPES = (FR_FIRSTSTRAND, FR_UNSTRANDED)
+
+# xml
+LIBRARY_ROOT_TAG = "libraries"
 
 class LibraryTableError(Exception):
     pass
@@ -97,14 +102,6 @@ class Library(object):
         fh.close()
 
     @staticmethod
-    def from_xml_file(xmlfile):
-        tree = etree.parse(xmlfile)        
-        root = tree.getroot()
-        assert root.tag == "libraries"
-        for elem in root.find("library"):
-            yield Library.from_xml(elem)
-    
-    @staticmethod
     def from_xml_elem(elem):
         kwargs = {}
         for f in Library.fields:
@@ -115,6 +112,14 @@ class Library(object):
         kwargs["params"] = params
         return Library(**kwargs)
 
+    @staticmethod
+    def from_xml_file(xmlfile):
+        tree = etree.parse(xmlfile)        
+        root = tree.getroot()
+        assert root.tag == LIBRARY_ROOT_TAG
+        for elem in root.findall("library"):
+            yield Library.from_xml_elem(elem)
+    
     def to_xml(self, parent):
         root = etree.SubElement(parent, "library")
         self.read1_files = ','.join(self.read1_files)
@@ -130,6 +135,16 @@ class Library(object):
         self.read2_files = self.read2_files.split(',')
         self.bam_files = self.bam_files.split(',')
         return parent
+
+    def to_xml_file(self, xmlfile):
+        root = etree.Element(LIBRARY_ROOT_TAG)
+        self.to_xml(root)
+        # indent for pretty printing
+        indent_xml(root)
+        # write to file
+        f = open(xmlfile, "w")
+        print >>f, etree.tostring(root)
+        f.close() 
 
     def is_valid(self):
         is_valid = True
@@ -183,7 +198,7 @@ def read_library_table_xls(filename):
     wkbook = xlrd.open_workbook(filename)
     # check that required sheet names exist
     sheet_names = wkbook.sheet_names()
-    if not "libraries" in sheet_names:
+    if not LIBRARY_ROOT_TAG in sheet_names:
         raise LibraryTableError("XLS file missing 'libraries' Sheet")
     if not "parameters" in sheet_names:
         raise LibraryTableError("XLS file missing 'parameters' Sheet")
@@ -199,7 +214,7 @@ def read_library_table_xls(filename):
         params[param_type][param_id][k] = v
     # read libraries
     libraries = {}
-    for field_dict in read_wksheet(wkbook.sheet_by_name("libraries")):
+    for field_dict in read_wksheet(wkbook.sheet_by_name(LIBRARY_ROOT_TAG)):
         # add params to field dict
         myparams = {}
         myparams.update(params["patient"][field_dict["patient_id"]])
