@@ -1108,8 +1108,9 @@ def main():
         if not os.path.exists(args.library_xml_file):
             parser.error("XML file %s not found" % (args.library_xml_file))
         # read library from XML
-        library = Library.from_xml_file(args.library_xml_file)
-        libraries = {library.library_id: library}
+        libraries = {}
+        for library in Library.from_xml_file(args.library_xml_file):
+            libraries[library.library_id] = library
     elif args.library_xls_file is not None:                
         if not os.path.exists(args.library_xls_file):
             parser.error("Excel file %s not found" % (args.library_xls_file))
