@@ -43,9 +43,12 @@ def main():
               'UP': make_array(nrefs)}
     both_unmapped = 0
     # Value of UU indicates the read was not part of a pair. 
-    # Value of CP indicates the read was part of a pair and the pair aligned concordantly. 
-    # Value of DP indicates the read was part of a pair and the pair aligned discordantly. 
-    # Value of UP indicates the read was part of a pair but the pair failed to aligned either concordantly or discordantly.
+    # Value of CP indicates the read was part of a pair and 
+    # the pair aligned concordantly. 
+    # Value of DP indicates the read was part of a pair and 
+    # the pair aligned discordantly. 
+    # Value of UP indicates the read was part of a pair but 
+    # the pair failed to aligned either concordantly or discordantly.
     # start filtering
     for pe_reads in parse_sam(infh, 
                               readnum_in_qname=False, 
@@ -56,7 +59,7 @@ def main():
         if (r1.is_unmapped and r2.is_unmapped):
             print >>fastq_fhs[0], to_fastq(r1, 0)
             print >>fastq_fhs[1], to_fastq(r2, 1)
-            both_unmapped += 1
+            both_unmapped += 2
         else:
             for r in (r1, r2):
                 if not r.is_unmapped:
