@@ -73,9 +73,9 @@
   </server>
 
   <server name="flux">
-    <modules_init_script>/scratch/arul_flux/med-mctp/sw/rhel6/init.sh</modules_init_script>
     <output_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq/runs</output_dir>
-    <references_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq/references</references_dir>
+    <modules_init_script>/scratch/arul_flux/med-mctp/mkiyer/sw/rhel6/init.sh</modules_init_script>
+    <references_dir>/scratch/arul_flux/med-mctp/mkiyer/references</references_dir>
     <seq_repos>
        <dir name="mctp_seq">/nfs/med-mctp-seq-3_ls</dir>
        <dir name="tcga">/nfs/med-mctp-tcga-1_ls/bam_files/rnaseq</dir>
@@ -91,13 +91,14 @@
       <script_line>#PBS -q flux</script_line>
       <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
       <script_line>#PBS -m abe</script_line>
+      <script_line>#PBS -V</script_line>
     </pbs>
   </server>
 
   <server name="fluxm">
-    <modules_init_script>/scratch/arul_flux/med-mctp/sw/rhel6/init.sh</modules_init_script>
     <output_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq/runs</output_dir>
-    <references_dir>/scratch/arul_flux/med-mctp/mkiyer/rnaseq/references</references_dir>
+    <modules_init_script>/scratch/arul_flux/med-mctp/mkiyer/sw/rhel6/init.sh</modules_init_script>
+    <references_dir>/scratch/arul_flux/med-mctp/mkiyer/references</references_dir>
     <seq_repos>
        <dir name="mctp_seq">/nfs/med-mctp-seq-3_ls</dir>
        <dir name="tcga">/nfs/med-mctp-tcga-1_ls/bam_files/rnaseq</dir>
@@ -113,6 +114,7 @@
       <script_line>#PBS -q fluxm</script_line>
       <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
       <script_line>#PBS -m abe</script_line>
+      <script_line>#PBS -V</script_line>
     </pbs>
   </server>
 
@@ -120,6 +122,7 @@
   <modules>
     <module>epd</module>
     <module>java</module>
+    <module>ActivePerl</module>
     <module>R</module>
     <module>bioinfo</module>
     <module>bx-python/0.7.0</module>
@@ -234,7 +237,7 @@
   <annovar run="yes"/>
 
   <!-- genome-specific file locations -->
-  <genome name="human" root_dir="Homo_sapiens_UCSC_hg19">
+  <genome name="human" root_dir="AssemblyLine_hg19_Linux_x86-64">
     <ucsc db="hg19" org="human"/>
     <abundant_bowtie2_index>Sequence/AbundantSequences/abundant</abundant_bowtie2_index>
     <genome_fasta_file>Sequence/Genome/genome.fa</genome_fasta_file>
