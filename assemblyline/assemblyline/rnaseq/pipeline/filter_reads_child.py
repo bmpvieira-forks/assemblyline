@@ -13,8 +13,8 @@ import array
 import pysam
 
 # project imports
-from assemblyline.rnaseq.lib.base import parse_sam, remove_multihits, \
-    to_fastq
+from assemblyline.rnaseq.lib.base import parse_sam, \
+    remove_multihits, to_fastq
 
 def main():
     logging.basicConfig(level=logging.DEBUG,
@@ -42,14 +42,6 @@ def main():
               'DP': make_array(nrefs),
               'UP': make_array(nrefs)}
     both_unmapped = 0
-    # Value of UU indicates the read was not part of a pair. 
-    # Value of CP indicates the read was part of a pair and 
-    # the pair aligned concordantly. 
-    # Value of DP indicates the read was part of a pair and 
-    # the pair aligned discordantly. 
-    # Value of UP indicates the read was part of a pair but 
-    # the pair failed to aligned either concordantly or discordantly.
-    # start filtering
     for pe_reads in parse_sam(infh, 
                               readnum_in_qname=False, 
                               remove_suffix=True):
@@ -63,6 +55,8 @@ def main():
         else:
             for r in (r1, r2):
                 if not r.is_unmapped:
+                    # 'YT' is bowtie2 SAM tag that gives PE alignment 
+                    # information
                     altype = r.opt('YT')
                     counts[altype][r.tid] += 1            
                 bamfh.write(r)
