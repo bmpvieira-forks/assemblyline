@@ -251,7 +251,6 @@ def create_job(library, pipeline, server, config_xml_file,
     logging.debug("\tcommand: %s" % (command))
     shell_commands.append(command)
     shell_commands.append(bash_check_retcode(msg))   
-
     #
     # extract fastq from bam input files
     #
@@ -265,13 +264,15 @@ def create_job(library, pipeline, server, config_xml_file,
     else:
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
+        log_file = os.path.join(results.log_dir, 'extract_fastq_from_bam.log')
         # convert bam to fastq
         for i,prefix in enumerate(results.bam_fastq_prefixes):
             args = ["python",
                     os.path.join(_pipeline_dir, "extract_fastq_from_bam.py"),
                     "--readnum-in-qname",
                     "--tmp-dir", results.tmp_dir,
-                    library.bam_files[i], prefix] 
+                    library.bam_files[i], prefix,
+                    '> %s 2>&1' % (log_file)] 
             command = ' '.join(map(str, args))
             shell_commands.append(command)
             shell_commands.append(bash_check_retcode())
@@ -322,12 +323,12 @@ def create_job(library, pipeline, server, config_xml_file,
         logging.debug("%s" % msg)    
         shell_commands.append(bash_log(msg, "INFO"))
         num_threads = min(num_processors, len(results.copied_fastq_files))
+        log_file = os.path.join(results.log_dir, 'fastqc.log')
         args = ['fastqc', "--threads", num_threads, "-o", results.output_dir]
         args.extend(results.copied_fastq_files)
+        args.append('> %s 2>&1' % (log_file))
         logging.debug("\targs: %s" % (' '.join(map(str, args))))
         command = ' '.join(map(str, args))
-        log_file = os.path.join(results.log_dir, 'fastqc.log')
-        command += ' > %s 2>&1' % (log_file)
         shell_commands.append(command)
         shell_commands.append(bash_check_retcode())   
     #

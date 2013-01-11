@@ -213,7 +213,7 @@ class RnaseqResults(object):
             self.bam_fastq_prefixes.append(prefix)
             for x in (1,2):
                 self.bam_read1_files.append("%s.paired.1.fq" % (prefix))
-                self.bam_read1_files.append("%s.paired.2.fq" % (prefix))                
+                self.bam_read2_files.append("%s.paired.2.fq" % (prefix))                
         # fastq files
         self.copied_fastq_files = []
         if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:
