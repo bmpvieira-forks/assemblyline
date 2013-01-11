@@ -26,13 +26,12 @@ import os
 import sys
 import xml.etree.cElementTree as etree
 
-import assemblyline
 import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
 
 from assemblyline.lib.librarytable import LibraryInfo
 from assemblyline.rnaseq.lib.base import parse_bool
-from assemblyline.rnaseq.run import get_pbs_header, bash_log, bash_check_retcode
+from assemblyline.rnaseq.create_jobs import get_pbs_header, bash_log, bash_check_retcode
 
 class PluginConfig(object):
     @staticmethod
