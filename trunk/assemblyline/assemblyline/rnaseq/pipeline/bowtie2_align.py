@@ -9,10 +9,6 @@ import sys
 import os
 import subprocess
 
-# project imports
-import assemblyline.rnaseq.pipeline
-_pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
-
 def bowtie2_paired_align(bowtie2_index,
                          bam_file,
                          read1_files,
