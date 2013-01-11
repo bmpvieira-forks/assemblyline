@@ -36,9 +36,8 @@ def bash_set_tmpdir(tmp_dir):
 
 def setup_modules_environment(pipeline, server):
     commands = ["source %s" % (server.modules_init_script)]
+    commands.append("module purge")
     for name in pipeline.modules:
-        basename = name.split("/")[0]
-        commands.append("module rm %s" % (basename))
         commands.append("module add %s" % (name))
     return commands
 
