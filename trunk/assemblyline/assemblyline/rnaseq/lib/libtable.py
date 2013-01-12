@@ -122,18 +122,19 @@ class Library(object):
     
     def to_xml(self, parent):
         root = etree.SubElement(parent, "library")
-        self.read1_files = ','.join(self.read1_files)
-        self.read2_files = ','.join(self.read2_files)
-        self.bam_files = ','.join(self.bam_files)
-        for f in Library.fields:
+        remaining_fields = list(Library.fields)
+        multi_fields = 'read1_files', 'read2_files', 'bam_files'
+        for f in multi_fields:
+            val = ','.join(getattr(self,f))
+            elem = etree.SubElement(root, f)
+            elem.text = val
+            remaining_fields.remove(f)            
+        for f in remaining_fields:
             elem = etree.SubElement(root, f)
             elem.text = getattr(self,f)
         for k,v in self.params.iteritems():
             elem = etree.SubElement(root, "param", name=k)
             elem.text = v
-        self.read1_files = self.read1_files.split(',')
-        self.read2_files = self.read2_files.split(',')
-        self.bam_files = self.bam_files.split(',')
         return parent
 
     def to_xml_file(self, xmlfile):
