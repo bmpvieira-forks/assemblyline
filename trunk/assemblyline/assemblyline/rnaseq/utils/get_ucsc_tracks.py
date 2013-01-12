@@ -137,8 +137,8 @@ def main():
     # Tophat Fusion (bowtie1) BAM file
     #
     ucsc_url = "%s%s" % (args.baseurl, results.tophat_fusion_bam_file)
-    track_name = "tophat1_bam_%s" % (results.library_id)
-    track_desc = "Tophat1 BAM for %s" % (results.library_id)
+    track_name = "tophatfus_bam_%s" % (results.library_id)
+    track_desc = "Tophatfus BAM for %s" % (results.library_id)
     track_line = ' '.join(['track type=bam',
                            'name="%s"' % (track_name),
                            'description="%s"' % (track_desc),
