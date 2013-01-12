@@ -151,6 +151,23 @@ def main():
                            'bigDataUrl="%s"' % (ucsc_url)])
     track_lines.append(track_line)
     #
+    # Tophat-Fusion fusion reads only BAM file
+    #
+    ucsc_url = "%s%s" % (args.baseurl, results.tophat_fusion_reads_bam_file)
+    track_name = "tophatfusr_bam_%s" % (results.library_id)
+    track_desc = "Tophat Fusion Reads BAM for %s" % (results.library_id)
+    track_line = ' '.join(['track type=bam',
+                           'name="%s"' % (track_name),
+                           'description="%s"' % (track_desc),
+                           'visibility=hide',
+                           'pairEndsByName=.',
+                           'pairSearchRange=%d' % (args.maxWindowToDraw),
+                           'bamColorMode=strand',
+                           'bamGrayMode=unpaired',
+                           'maxWindowToDraw=%s' % (args.maxWindowToDraw),
+                           'bigDataUrl="%s"' % (ucsc_url)])
+    track_lines.append(track_line)
+    #
     # coverage files (bigwig)
     # 
     if library_type == FR_UNSTRANDED:
