@@ -1255,13 +1255,14 @@ def generate_html(params):
         file = open(file_name, 'r')
         for line in file:
             if line_no % 6 == 0:
+                # add current fusion to list and reset state
                 if output and not do_not_add:
                     fusion_list.append(output)
-
                 do_not_add = False
+                
+                # parse line
                 temp_list = line[:-1].split(' ')
                 sample_name = temp_list[0]
-
                 chr = temp_list[1]
                 chr1, chr2 = chr.split('-')
                 left = int(temp_list[2])
@@ -1548,9 +1549,19 @@ def generate_html(params):
                             (lcount, lavg, lgap, lder, rcount, ravg, rgap, rder, rate, dist, score)
                         
                         # print >> sys.stderr, "\t%d" % (line_no / 6 + 1)
-
                     else:
                         read_output = [r"too many - not shown"]
+                        output["read_output"] = read_output
+                        output["lcount"] = 0
+                        output["lavg"] = 0
+                        output["lgap"] = 0
+                        output["lder"] = 0
+                        output["rcount"] = 0
+                        output["ravg"] = 0
+                        output["rgap"] = 0
+                        output["rder"] = 0
+                        output["score"] = 0
+                        output["test"] = ""
 
                 if not "read_output" in output:
                     output["read_output"] = ""
@@ -1562,6 +1573,8 @@ def generate_html(params):
                     output["ravg"] = 0
                     output["rgap"] = 0
                     output["rder"] = 0
+                    output["score"] = 0
+                    output["test"] = ""
 
             line_no += 1
 
