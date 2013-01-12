@@ -117,7 +117,7 @@ def main():
     # build track lines
     track_lines = []
     #
-    # Tophat2 BAM file
+    # Tophat (bowtie2) BAM file
     #
     ucsc_url = "%s%s" % (args.baseurl, results.tophat_bam_file)
     track_name = "tophat2_bam_%s" % (results.library_id)
@@ -134,28 +134,11 @@ def main():
                            'bigDataUrl="%s"' % (ucsc_url)])
     track_lines.append(track_line)
     #
-    # Tophat-Fusion (bowtie1) BAM file
+    # Tophat Fusion (bowtie1) BAM file
     #
     ucsc_url = "%s%s" % (args.baseurl, results.tophat_fusion_bam_file)
-    track_name = "tophatfus_bam_%s" % (results.library_id)
-    track_desc = "Tophat-Fusion BAM for %s" % (results.library_id)
-    track_line = ' '.join(['track type=bam',
-                           'name="%s"' % (track_name),
-                           'description="%s"' % (track_desc),
-                           'visibility=hide',
-                           'pairEndsByName=.',
-                           'pairSearchRange=%d' % (args.maxWindowToDraw),
-                           'bamColorMode=strand',
-                           'bamGrayMode=unpaired',
-                           'maxWindowToDraw=%s' % (args.maxWindowToDraw),
-                           'bigDataUrl="%s"' % (ucsc_url)])
-    track_lines.append(track_line)
-    #
-    # Tophat-Fusion fusion reads only BAM file
-    #
-    ucsc_url = "%s%s" % (args.baseurl, results.tophat_fusion_reads_bam_file)
-    track_name = "tophatfusr_bam_%s" % (results.library_id)
-    track_desc = "Tophat Fusion Reads BAM for %s" % (results.library_id)
+    track_name = "tophat1_bam_%s" % (results.library_id)
+    track_desc = "Tophat1 BAM for %s" % (results.library_id)
     track_line = ' '.join(['track type=bam',
                            'name="%s"' % (track_name),
                            'description="%s"' % (track_desc),

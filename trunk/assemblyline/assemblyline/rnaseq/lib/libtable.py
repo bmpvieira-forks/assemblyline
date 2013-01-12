@@ -116,9 +116,11 @@ class Library(object):
     def from_xml_file(xmlfile):
         tree = etree.parse(xmlfile)        
         root = tree.getroot()
-        assert root.tag == LIBRARY_ROOT_TAG
-        for elem in root.findall("library"):
-            yield Library.from_xml_elem(elem)
+        if root.tag == "library":
+            yield Library.from_xml_elem(root)
+        else:
+            for elem in root.findall("library"):
+                yield Library.from_xml_elem(elem)
     
     def to_xml(self, parent):
         root = etree.SubElement(parent, "library")

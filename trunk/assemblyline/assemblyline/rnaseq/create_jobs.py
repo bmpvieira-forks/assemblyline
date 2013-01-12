@@ -441,30 +441,30 @@ def create_job(library, pipeline, server, config_xml_file,
         command = ' '.join(map(str, args))
         shell_commands.append(command)        
         shell_commands.append(bash_check_retcode())
-    #
-    # extract fusion reads from tophat bam file
-    #
-    input_files = [results.tophat_fusion_bam_file]
-    output_files = [results.tophat_fusion_reads_bam_file,
-                    results.tophat_fusion_reads_bam_index_file]
-    msg = "Extracting fusion reads"
-    skip = ((not pipeline.tophat_fusion_run) or 
-            many_up_to_date(output_files, input_files))
-    if skip:
-        logging.debug("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug("%s" % (msg))
-        shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'tophat_extract_fusion_reads.log')
-        args = ["python", 
-                os.path.join(_pipeline_dir, "tophat_extract_fusion_reads.py"),
-                results.tophat_fusion_bam_file,
-                results.tophat_fusion_reads_bam_file,
-                '> %s 2>&1' % (log_file)]
-        command = ' '.join(map(str, args))
-        shell_commands.append(command)        
-        shell_commands.append(bash_check_retcode())
+#    #
+#    # extract fusion reads from tophat bam file
+#    #
+#    input_files = [results.tophat_fusion_bam_file]
+#    output_files = [results.tophat_fusion_reads_bam_file,
+#                    results.tophat_fusion_reads_bam_index_file]
+#    msg = "Extracting fusion reads"
+#    skip = ((not pipeline.tophat_fusion_run) or 
+#            many_up_to_date(output_files, input_files))
+#    if skip:
+#        logging.debug("[SKIPPED] %s" % (msg))
+#        shell_commands.append(bash_log(msg, "SKIPPED"))
+#    else:
+#        logging.debug("%s" % (msg))
+#        shell_commands.append(bash_log(msg, "INFO"))
+#        log_file = os.path.join(results.log_dir, 'tophat_extract_fusion_reads.log')
+#        args = ["python", 
+#                os.path.join(_pipeline_dir, "tophat_extract_fusion_reads.py"),
+#                results.tophat_fusion_bam_file,
+#                results.tophat_fusion_reads_bam_file,
+#                '> %s 2>&1' % (log_file)]
+#        command = ' '.join(map(str, args))
+#        shell_commands.append(command)        
+#        shell_commands.append(bash_check_retcode())
     #
     # tophat fusion post processing script
     #
