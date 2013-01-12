@@ -69,8 +69,15 @@ TOPHAT_FUSION_DIR = 'tophatfusion'
 TOPHAT_FUSION_BAM_FILE = os.path.join(TOPHAT_FUSION_DIR, "accepted_hits.bam")
 TOPHAT_FUSION_BAM_INDEX_FILE = TOPHAT_FUSION_BAM_FILE + ".bai"
 TOPHAT_FUSION_FILE = os.path.join(TOPHAT_FUSION_DIR, "fusions.out")
-TOPHAT_FUSION_READS_BAM_FILE = "fusion_hits.bam"
-TOPHAT_FUSION_READS_BAM_INDEX_FILE = TOPHAT_FUSION_READS_BAM_FILE + ".bai"
+#TOPHAT_FUSION_READS_BAM_FILE = "fusion_hits.bam"
+#TOPHAT_FUSION_READS_BAM_INDEX_FILE = TOPHAT_FUSION_READS_BAM_FILE + ".bai"
+#TOPHAT_FUSION_TMP_FILES = ("accepted_hits.bam",
+#                           "accepted_hits.bam.bai",
+#                           "deletions.bed",
+#                           "insertions.bed",
+#                           "junctions.bed",
+#                           "tmp",
+#                           "unmapped.bam")
 TOPHAT_FUSION_POST_RESULT_FILE = os.path.join(TOPHAT_FUSION_DIR, 'result.txt')
 TOPHAT_FUSION_POST_HTML_FILE = os.path.join(TOPHAT_FUSION_DIR, 'result.html')
 TOPHAT_FUSION_POST_TMP_FILES = (os.path.join(TOPHAT_FUSION_DIR, f) 
@@ -277,10 +284,11 @@ class RnaseqResults(object):
         self.tophat_fusion_bam_file = os.path.join(self.output_dir, TOPHAT_FUSION_BAM_FILE)        
         self.tophat_fusion_bam_index_file = os.path.join(self.output_dir, TOPHAT_FUSION_BAM_INDEX_FILE)
         self.tophat_fusion_file = os.path.join(self.output_dir, TOPHAT_FUSION_FILE)
+        #self.tophat_fusion_reads_bam_file = os.path.join(self.tophat_fusion_dir, TOPHAT_FUSION_READS_BAM_FILE)        
+        #self.tophat_fusion_reads_bam_index_file = os.path.join(self.output_dir, TOPHAT_FUSION_READS_BAM_INDEX_FILE)
+        self.tophat_fusion_tmp_files = (os.path.join(self.tophat_fusion_dir, f) for f in TOPHAT_FUSION_TMP_FILES)
         self.tophat_fusion_post_result_file = os.path.join(self.output_dir, TOPHAT_FUSION_POST_RESULT_FILE)
         self.tophat_fusion_post_tmp_files = (os.path.join(self.output_dir, f) for f in TOPHAT_FUSION_POST_TMP_FILES)
-        self.tophat_fusion_reads_bam_file = os.path.join(self.tophat_fusion_dir, TOPHAT_FUSION_READS_BAM_FILE)        
-        self.tophat_fusion_reads_bam_index_file = os.path.join(self.output_dir, TOPHAT_FUSION_READS_BAM_INDEX_FILE)
         # cufflinks ab initio output files
         self.cufflinks_ab_initio_dir = os.path.join(self.output_dir, CUFFLINKS_AB_INITIO_DIR)
         self.cufflinks_ab_initio_gtf_file = os.path.join(self.cufflinks_ab_initio_dir, CUFFLINKS_TRANSCRIPTS_GTF_FILE)
@@ -439,16 +447,16 @@ class RnaseqResults(object):
                 logging.error("Library %s missing/corrupt tophat fusion file" % (self.library_id))
                 missing_files.append(self.tophat_fusion_file)
                 is_valid = False
-            # check tophat fusion reads bam file
-            if not check_sam_file(self.tophat_fusion_reads_bam_file, isbam=True):
-                logging.error("Library %s missing/corrupt tophat fusion reads BAM file" % (self.library_id))
-                missing_files.append(self.tophat_fusion_reads_bam_file)
-                is_valid = False
-            # check tophat fusion reads bam index file
-            if not file_exists_and_nz_size(self.tophat_fusion_reads_bam_index_file):
-                logging.error("Library %s missing tophat fusion reads BAM index" % (self.library_id))
-                missing_files.append(self.tophat_fusion_reads_bam_index_file)
-                is_valid = False
+#            # check tophat fusion reads bam file
+#            if not check_sam_file(self.tophat_fusion_reads_bam_file, isbam=True):
+#                logging.error("Library %s missing/corrupt tophat fusion reads BAM file" % (self.library_id))
+#                missing_files.append(self.tophat_fusion_reads_bam_file)
+#                is_valid = False
+#            # check tophat fusion reads bam index file
+#            if not file_exists_and_nz_size(self.tophat_fusion_reads_bam_index_file):
+#                logging.error("Library %s missing tophat fusion reads BAM index" % (self.library_id))
+#                missing_files.append(self.tophat_fusion_reads_bam_index_file)
+#                is_valid = False
             # check tophat fusion post result file
             if config.tophat_fusion_post_run:
                 if not os.path.exists(self.tophat_fusion_post_result_file):
