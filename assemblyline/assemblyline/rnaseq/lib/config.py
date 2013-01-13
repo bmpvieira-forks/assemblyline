@@ -286,7 +286,7 @@ class RnaseqResults(object):
         self.tophat_fusion_file = os.path.join(self.output_dir, TOPHAT_FUSION_FILE)
         #self.tophat_fusion_reads_bam_file = os.path.join(self.tophat_fusion_dir, TOPHAT_FUSION_READS_BAM_FILE)        
         #self.tophat_fusion_reads_bam_index_file = os.path.join(self.output_dir, TOPHAT_FUSION_READS_BAM_INDEX_FILE)
-        self.tophat_fusion_tmp_files = (os.path.join(self.tophat_fusion_dir, f) for f in TOPHAT_FUSION_TMP_FILES)
+        #self.tophat_fusion_tmp_files = (os.path.join(self.tophat_fusion_dir, f) for f in TOPHAT_FUSION_TMP_FILES)
         self.tophat_fusion_post_result_file = os.path.join(self.output_dir, TOPHAT_FUSION_POST_RESULT_FILE)
         self.tophat_fusion_post_tmp_files = (os.path.join(self.output_dir, f) for f in TOPHAT_FUSION_POST_TMP_FILES)
         # cufflinks ab initio output files
