@@ -9,6 +9,8 @@ import sys
 import os
 import subprocess
 
+from assemblyline.lib.base import check_executable
+
 def bowtie2_paired_align(bowtie2_index,
                          bam_file,
                          read1_files,
@@ -80,6 +82,10 @@ def main():
     parser.add_argument("bowtie2_index")
     parser.add_argument("bam_file")
     args = parser.parse_args()
+    if not check_executable("bowtie2"):
+        parser.error("bowtie2 binary not found")
+    if not check_executable("samtools"):
+        parser.error("samtools binary not found")
     read1_files = []
     read2_files = []
     unpaired_files = []
