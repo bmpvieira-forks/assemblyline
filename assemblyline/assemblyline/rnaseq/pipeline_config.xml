@@ -69,6 +69,7 @@
       <script_line>#PBS -q batch</script_line>
       <script_line>#PBS -m abe</script_line>
       <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
+      <script_line>#PBS -V</script_line>
     </pbs>
   </server>
 
