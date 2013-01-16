@@ -39,6 +39,11 @@ FR_FIRSTSTRAND = 'fr-firststrand'
 FR_UNSTRANDED = 'fr-unstranded'
 LIBRARY_TYPES = (FR_FIRSTSTRAND, FR_UNSTRANDED)
 
+# library protocols
+EXOME_CAPTURE_TRANSCRIPTOME = 'exome_capture_transcriptome'
+POLYA_TRANSCRIPTOME = 'polya_transcriptome'
+LIBRARY_PROTOCOLS = (EXOME_CAPTURE_TRANSCRIPTOME,
+                     POLYA_TRANSCRIPTOME)
 # xml
 LIBRARY_ROOT_TAG = "libraries"
 
@@ -46,9 +51,10 @@ class LibraryTableError(Exception):
     pass
 
 class Library(object):
-    fields = ('study_id', 'cohort_id', 'patient_id', 'sample_id', 'library_id',
-              'description', 'species', 'library_type', 'fragment_layout', 
-              'seq_repo', 'read1_files', 'read2_files', 'bam_files')  
+    fields = ('study_id', 'cohort_id', 'patient_id', 'sample_id', 
+              'library_id', 'description', 'species', 'library_protocol', 
+              'library_type', 'fragment_layout', 'seq_repo', 'read1_files', 
+              'read2_files', 'bam_files')  
 
     def __init__(self, **kwargs):
         # basic parameters
