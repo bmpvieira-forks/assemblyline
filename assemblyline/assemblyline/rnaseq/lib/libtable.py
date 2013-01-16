@@ -189,7 +189,7 @@ class Library(object):
 def read_wksheet(wksheet):
     field_names = wksheet.row_values(0)
     field_descs = wksheet.row_values(1)
-    for rownum in xrange(2, wksheet.nrows):
+    for rownum in xrange(1, wksheet.nrows):
         fields = wksheet.row_values(rownum)
         #print fields
         fields = [' '.join(str(field).split('\n')) for field in fields]

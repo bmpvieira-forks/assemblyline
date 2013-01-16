@@ -10,7 +10,8 @@ import argparse
 import xml.etree.cElementTree as etree
 
 from assemblyline.rnaseq.lib.libtable import Library, \
-    FRAGMENT_LAYOUT_SINGLE, FRAGMENT_LAYOUT_PAIRED
+    FRAGMENT_LAYOUT_SINGLE, FRAGMENT_LAYOUT_PAIRED, \
+    POLYA_TRANSCRIPTOME, FR_UNSTRANDED
 from assemblyline.rnaseq.lib.base import indent_xml
 
 def main():
@@ -18,7 +19,8 @@ def main():
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser()
     parser.add_argument("--species", dest="species", default="human")
-    parser.add_argument("--library-type", dest="library_type", default="fr-unstranded")
+    parser.add_argument("--library-type", dest="library_type", default=FR_UNSTRANDED)
+    parser.add_argument("--library-protocol", dest="library_protocol", default=POLYA_TRANSCRIPTOME)
     parser.add_argument("--param", dest="param_list", action="append", default=None)
     parser.add_argument("--seq-repo", dest="seq_repo", default="tcga")
     parser.add_argument("--xls", dest="write_xls", action="store_true", default=False)
@@ -82,7 +84,8 @@ def main():
                   'library_id': aliquot_id,
                   'description': legacy_sample_id,
                   'species': args.species,
-                  'library_type': 'fr-unstranded',
+                  'library_protocol': args.library_protocol,
+                  'library_type': args.library_type,
                   'fragment_layout': fragment_layout,
                   'seq_repo': args.seq_repo,
                   'read1_files': '',
@@ -106,13 +109,15 @@ def main():
     else:
         # print file headers
         header_fields = ["study_id", "cohort_id", "patient_id", "sample_id", 
-                         "library_id", "description", "species", "library_type",
+                         "library_id", "description", "species", 
+                         "library_protocol", "library_type", 
                          "fragment_layout", "seq_repo", 
                          "read1_files", "read2_files", "bam_files"]
         print '\t'.join(header_fields)
         print '\t'.join(header_fields)
         fields = [study_id, disease_abbr, patient_id, sample_id, aliquot_id,
-                  legacy_sample_id, args.species, args.library_type, fragment_layout, 
+                  legacy_sample_id, args.species, args.library_protocol, 
+                  args.library_type, fragment_layout, 
                   args.seq_repo, "", "", bam_files[0]]
         print '\t'.join(fields)
 
