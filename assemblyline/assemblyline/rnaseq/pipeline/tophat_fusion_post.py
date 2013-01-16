@@ -412,7 +412,13 @@ def filter_fusion(bwt_idx_prefix, refgene_file, ensgene_file, params,
 
             return min_value
 
-        kmer_len = len(seq_chr_dic.keys()[0])
+        ##PATCH 1/16/2013 mkiyer
+        # check if seq_chr_dic empty otherwise 
+        # when there are no fusions found this fails
+        if len(seq_chr_dic) == 0:
+            kmer_len = None
+        else:
+            kmer_len = len(seq_chr_dic.keys()[0])
         ##PATCH 1/6/2013 mkiyer
         # don't need to know current dir anymore (used for 'maher' hack)
         #data = os.getcwd().split('/')[-1]
@@ -2071,9 +2077,6 @@ def main(argv=None):
         if not os.path.exists(fusion_file):
             print >> sys.stderr, "[%s] fusions.out file not found" % (right_now())
             return 2
-        if os.path.getsize(fusion_file) == 0:
-            print >> sys.stderr, "[%s] fusions.out file has zero size, assuming no fusions" % (right_now())
-            return 0
         bam_file = input_dir + "/accepted_hits.bam"
         if not os.path.exists(bam_file):
             print >> sys.stderr, "[%s] accepted_hits.bam file not found" % (right_now())
