@@ -123,7 +123,7 @@ ANNOVAR_GENOME_SUMMARY_FILE = "annovar.genome_summary.csv"
 JOB_DONE_FILE = "job.done"
 # job memory and runtime
 PBS_JOB_MEM = 24000
-PBS_JOB_WALLTIME = "160:00:00"
+PBS_JOB_WALLTIME = "120:00:00"
 PBS_STDOUT_FILE = "pbs.stdout"
 PBS_STDERR_FILE = "pbs.stderr"
 # script files
