@@ -222,7 +222,7 @@ def read_library_table_xls(filename):
         v = field_dict["parameter_value"]
         params[param_type][param_id][k] = v
     # read libraries
-    libraries = {}
+    libraries = collections.OrderedDict()
     for field_dict in read_wksheet(wkbook.sheet_by_name(LIBRARY_ROOT_TAG)):
         # add params to field dict
         myparams = {}

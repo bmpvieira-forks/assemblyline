@@ -642,7 +642,6 @@ def filter_fusion(bwt_idx_prefix, refgene_file, ensgene_file, params,
         seq, chrs = line[:-1].split('\t')
         chrs = chrs.split(',')
         seq_chr_dic[seq] = chrs
-    
     seq_chr_file.close()
 
     re_mir = re.compile(r'^(MIR)')
@@ -698,9 +697,8 @@ def filter_fusion(bwt_idx_prefix, refgene_file, ensgene_file, params,
     refGene_list = read_genes(refgene_file)
     ensGene_list = read_genes(ensgene_file)
 
-    fusion_gene_list = []
-
     print >> sys.stderr, "\tProcessing:", fusion_input_file
+    fusion_gene_list = []
     filter_fusion_impl(fusion_input_file, sample_name, refGene_list, ensGene_list, seq_chr_dic, fusion_gene_list)
 
     fusion_out_file = output_dir + "potential_fusion.txt"
@@ -2073,6 +2071,9 @@ def main(argv=None):
         if not os.path.exists(fusion_file):
             print >> sys.stderr, "[%s] fusions.out file not found" % (right_now())
             return 2
+        if os.path.getsize(fusion_file) == 0:
+            print >> sys.stderr, "[%s] fusions.out file has zero size, assuming no fusions" % (right_now())
+            return 0
         bam_file = input_dir + "/accepted_hits.bam"
         if not os.path.exists(bam_file):
             print >> sys.stderr, "[%s] accepted_hits.bam file not found" % (right_now())

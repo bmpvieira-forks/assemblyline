@@ -1,4 +1,4 @@
-<rnaseq version="0.1.8">
+<rnaseq version="0.1.9">
   <!-- server setup -->
   <server name="mkiyer_rhel6">
     <modules_init_script>/home/mkiyer/sw/rhel6/init.sh</modules_init_script>
