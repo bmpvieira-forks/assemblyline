@@ -414,7 +414,7 @@ class RnaseqResults(object):
             is_valid = False
         # check coverage files
         if not has_library_metrics:
-            logging.error("Library %s missing coverage bigwig file(s)" % (self.library_id))
+            logging.error("Library %s missing coverage bigwig file" % (self.library_id))
             missing_files.append(self.coverage_bigwig_prefix + ".bw")
             is_valid = False
         else:
@@ -427,7 +427,7 @@ class RnaseqResults(object):
                                 self.coverage_bigwig_prefix + "_neg.bw"]                                 
             for f in bigwig_files:
                 if not file_exists_and_nz_size(f):
-                    logging.error("Library %s missing coverage bigwig file %s" % (self.library_id))
+                    logging.error("Library %s missing coverage bigwig file" % (self.library_id))
                     is_valid = False
                     missing_files.append(f)
         # check junction bigbed file
