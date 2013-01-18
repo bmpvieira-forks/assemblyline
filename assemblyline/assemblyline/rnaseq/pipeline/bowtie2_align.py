@@ -44,8 +44,8 @@ def bowtie2_paired_align(bowtie2_index,
             os.path.join(_pipeline_dir, "sam_no_unal.py"),
             "-", "-"]
     logging.debug("sam_no_unal args: %s" % str(args))
-    nounal_p = subprocess.call(map(str,args), stdin=aln_p.stdout, 
-                               stdout=subprocess.PIPE)  
+    nounal_p = subprocess.Popen(map(str,args), stdin=aln_p.stdout, 
+                                stdout=subprocess.PIPE)  
     # convert sam to bam
     args = ["samtools", "view", "-bS", "-"]
     f = open(unsorted_bam_file, "wb")
