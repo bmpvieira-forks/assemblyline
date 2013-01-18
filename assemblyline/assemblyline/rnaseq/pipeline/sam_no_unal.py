@@ -19,21 +19,27 @@ def main():
     parser.add_argument('input_file')
     parser.add_argument('output_file')
     args = parser.parse_args()
-    if not os.path.exists(args.input_file):
-        parser.error("Input file not found")
     # open input file
-    ext = os.path.splitext(args.input_file)[-1]
-    if ext == ".bam":
-        inmode = "rb"
-    else:
+    if args.input_file == "-":
         inmode = "r"
+    else:
+        if not os.path.exists(args.input_file):
+            parser.error("input file not found")
+        ext = os.path.splitext(args.input_file)[-1]
+        if ext == ".bam":
+            inmode = "rb"
+        else:
+            inmode = "r"
     infh = pysam.Samfile(args.input_file, inmode)
     # open output file
-    ext = os.path.splitext(args.output_file)[-1]
-    if ext == ".bam":
-        outmode = "wb"
-    else:
+    if args.output_file == "-":
         outmode = "wh"
+    else:
+        ext = os.path.splitext(args.output_file)[-1]
+        if ext == ".bam":
+            outmode = "wb"
+        else:
+            outmode = "wh"
     outfh = pysam.Samfile(args.output_file, outmode, template=infh)
     num_reads = 0
     unmapped = 0
