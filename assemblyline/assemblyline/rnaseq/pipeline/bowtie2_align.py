@@ -10,6 +10,8 @@ import os
 import subprocess
 
 from assemblyline.lib.base import check_executable
+import assemblyline.rnaseq.pipeline
+_pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
 
 def bowtie2_paired_align(bowtie2_index,
                          bam_file,
@@ -36,13 +38,22 @@ def bowtie2_paired_align(bowtie2_index,
     args = map(str, args)
     logging.debug("bowtie2 args: %s" % (' '.join(args)))
     aln_p = subprocess.Popen(args, stdout=subprocess.PIPE)
+    # remove unmapped reads from SAM
+    # TODO: this will not be necessary after bug fix in bowtie2 --no-unal option
+    args = ["python", 
+            os.path.join(_pipeline_dir, "sam_no_unal.py"),
+            "-", "-"]
+    logging.debug("sam_no_unal args: %s" % str(args))
+    nounal_p = subprocess.call(map(str,args), stdin=aln_p.stdout, 
+                               stdout=subprocess.PIPE)  
     # convert sam to bam
     args = ["samtools", "view", "-bS", "-"]
     f = open(unsorted_bam_file, "wb")
-    retcode1 = subprocess.call(args, stdin=aln_p.stdout, stdout=f)     
+    retcode1 = subprocess.call(args, stdin=nounal_p.stdout, stdout=f)     
     f.close()
-    retcode2 = aln_p.wait()
-    retcode = retcode1 + retcode2
+    retcode2 = nounal_p.wait()
+    retcode3 = aln_p.wait()
+    retcode = retcode1 + retcode2 + retcode3
     if retcode != 0:
         logging.error("bowtie2 alignment failed")
         if os.path.exists(unsorted_bam_file):
