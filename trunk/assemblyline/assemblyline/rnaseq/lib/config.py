@@ -443,7 +443,7 @@ class RnaseqResults(object):
                 missing_files.append(self.tophat_fusion_bam_file)
                 is_valid = False
             # check tophat fusion file
-            if not file_exists_and_nz_size(self.tophat_fusion_file):
+            if not os.path.exists(self.tophat_fusion_file):
                 logging.error("Library %s missing/corrupt tophat fusion file" % (self.library_id))
                 missing_files.append(self.tophat_fusion_file)
                 is_valid = False

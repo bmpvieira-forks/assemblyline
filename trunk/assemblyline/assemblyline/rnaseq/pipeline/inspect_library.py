@@ -54,7 +54,7 @@ def inspect_rnaseq_library(bowtie_index,
     logging.debug("bowtie args: %s" % (' '.join(map(str, args))))
     aln_p = subprocess.Popen(map(str,args), stdout=subprocess.PIPE)
     # setup inspection process
-    args = [sys.executable, 
+    args = ["python", 
             os.path.join(_pipeline_dir, "inspect_library_analysis.py"),
             "--strand-spec-frac", strand_spec_frac,
             "--fragment-layout", fragment_layout,

@@ -59,7 +59,7 @@ def run_htseq_count(gtf_file, bam_file, output_file, run_as_pe,
     else:
         # if running as single-read need to eliminate all paired-end flags from
         # the reads 
-        args = [sys.executable, 
+        args = ["python", 
                 os.path.join(_pipeline_dir, "bam_pe_to_sr.py"),
                 input_file, "-"]
         logging.debug("bam pe to sr args: %s" % (map(str, args)))
