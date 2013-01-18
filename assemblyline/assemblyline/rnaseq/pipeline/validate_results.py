@@ -32,7 +32,8 @@ def main():
                  missing_files[0] == results.job_done_file)
     if valid:
         open(results.job_done_file, "w").close()
-    return config.JOB_SUCCESS
+        return config.JOB_SUCCESS
+    return config.JOB_ERROR
     
 if __name__ == '__main__':
     sys.exit(main())
