@@ -29,8 +29,9 @@ def bowtie2_paired_align(bowtie2_index,
     for arg in extra_args:        
         args.extend(arg.split())    
     args.extend(["-p", num_threads,
-# TODO: problem in bowtie2 version 2.0.5 with the --no-unal flag
-#                 "--no-unal",
+                 # TODO: problem in bowtie2 version 2.0.5 
+                 # with the --no-unal flag
+                 #"--no-unal",
                  "-x", bowtie2_index,
                  "-1", ','.join(read1_files),
                  "-2", ','.join(read2_files),
