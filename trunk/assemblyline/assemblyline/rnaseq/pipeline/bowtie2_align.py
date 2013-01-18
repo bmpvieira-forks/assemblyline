@@ -24,7 +24,7 @@ def bowtie2_paired_align(bowtie2_index,
     num_threads = max(1, num_processors-1)
     # align with bowtie2
     bam_prefix = os.path.splitext(bam_file)[0]
-    unsorted_bam_file = os.path.join(tmp_dir, os.path.basename(bam_prefix) + ".bam")
+    unsorted_bam_file = os.path.join(tmp_dir, os.path.basename(bam_prefix) + ".unsorted.bam")
     args = ["bowtie2"]
     for arg in extra_args:        
         args.extend(arg.split())    
