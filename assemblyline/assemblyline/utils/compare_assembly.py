@@ -282,11 +282,12 @@ def gather_global_stats(transcripts):
             else:
                 d.is_assembly = True
             pattern.append(k)
-        d = pattern_dict[tuple(pattern)]
-        if is_ref:
-            d.is_ref = True
-        else:
-            d.is_assembly = True
+        if len(pattern) > 0:
+            d = pattern_dict[tuple(pattern)]
+            if is_ref:
+                d.is_ref = True
+            else:
+                d.is_assembly = True
     # compile statistics
     stats_obj = GlobalStats()
     for strand, intron_dict in strand_intron_dict.iteritems():
