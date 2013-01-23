@@ -159,7 +159,7 @@ def bed_to_seq(bed_file, reference_seq_file, sep):
 def main():
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    parser = argparse.ArgumentParser(description="Build alignment indexes for use with chimerascan")
+    parser = argparse.ArgumentParser(description="Extract transcript sequences from BED file")
     parser.add_argument("--sep", dest="sep", default='')
     parser.add_argument("ref_fasta_file", help="reference genome FASTA file")    
     parser.add_argument("bed_file")

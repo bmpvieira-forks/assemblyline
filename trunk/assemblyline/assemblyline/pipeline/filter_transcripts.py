@@ -97,7 +97,7 @@ def choose_cutoff(cutoff_table_file, min_prec, min_rec, min_spec,
             valid_lines.append(i)
     if len(valid_lines) == 0:
         return None, None, None, None, None, None
-    # find cutoff with maximum F measure among valid cutoffs
+    # find best cutoff among valid cutoffs
     best_ind = None
     best_val = 0.0
     for i in valid_lines:
