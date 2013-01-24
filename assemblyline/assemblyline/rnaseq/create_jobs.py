@@ -1041,7 +1041,7 @@ def create_job(library, pipeline, server, config_xml_file,
         shell_commands.append(bash_check_retcode(msg))   
     #
     # write shell/pbs scripts
-    # 
+    #
     if server.pbs:
         pbsfh = open(results.pbs_script_file, "w")
         print >>pbsfh, "#!/bin/sh"
