@@ -47,9 +47,6 @@ LIBRARY_PROTOCOLS = (EXOME_CAPTURE_TRANSCRIPTOME,
 # xml
 LIBRARY_ROOT_TAG = "libraries"
 
-class LibraryTableError(Exception):
-    pass
-
 class Library(object):
     fields = ('study_id', 'cohort_id', 'patient_id', 'sample_id', 
               'library_id', 'description', 'species', 'library_protocol', 
@@ -208,9 +205,9 @@ def read_library_table_xls(filename):
     # check that required sheet names exist
     sheet_names = wkbook.sheet_names()
     if not LIBRARY_ROOT_TAG in sheet_names:
-        raise LibraryTableError("XLS file missing 'libraries' Sheet")
+        raise Exception("XLS file missing 'libraries' Sheet")
     if not "parameters" in sheet_names:
-        raise LibraryTableError("XLS file missing 'parameters' Sheet")
+        raise Exception("XLS file missing 'parameters' Sheet")
     # read parameters
     params = {"patient": collections.defaultdict(lambda: {}),
               "sample": collections.defaultdict(lambda: {}),
@@ -234,6 +231,6 @@ def read_library_table_xls(filename):
         library = Library(**field_dict)
         # ensure unique ids
         if library.library_id in libraries:
-            raise LibraryTableError("Found duplicate library id %s" % (library.library_id))
+            raise Exception("Found duplicate library id %s" % (library.library_id))
         libraries[library.library_id] = library
     return libraries
