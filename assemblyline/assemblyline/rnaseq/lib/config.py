@@ -100,6 +100,7 @@ COVERAGE_BIGWIG_PREFIX = "coverage"
 STRAND_SUFFIX_DICT = {"+": "pos", "-": "neg", ".": "none"}
 JUNCTIONS_BIGBED_FILE = "junctions.bb"
 # cufflinks output
+CUFFLINKS_DEPRECATED_DIR = "cufflinks"
 CUFFLINKS_AB_INITIO_DIR = "cufflinks_ab_initio"
 CUFFLINKS_KNOWN_DIR = "cufflinks_known"
 CUFFLINKS_TRANSCRIPTS_GTF_FILE = "transcripts.gtf"
@@ -289,6 +290,9 @@ class RnaseqResults(object):
         #self.tophat_fusion_tmp_files = (os.path.join(self.tophat_fusion_dir, f) for f in TOPHAT_FUSION_TMP_FILES)
         self.tophat_fusion_post_result_file = os.path.join(self.output_dir, TOPHAT_FUSION_POST_RESULT_FILE)
         self.tophat_fusion_post_tmp_files = (os.path.join(self.output_dir, f) for f in TOPHAT_FUSION_POST_TMP_FILES)
+        # TODO: only for rnaseq_df1
+        self.cufflinks_dir = os.path.join(self.output_dir, CUFFLINKS_DEPRECATED_DIR)
+        self.cufflinks_gtf_file = os.path.join(self.cufflinks_dir, CUFFLINKS_TRANSCRIPTS_GTF_FILE)
         # cufflinks ab initio output files
         self.cufflinks_ab_initio_dir = os.path.join(self.output_dir, CUFFLINKS_AB_INITIO_DIR)
         self.cufflinks_ab_initio_gtf_file = os.path.join(self.cufflinks_ab_initio_dir, CUFFLINKS_TRANSCRIPTS_GTF_FILE)
