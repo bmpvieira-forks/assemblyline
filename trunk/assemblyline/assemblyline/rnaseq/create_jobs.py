@@ -11,7 +11,7 @@ import subprocess
 import shutil
 
 import assemblyline.rnaseq.lib.config as config
-from assemblyline.rnaseq.lib.base import many_up_to_date, detect_format
+from assemblyline.rnaseq.lib.base import detect_format
 from assemblyline.rnaseq.lib.libtable import Library, read_library_table_xls, FRAGMENT_LAYOUT_PAIRED
 import assemblyline.rnaseq.pipeline
 _pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
@@ -253,14 +253,8 @@ def create_job(library, pipeline, server, config_xml_file,
     #
     # extract fastq from bam input files
     #
-    input_files = library.bam_files
-    output_files = results.bam_read1_files + results.bam_read2_files
-    skip = many_up_to_date(output_files, input_files)
     msg = "Converting BAM input files to FASTQ"
-    if skip:
-        logging.debug("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
+    if len(results.bam_fastq_prefixes) > 0:    
         logging.debug(msg)
         shell_commands.append(bash_log(msg, "INFO"))
         log_file = os.path.join(results.log_dir, 'extract_fastq_from_bam.log')
@@ -279,128 +273,88 @@ def create_job(library, pipeline, server, config_xml_file,
     #
     # copy/concatenate sequences read1
     #
-    input_files = library.read1_files + results.bam_read1_files
-    output_files = [results.copied_fastq_files[0]]
-    skip = many_up_to_date(output_files, input_files)
     msg = "Concatenating/copying read1 sequence files"
-    if skip:
-        logging.debug("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg)
-        shell_commands.append(bash_log(msg, "INFO"))
-        commands = concatenate_sequences(library.read1_files + results.bam_read1_files, 
-                                         results.copied_fastq_files[0])
-        shell_commands.extend(commands)
+    logging.debug(msg)
+    shell_commands.append(bash_log(msg, "INFO"))
+    commands = concatenate_sequences(library.read1_files + results.bam_read1_files, 
+                                     results.copied_fastq_files[0])
+    shell_commands.extend(commands)
     #
     # copy/concatenate sequences read2
     #
     if library.fragment_layout == FRAGMENT_LAYOUT_PAIRED:    
-        input_files = library.read2_files + results.bam_read2_files
-        output_files = [results.copied_fastq_files[1]]
-        skip = many_up_to_date(output_files, input_files)
         msg = "Concatenating/copying read2 sequence files"
-        if skip:
-            logging.debug("[SKIPPED] %s" % msg)
-            shell_commands.append(bash_log(msg, "SKIPPED"))
-        else:
-            logging.debug(msg)
-            shell_commands.append(bash_log(msg, "INFO"))
-            commands = concatenate_sequences(library.read2_files + results.bam_read2_files, 
-                                             results.copied_fastq_files[1])
-            shell_commands.extend(commands)
+        logging.debug(msg)
+        shell_commands.append(bash_log(msg, "INFO"))
+        commands = concatenate_sequences(library.read2_files + results.bam_read2_files, 
+                                         results.copied_fastq_files[1])
+        shell_commands.extend(commands)
     #
     # Run FASTQC quality assessment
     #
-    input_files = results.copied_fastq_files
-    output_files = results.fastqc_data_files + results.fastqc_report_files
-    skip = many_up_to_date(output_files, input_files)
     msg = "Running FASTQC quality assessment"
-    if skip:
-        logging.debug("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug("%s" % msg)    
-        shell_commands.append(bash_log(msg, "INFO"))
-        num_threads = min(num_processors, len(results.copied_fastq_files))
-        log_file = os.path.join(results.log_dir, 'fastqc.log')
-        args = ['fastqc', "--threads", num_threads, "-o", results.output_dir]
-        args.extend(results.copied_fastq_files)
-        args.append('> %s 2>&1' % (log_file))
-        logging.debug("\targs: %s" % (' '.join(map(str, args))))
-        command = ' '.join(map(str, args))
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())   
+    logging.debug("%s" % msg)    
+    shell_commands.append(bash_log(msg, "INFO"))
+    num_threads = min(num_processors, len(results.copied_fastq_files))
+    log_file = os.path.join(results.log_dir, 'fastqc.log')
+    args = ['fastqc', "--threads", num_threads, "-o", results.output_dir]
+    args.extend(results.copied_fastq_files)
+    args.append('> %s 2>&1' % (log_file))
+    logging.debug("\targs: %s" % (' '.join(map(str, args))))
+    command = ' '.join(map(str, args))
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode())   
     #
     # Filter reads that map to abundant sequences
     #
-    input_files = results.fastqc_data_files + results.copied_fastq_files
-    output_files = results.filtered_fastq_files + [results.sorted_abundant_bam_file]
-    skip = many_up_to_date(output_files, input_files)
     msg = "Filtering reads that map to abundant sequences"
-    if skip:
-        logging.debug("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg)
-        shell_commands.append(bash_log(msg, "INFO"))
-        args = ["python", 
-                os.path.join(_pipeline_dir, "filter_reads.py"),
-                "--num-processors", num_processors,
-                "--tmp-dir", results.tmp_dir,
-                genome_static.abundant_bowtie2_index,
-                ','.join(results.fastqc_data_files),
-                ','.join(results.copied_fastq_files),
-                ','.join(results.filtered_fastq_files),
-                results.sorted_abundant_bam_file,
-                results.abundant_counts_file]
-        logging.debug("\targs: %s" % (' '.join(map(str, args))))
-        command = ' '.join(map(str, args))
-        log_file = os.path.join(results.log_dir, 'filter_abundant_sequences.log')
-        command += ' > %s 2>&1' % (log_file)
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())
+    logging.debug(msg)
+    shell_commands.append(bash_log(msg, "INFO"))
+    args = ["python", 
+            os.path.join(_pipeline_dir, "filter_reads.py"),
+            "--num-processors", num_processors,
+            "--tmp-dir", results.tmp_dir,
+            genome_static.abundant_bowtie2_index,
+            ','.join(results.fastqc_data_files),
+            ','.join(results.copied_fastq_files),
+            ','.join(results.filtered_fastq_files),
+            results.sorted_abundant_bam_file,
+            results.abundant_counts_file]
+    logging.debug("\targs: %s" % (' '.join(map(str, args))))
+    command = ' '.join(map(str, args))
+    log_file = os.path.join(results.log_dir, 'filter_abundant_sequences.log')
+    command += ' > %s 2>&1' % (log_file)
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode())
     #
     # inspect the library and determine characteristics
     #
     msg = "Inspecting library"
-    input_files = results.filtered_fastq_files
-    output_files = [results.library_metrics_file, 
-                    results.frag_size_dist_plot_file]
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.debug("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg) 
-        shell_commands.append(bash_log(msg, "INFO"))
-        args = ["python",
-                os.path.join(_pipeline_dir, "inspect_library.py"),
-                "-p", num_processors]
-        for arg in pipeline.inspect_args:
-            args.extend(arg.split())
-        args.extend([genome_static.fragment_size_bowtie1_index,
-                     results.library_metrics_file,
-                     results.frag_size_dist_plot_file])
-        args.extend(results.filtered_fastq_files)
-        logging.debug("\targs: %s" % (' '.join(map(str, args))))
-        command = ' '.join(map(str, args))
-        log_file = os.path.join(results.log_dir, 'inspect_library.log')
-        command += ' > %s 2>&1' % (log_file)        
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())
+    logging.debug(msg) 
+    shell_commands.append(bash_log(msg, "INFO"))
+    args = ["python",
+            os.path.join(_pipeline_dir, "inspect_library.py"),
+            "-p", num_processors]
+    for arg in pipeline.inspect_args:
+        args.extend(arg.split())
+    args.extend([genome_static.fragment_size_bowtie1_index,
+                 results.library_metrics_file,
+                 results.frag_size_dist_plot_file])
+    args.extend(results.filtered_fastq_files)
+    logging.debug("\targs: %s" % (' '.join(map(str, args))))
+    command = ' '.join(map(str, args))
+    log_file = os.path.join(results.log_dir, 'inspect_library.log')
+    command += ' > %s 2>&1' % (log_file)        
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode())
     #
     # align reads with tophat fusion
     #
-    input_files = results.filtered_fastq_files + [results.library_metrics_file]
-    output_files = [results.tophat_fusion_bam_file]
-    msg = "Aligning reads with Tophat-Fusion"
-    skip = ((not pipeline.tophat_fusion_run) or 
-            many_up_to_date(output_files, input_files))
-    if skip:
+    if (not pipeline.tophat_fusion_run):
         logging.debug("[SKIPPED] %s" % (msg))
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
+        msg = "Aligning reads with Tophat-Fusion"
         logging.debug("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
         args = ["python", os.path.join(_pipeline_dir, "run_tophat.py"),
@@ -423,18 +377,8 @@ def create_job(library, pipeline, server, config_xml_file,
         command += ' > %s 2>&1' % (log_file)        
         shell_commands.append(command)        
         shell_commands.append(bash_check_retcode())
-    #
-    # index tophat fusion bam file
-    #
-    input_files = [results.tophat_fusion_bam_file]
-    output_files = [results.tophat_fusion_bam_index_file]
-    msg = "Indexing Tophat-Fusion BAM file"
-    skip = ((not pipeline.tophat_fusion_run) or
-            many_up_to_date(output_files, input_files))
-    if skip:
-        logging.debug("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
+        # index tophat fusion bam file
+        msg = "Indexing Tophat-Fusion BAM file"
         logging.debug("%s" % (msg))
         shell_commands.append(bash_log(msg, "INFO"))
         args = ["samtools", "index", results.tophat_fusion_bam_file]
@@ -442,39 +386,12 @@ def create_job(library, pipeline, server, config_xml_file,
         command = ' '.join(map(str, args))
         shell_commands.append(command)        
         shell_commands.append(bash_check_retcode())
-#    #
-#    # extract fusion reads from tophat bam file
-#    #
-#    input_files = [results.tophat_fusion_bam_file]
-#    output_files = [results.tophat_fusion_reads_bam_file,
-#                    results.tophat_fusion_reads_bam_index_file]
-#    msg = "Extracting fusion reads"
-#    skip = ((not pipeline.tophat_fusion_run) or 
-#            many_up_to_date(output_files, input_files))
-#    if skip:
-#        logging.debug("[SKIPPED] %s" % (msg))
-#        shell_commands.append(bash_log(msg, "SKIPPED"))
-#    else:
-#        logging.debug("%s" % (msg))
-#        shell_commands.append(bash_log(msg, "INFO"))
-#        log_file = os.path.join(results.log_dir, 'tophat_extract_fusion_reads.log')
-#        args = ["python", 
-#                os.path.join(_pipeline_dir, "tophat_extract_fusion_reads.py"),
-#                results.tophat_fusion_bam_file,
-#                results.tophat_fusion_reads_bam_file,
-#                '> %s 2>&1' % (log_file)]
-#        command = ' '.join(map(str, args))
-#        shell_commands.append(command)        
-#        shell_commands.append(bash_check_retcode())
     #
     # tophat fusion post processing script
     #
-    input_files = [results.tophat_fusion_file]
-    output_files = [results.tophat_fusion_post_result_file]
     msg = "Post-processing Tophat-Fusion results"
-    skip = (((not pipeline.tophat_fusion_run) and
-             (not pipeline.tophat_fusion_post_run)) or 
-            many_up_to_date(output_files, input_files))
+    skip = ((not pipeline.tophat_fusion_run) and
+            (not pipeline.tophat_fusion_post_run)) 
     if skip:
         logging.debug("[SKIPPED] %s" % (msg))
         shell_commands.append(bash_log(msg, "SKIPPED"))
@@ -501,249 +418,180 @@ def create_job(library, pipeline, server, config_xml_file,
     #
     # align reads with tophat
     #
-    input_files = results.filtered_fastq_files + [results.library_metrics_file]
-    output_files = [results.tophat_bam_file]
     msg = "Aligning reads with Tophat"
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.debug("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug("%s" % (msg))
-        shell_commands.append(bash_log(msg, "INFO"))
-        args = ["python", os.path.join(_pipeline_dir, "run_tophat.py"),
-                "-p", num_processors,
-                '--rg-id', library.library_id,
-                '--rg-sample="%s"' % library.sample_id,
-                '--rg-library="%s"' % library.library_id,
-                '--rg-description="%s"' % library.description,
-                '--rg-center="%s"' % library.study_id]
-        # resolve genome-specific args
-        for arg in pipeline.tophat_args:
-            args.append('--tophat-arg="%s"' % genome_static.resolve_arg(arg))
-        args.extend([results.tophat_dir,
-                     genome_static.genome_bowtie2_index,
-                     results.library_metrics_file])
-        args.extend(results.filtered_fastq_files)
-        logging.debug("\targs: %s" % (' '.join(map(str, args))))
-        command = ' '.join(map(str, args))
-        log_file = os.path.join(results.log_dir, 'tophat.log')
-        command += ' > %s 2>&1' % (log_file)
-        shell_commands.append(command)        
-        shell_commands.append(bash_check_retcode())
+    logging.debug("%s" % (msg))
+    shell_commands.append(bash_log(msg, "INFO"))
+    args = ["python", os.path.join(_pipeline_dir, "run_tophat.py"),
+            "-p", num_processors,
+            '--rg-id', library.library_id,
+            '--rg-sample="%s"' % library.sample_id,
+            '--rg-library="%s"' % library.library_id,
+            '--rg-description="%s"' % library.description,
+            '--rg-center="%s"' % library.study_id]
+    # resolve genome-specific args
+    for arg in pipeline.tophat_args:
+        args.append('--tophat-arg="%s"' % genome_static.resolve_arg(arg))
+    args.extend([results.tophat_dir,
+                 genome_static.genome_bowtie2_index,
+                 results.library_metrics_file])
+    args.extend(results.filtered_fastq_files)
+    logging.debug("\targs: %s" % (' '.join(map(str, args))))
+    command = ' '.join(map(str, args))
+    log_file = os.path.join(results.log_dir, 'tophat.log')
+    command += ' > %s 2>&1' % (log_file)
+    shell_commands.append(command)        
+    shell_commands.append(bash_check_retcode())
     #
     # index tophat bam file
     #
-    input_files = [results.tophat_bam_file]
-    output_files = [results.tophat_bam_index_file]
     msg = "Indexing Tophat BAM file"
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.debug("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug("%s" % (msg))
-        shell_commands.append(bash_log(msg, "INFO"))
-        args = ["samtools", "index", results.tophat_bam_file]
-        logging.debug("\targs: %s" % (' '.join(map(str, args))))
-        command = ' '.join(map(str, args))
-        shell_commands.append(command)        
-        shell_commands.append(bash_check_retcode(msg))
+    logging.debug("%s" % (msg))
+    shell_commands.append(bash_log(msg, "INFO"))
+    args = ["samtools", "index", results.tophat_bam_file]
+    logging.debug("\targs: %s" % (' '.join(map(str, args))))
+    command = ' '.join(map(str, args))
+    shell_commands.append(command)        
+    shell_commands.append(bash_check_retcode(msg))
     #
     # run picard diagnostics for alignment results
     #
     msg = "Collecting alignment metrics with Picard"    
-    input_files = [results.tophat_bam_file]
-    output_files = [results.alignment_summary_metrics,
-                    results.quality_by_cycle_metrics,
-                    results.quality_distribution_metrics]
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.debug("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg)
-        shell_commands.append(bash_log(msg, "INFO"))
-        args = ["java", "-Xmx4g", "-jar", 
-                "$PICARDPATH/CollectMultipleMetrics.jar",
-                "INPUT=%s" % (results.tophat_bam_file),
-                "REFERENCE_SEQUENCE=%s" % genome_static.genome_fasta_file,
-                "OUTPUT=%s" % (os.path.join(results.output_dir, "picard")),
-                "ASSUME_SORTED=TRUE",
-                "TMP_DIR=%s" % results.tmp_dir,
-                "VALIDATION_STRINGENCY=SILENT"]
-        logging.debug("\targs: %s" % (' '.join(map(str, args))))
-        command = ' '.join(map(str, args))
-        log_file = os.path.join(results.log_dir, 'picard_collect_multiple_metrics.log')
-        command += ' > %s 2>&1' % (log_file)        
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())   
+    logging.debug(msg)
+    shell_commands.append(bash_log(msg, "INFO"))
+    args = ["java", "-Xmx4g", "-jar", 
+            "$PICARDPATH/CollectMultipleMetrics.jar",
+            "INPUT=%s" % (results.tophat_bam_file),
+            "REFERENCE_SEQUENCE=%s" % genome_static.genome_fasta_file,
+            "OUTPUT=%s" % (os.path.join(results.output_dir, "picard")),
+            "ASSUME_SORTED=TRUE",
+            "TMP_DIR=%s" % results.tmp_dir,
+            "VALIDATION_STRINGENCY=SILENT"]
+    logging.debug("\targs: %s" % (' '.join(map(str, args))))
+    command = ' '.join(map(str, args))
+    log_file = os.path.join(results.log_dir, 'picard_collect_multiple_metrics.log')
+    command += ' > %s 2>&1' % (log_file)        
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode())   
     #
     # run picard for rna-seq diagnostics
     #
     msg = "Collecting RNA-Seq metrics with Picard"
-    input_files = [results.tophat_bam_file,
-                   results.library_metrics_file]
-    output_files = [results.rnaseq_metrics]
-    skip = many_up_to_date(output_files, input_files)
-    if skip:    
-        logging.debug("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg)
-        shell_commands.append(bash_log(msg, "INFO"))
-        args = ["python",
-                os.path.join(_pipeline_dir, "picard_metrics.py"),
-                "--tmp-dir", results.tmp_dir,
-                "--picard-dir", "$PICARDPATH",
-                results.tophat_bam_file,
-                results.library_metrics_file,
-                genome_static.gene_annotation_refflat,
-                genome_static.picard_ribosomal_intervals,
-                genome_static.genome_fasta_file,   
-                results.rnaseq_metrics,
-                results.rnaseq_metrics_pdf]
-        logging.debug("\targs: %s" % (' '.join(map(str, args))))
-        command = ' '.join(map(str, args))
-        log_file = os.path.join(results.log_dir, 'picard_rnaseq_metrics.log')
-        command += ' > %s 2>&1' % (log_file)                
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())
+    logging.debug(msg)
+    shell_commands.append(bash_log(msg, "INFO"))
+    args = ["python",
+            os.path.join(_pipeline_dir, "picard_metrics.py"),
+            "--tmp-dir", results.tmp_dir,
+            "--picard-dir", "$PICARDPATH",
+            results.tophat_bam_file,
+            results.library_metrics_file,
+            genome_static.gene_annotation_refflat,
+            genome_static.picard_ribosomal_intervals,
+            genome_static.genome_fasta_file,   
+            results.rnaseq_metrics,
+            results.rnaseq_metrics_pdf]
+    logging.debug("\targs: %s" % (' '.join(map(str, args))))
+    command = ' '.join(map(str, args))
+    log_file = os.path.join(results.log_dir, 'picard_rnaseq_metrics.log')
+    command += ' > %s 2>&1' % (log_file)                
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode())
     #
     # extract unmapped paired fastq files for realignment
     #
     msg = "Converting unmapped BAM to FASTQ for realignment"
-    input_files = [results.tophat_unmapped_bam_file]
-    output_files = (results.unmapped_paired_fastq_files + 
-                    results.unmapped_unpaired_fastq_files)
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.debug("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg)
-        shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'unmapped_bam_to_fastq.log')
-        # convert bam to paired fastq
-        args = ["python",
-                os.path.join(_pipeline_dir, "extract_fastq_from_bam.py"),
-                "--tmp-dir", results.tmp_dir,
-                results.tophat_unmapped_bam_file,
-                results.unmapped_fastq_prefix,
-                '> %s 2>&1' % (log_file)]
-        command = ' '.join(map(str, args))
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode(msg))
+    logging.debug(msg)
+    shell_commands.append(bash_log(msg, "INFO"))
+    log_file = os.path.join(results.log_dir, 'unmapped_bam_to_fastq.log')
+    # convert bam to paired fastq
+    args = ["python",
+            os.path.join(_pipeline_dir, "extract_fastq_from_bam.py"),
+            "--tmp-dir", results.tmp_dir,
+            results.tophat_unmapped_bam_file,
+            results.unmapped_fastq_prefix,
+            '> %s 2>&1' % (log_file)]
+    command = ' '.join(map(str, args))
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode(msg))
     #
     # align to pathogen sequences
     #
     msg = "Aligning to pathogen sequences"
-    input_files = (results.unmapped_paired_fastq_files + 
-                   results.unmapped_unpaired_fastq_files)
-    output_files = [results.pathogen_bam_file]
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.debug("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg) 
-        shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'bowtie2_align_pathogens.log')        
-        args = ["python",
-                os.path.join(_pipeline_dir, "bowtie2_align.py"),
-                "-p", num_processors,
-                "--tmp-dir", results.tmp_dir,
-                "-1", results.unmapped_paired_fastq_files[0],
-                "-2", results.unmapped_paired_fastq_files[1],
-                "-U", ','.join(results.unmapped_unpaired_fastq_files)]
-        # extra args
-        for arg in pipeline.pathogen_screen_bt2_args:
-            args.append('--extra-arg="%s"' % arg)
-        args.extend([genome_static.pathogen_bowtie2_index,                     
-                     results.pathogen_bam_file])
-        args.append('> %s 2>&1' % (log_file))
-        command = ' '.join(map(str, args))
-        logging.debug("\tcommand: %s" % (command))
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())
+    logging.debug(msg) 
+    shell_commands.append(bash_log(msg, "INFO"))
+    log_file = os.path.join(results.log_dir, 'bowtie2_align_pathogens.log')        
+    args = ["python",
+            os.path.join(_pipeline_dir, "bowtie2_align.py"),
+            "-p", num_processors,
+            "--tmp-dir", results.tmp_dir,
+            "-1", results.unmapped_paired_fastq_files[0],
+            "-2", results.unmapped_paired_fastq_files[1],
+            "-U", ','.join(results.unmapped_unpaired_fastq_files)]
+    # extra args
+    for arg in pipeline.pathogen_screen_bt2_args:
+        args.append('--extra-arg="%s"' % arg)
+    args.extend([genome_static.pathogen_bowtie2_index,                     
+                 results.pathogen_bam_file])
+    args.append('> %s 2>&1' % (log_file))
+    command = ' '.join(map(str, args))
+    logging.debug("\tcommand: %s" % (command))
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode())
     #
     # count pathogen sequences
     #
     msg = "Counting pathogen alignments"
-    input_files = [results.pathogen_bam_file]
-    output_files = [results.pathogen_counts_file]
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.debug("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg)
-        shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'pathogen_counts.log')
-        args = ["python",
-                os.path.join(_pipeline_dir, "bowtie2_quantify.py"),
-                results.pathogen_bam_file,
-                results.pathogen_counts_file,
-                '> %s 2>&1' % (log_file)]
-        command = ' '.join(map(str, args))
-        logging.debug("\tcommand: %s" % (command))
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())            
+    logging.debug(msg)
+    shell_commands.append(bash_log(msg, "INFO"))
+    log_file = os.path.join(results.log_dir, 'pathogen_counts.log')
+    args = ["python",
+            os.path.join(_pipeline_dir, "bowtie2_quantify.py"),
+            results.pathogen_bam_file,
+            results.pathogen_counts_file,
+            '> %s 2>&1' % (log_file)]
+    command = ' '.join(map(str, args))
+    logging.debug("\tcommand: %s" % (command))
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode())            
     #
     # align to repeat elements
     #
     msg = "Aligning to repeat element sequences"
-    input_files = (results.unmapped_paired_fastq_files + 
-                   results.unmapped_unpaired_fastq_files)
-    output_files = [results.repeat_element_bam_file]
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.debug("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg) 
-        shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'bowtie2_align_repeats.log')        
-        args = ["python",
-                os.path.join(_pipeline_dir, "bowtie2_align.py"),
-                "-p", num_processors,
-                "--tmp-dir", results.tmp_dir,
-                "-1", results.unmapped_paired_fastq_files[0],
-                "-2", results.unmapped_paired_fastq_files[1],
-                "-U", ','.join(results.unmapped_unpaired_fastq_files)]
-        # extra args
-        for arg in pipeline.repeat_elements_bt2_args:
-            args.append('--extra-arg="%s"' % arg)
-        args.extend([genome_static.repbase_bowtie2_index,                     
-                     results.repeat_element_bam_file])
-        args.append('> %s 2>&1' % (log_file))
-        command = ' '.join(map(str, args))
-        logging.debug("\tcommand: %s" % (command))
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())
+    logging.debug(msg) 
+    shell_commands.append(bash_log(msg, "INFO"))
+    log_file = os.path.join(results.log_dir, 'bowtie2_align_repeats.log')        
+    args = ["python",
+            os.path.join(_pipeline_dir, "bowtie2_align.py"),
+            "-p", num_processors,
+            "--tmp-dir", results.tmp_dir,
+            "-1", results.unmapped_paired_fastq_files[0],
+            "-2", results.unmapped_paired_fastq_files[1],
+            "-U", ','.join(results.unmapped_unpaired_fastq_files)]
+    # extra args
+    for arg in pipeline.repeat_elements_bt2_args:
+        args.append('--extra-arg="%s"' % arg)
+    args.extend([genome_static.repbase_bowtie2_index,                     
+                 results.repeat_element_bam_file])
+    args.append('> %s 2>&1' % (log_file))
+    command = ' '.join(map(str, args))
+    logging.debug("\tcommand: %s" % (command))
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode())
     #
     # count repeat elements
     #
     msg = "Counting repeat element alignments"
-    input_files = [results.repeat_element_bam_file]
-    output_files = [results.repeat_element_counts_file]
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.debug("[SKIPPED] %s" % (msg))
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg)
-        shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'repeat_element_counts.log')
-        args = ["python",
-                os.path.join(_pipeline_dir, "bowtie2_quantify.py"),
-                results.repeat_element_bam_file,
-                results.repeat_element_counts_file,
-                '> %s 2>&1' % (log_file)]
-        command = ' '.join(map(str, args))
-        logging.debug("\tcommand: %s" % (command))
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode()) 
+    logging.debug(msg)
+    shell_commands.append(bash_log(msg, "INFO"))
+    log_file = os.path.join(results.log_dir, 'repeat_element_counts.log')
+    args = ["python",
+            os.path.join(_pipeline_dir, "bowtie2_quantify.py"),
+            results.repeat_element_bam_file,
+            results.repeat_element_counts_file,
+            '> %s 2>&1' % (log_file)]
+    command = ' '.join(map(str, args))
+    logging.debug("\tcommand: %s" % (command))
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode()) 
     #
     # generate genome coverage maps  
     #
@@ -769,38 +617,26 @@ def create_job(library, pipeline, server, config_xml_file,
     # generate splice junction bigbed file  
     #
     msg = "Generating splice junction bigbed file"
-    input_files = [results.tophat_juncs_file] 
-    output_files = [results.junctions_bigbed_file]    
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.debug("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg)
-        shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'bed_to_bigbed.log')
-        args = ["python",
-                os.path.join(_pipeline_dir, "bed_to_bigbed.py"),
-                "--score-to-name",
-                "--tmp-dir", results.tmp_dir,
-                results.tophat_juncs_file,
-                genome_static.chrom_sizes,
-                results.junctions_bigbed_file,
-                '> %s 2>&1' % (log_file)]
-        command = ' '.join(map(str, args))
-        logging.debug("\tcommand: %s" % (command))
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode()) 
+    logging.debug(msg)
+    shell_commands.append(bash_log(msg, "INFO"))
+    log_file = os.path.join(results.log_dir, 'bed_to_bigbed.log')
+    args = ["python",
+            os.path.join(_pipeline_dir, "bed_to_bigbed.py"),
+            "--score-to-name",
+            "--tmp-dir", results.tmp_dir,
+            results.tophat_juncs_file,
+            genome_static.chrom_sizes,
+            results.junctions_bigbed_file,
+            '> %s 2>&1' % (log_file)]
+    command = ' '.join(map(str, args))
+    logging.debug("\tcommand: %s" % (command))
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode()) 
     #
     # run cufflinks to assemble transcriptome
     #
     msg = "Assembling transcriptome with Cufflinks"
-    input_files = [results.library_metrics_file, 
-                   results.tophat_bam_file]
-    output_files = [results.cufflinks_ab_initio_gtf_file]  
-    skip = ((not pipeline.cufflinks_ab_initio_run) or
-            many_up_to_date(output_files, input_files))
-    if skip:
+    if (not pipeline.cufflinks_ab_initio_run):
         logging.debug("[SKIPPED] %s" % msg)
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
@@ -826,13 +662,8 @@ def create_job(library, pipeline, server, config_xml_file,
     #
     # cufflinks on known genes
     #
-    msg = "Estimating known gene expression with cufflinks"
-    input_files = [results.library_metrics_file, 
-                   results.tophat_bam_file]
-    output_files = [results.cufflinks_known_gtf_file]    
-    skip = ((not pipeline.cufflinks_known_run) or
-            many_up_to_date(output_files, input_files))
-    if skip:
+    msg = "Estimating known gene expression with cufflinks"   
+    if (not pipeline.cufflinks_known_run):
         logging.debug("[SKIPPED] %s" % msg)
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
@@ -859,11 +690,7 @@ def create_job(library, pipeline, server, config_xml_file,
     # run htseq-count for gene expression
     #
     msg = "Counting reads across genes with htseq-count"
-    output_files = [results.htseq_count_known_file]
-    input_files = [results.tophat_bam_file]
-    skip = ((not pipeline.htseq_count_run) or
-            many_up_to_date(output_files, input_files))
-    if skip:
+    if (not pipeline.htseq_count_run):
         logging.debug("[SKIPPED] %s" % msg)
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
@@ -888,11 +715,7 @@ def create_job(library, pipeline, server, config_xml_file,
     # run picard to remove duplicates
     #
     msg = "Removing duplicate reads with Picard"
-    input_files = [results.tophat_bam_file]
-    output_files = [results.tophat_rmdup_bam_file]
-    skip = ((not pipeline.varscan_run) or
-            many_up_to_date(output_files, input_files))
-    if skip:
+    if (not pipeline.varscan_run):
         logging.debug("[SKIPPED] %s" % msg)
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
@@ -915,11 +738,7 @@ def create_job(library, pipeline, server, config_xml_file,
     # run varscan for variant calling
     #
     msg = "Calling variants with VarScan"
-    output_files = [results.varscan_snv_file]
-    input_files = [results.tophat_rmdup_bam_file]
-    skip = ((not pipeline.varscan_run) or
-            many_up_to_date(output_files, input_files))
-    if skip:
+    if (not pipeline.varscan_run):
         logging.debug("[SKIPPED] %s" % msg)
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
@@ -942,12 +761,7 @@ def create_job(library, pipeline, server, config_xml_file,
     # index varscan vcf file
     #
     msg = "Indexing VCF files"
-    output_files = [results.varscan_snv_bgzip_file,
-                    results.varscan_snv_tabix_file]
-    input_files = [results.varscan_snv_file]
-    skip = ((not pipeline.varscan_run) or
-            many_up_to_date(output_files, input_files))
-    if skip:
+    if (not pipeline.varscan_run):
         logging.debug("[SKIPPED] %s" % msg)
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
@@ -964,11 +778,8 @@ def create_job(library, pipeline, server, config_xml_file,
     # convert VCF to annovar input format
     #
     msg = "Converting VCF to Annovar format"
-    output_files = [results.varscan_snv_file]
-    input_files = [results.annovar_input_file]
-    skip = (((not pipeline.varscan_run) and 
-             (not pipeline.annovar_var)) or
-            many_up_to_date(output_files, input_files))
+    skip = ((not pipeline.varscan_run) and 
+            (not pipeline.annovar_var))
     if skip:
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
@@ -985,46 +796,55 @@ def create_job(library, pipeline, server, config_xml_file,
     #
     # run annovar to filter variant calls
     #
-    msg = "Annotation variants with Annovar"
-    output_files = [results.annovar_input_file]
-    input_files = [results.annovar_genome_summary_file]
-    skip = (((not pipeline.varscan_run) and 
-             (not pipeline.annovar_var)) or
-            many_up_to_date(output_files, input_files))
+    msg = "Annotating variants with Annovar"
+    skip = ((not pipeline.varscan_run) and 
+            (not pipeline.annovar_var))
     if skip:
         shell_commands.append(bash_log(msg, "SKIPPED"))
     else:
         shell_commands.append(bash_log(msg, "INFO"))
-        log_file = os.path.join(results.log_dir, 'summarize_annovar.log')
+        log_file = os.path.join(results.log_dir, 'annovar_summary.log')
         args = ["perl $ANNOVARPATH/summarize_annovar.pl",
-                genome_static.annovar_args,
+                genome_static.annovar_summary_args,
                 "--outfile", results.annovar_output_prefix,
                 results.annovar_input_file,
                 genome_static.annovar_db,
                 '> %s 2>&1' % (log_file)]
         command = ' '.join(map(str, args))
         shell_commands.append(command)
-        shell_commands.append(bash_check_retcode())  
+        shell_commands.append(bash_check_retcode())
+    #
+    # annotate cosmic positions
+    #
+    msg = "Annotating COSMIC positions with Annovar"
+    skip = ((not pipeline.varscan_run) and 
+            (not pipeline.annovar_var))
+    if skip:
+        shell_commands.append(bash_log(msg, "SKIPPED"))
+    else:
+        shell_commands.append(bash_log(msg, "INFO"))
+        log_file = os.path.join(results.log_dir, 'annovar_cosmic.log')
+        args = ["perl $ANNOVARPATH/annotate_variation.pl", 
+                genome_static.annovar_cosmic_args,
+                results.annovar_input_file,
+                genome_static.annovar_db,
+                '> %s 2>&1' % (log_file)]
+        command = ' '.join(map(str, args))
+        shell_commands.append(command)
+        shell_commands.append(bash_check_retcode())
     #
     # write job finished file
     #
     msg = "Validating results"
-    output_files = [results.job_done_file]
-    input_files = [results.library_xml_file, results.config_xml_file]
-    skip = many_up_to_date(output_files, input_files)
-    if skip:
-        logging.debug("[SKIPPED] %s" % msg)
-        shell_commands.append(bash_log(msg, "SKIPPED"))
-    else:
-        logging.debug(msg)
-        shell_commands.append(bash_log(msg, "INFO"))
-        args = ["python", 
-                os.path.join(_pipeline_dir, "validate_results.py"),
-                results.output_dir]
-        logging.debug("\targs: %s" % (' '.join(map(str, args))))
-        command = ' '.join(map(str, args))
-        shell_commands.append(command)
-        shell_commands.append(bash_check_retcode()) 
+    logging.debug(msg)
+    shell_commands.append(bash_log(msg, "INFO"))
+    args = ["python", 
+            os.path.join(_pipeline_dir, "validate_results.py"),
+            results.output_dir]
+    logging.debug("\targs: %s" % (' '.join(map(str, args))))
+    command = ' '.join(map(str, args))
+    shell_commands.append(command)
+    shell_commands.append(bash_check_retcode()) 
     #
     # cleanup intermediate files
     #
@@ -1038,7 +858,7 @@ def create_job(library, pipeline, server, config_xml_file,
         shell_commands.append(bash_log(msg, "INFO"))
         command = "rm -rf %s" % (results.tmp_dir)
         shell_commands.append(command)    
-        shell_commands.append(bash_check_retcode(msg))   
+        shell_commands.append(bash_check_retcode(msg))
     #
     # write shell/pbs scripts
     #
