@@ -945,7 +945,7 @@ class PipelineConfig(object):
                        os.path.join(swdir, "summarize_annovar.pl")]
             for script in scripts:
                 if os.path.exists(script):
-                    logging.error("Checking for Annovar script '%s'... found" % (script))
+                    logging.debug("Checking for Annovar script '%s'... found" % (script))
                 else:
                     logging.error("Annovar script '%s' not found" % (script))
                     valid = False
