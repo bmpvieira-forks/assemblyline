@@ -25,7 +25,12 @@ def main():
     if not library.is_valid():
         logging.error("Library not valid")
         return config.JOB_ERROR
-    results = config.RnaseqResults(library, args.output_dir)
+    config_xml_file = os.path.join(args.output_dir, config.CONFIG_XML_FILE)
+    if not os.path.exists(config_xml_file):
+        logging.error("Configuration xml file not found")
+        return config.JOB_ERROR
+    pipeline = config.PipelineConfig.from_xml(args.config_xml_file)
+    results = config.RnaseqResults(library, pipeline, args.output_dir)
     valid, missing_files = results.validate()
     if not valid:
         valid = (len(missing_files) == 1 and 

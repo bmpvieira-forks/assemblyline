@@ -110,7 +110,7 @@ def main():
         return config.JOB_ERROR
     genome = pipeline.genomes[library.species]
     # get results
-    results = config.RnaseqResults(library, library_dir)
+    results = config.RnaseqResults(library, pipeline, library_dir)
     # predict library type
     obj = RnaseqLibraryMetrics.from_file(results.library_metrics_file)
     library_type = obj.predict_library_type()
