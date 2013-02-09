@@ -55,6 +55,18 @@ class AlignmentSummaryMetrics(object):
                 return int(round(float(fields[index])))
         return None
 
+def get_rnaseq_metrics(filename):
+    f = open(filename)
+    for line in f:
+        if line.startswith("## METRICS"):
+            fields = line.strip().split('\t')
+            if fields[1] == "net.sf.picard.analysis.RnaSeqMetrics":
+                break
+    keys = f.next().strip().split('\t')
+    vals = f.next().strip().split('\t')
+    f.close()
+    metrics_dict = dict(zip(keys,vals))
+    return metrics_dict
     
 def get_total_reads(alignment_metrics_file):
     f = open(alignment_metrics_file)

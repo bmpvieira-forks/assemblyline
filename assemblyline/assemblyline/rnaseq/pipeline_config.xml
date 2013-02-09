@@ -1,4 +1,4 @@
-<rnaseq version="0.1.9">
+<rnaseq version="0.2.0">
   <!-- server setup -->
   <server name="mkiyer_rhel6">
     <modules_init_script>/home/mkiyer/sw/rhel6/init.sh</modules_init_script>
@@ -256,8 +256,11 @@
     <transcriptome_bowtie1_index>Sequence/Transcriptome/Bowtie1Index/transcriptome</transcriptome_bowtie1_index>
     <transcriptome_bowtie2_index>Sequence/Transcriptome/Bowtie2Index/transcriptome</transcriptome_bowtie2_index>
     <cufflinks_mask_genes>Annotation/cufflinks_mask_genes.gtf</cufflinks_mask_genes>
-    <annovar_db>Annotation/annovardb</annovar_db>
-    <annovar_summary_args>--buildver hg19 --remove --verdbsnp 135 --ver1000g 1000g2012apr --veresp 6500 --genetype ensgene --alltranscript</annovar_summary_args>
-    <annovar_cosmic_args>--buildver hg19 --filter --dbtype cosmic61</annovar_cosmic_args>
+    <annovar>
+      <db>Annotation/annovardb</db>
+      <buildver>hg19</buildver>
+      <cosmicver>cosmic61</cosmicver>
+      <summary_args>--remove --verdbsnp 135 --ver1000g 1000g2012apr --veresp 6500 --genetype ensgene --alltranscript</summary_args>
+    </annovar>
   </genome>
 </rnaseq>

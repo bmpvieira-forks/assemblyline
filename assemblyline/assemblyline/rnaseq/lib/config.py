@@ -120,6 +120,7 @@ ANNOVAR_INPUT_FILE = "annovar_input.txt"
 ANNOVAR_OUTPUT_PREFIX = "annovar"
 ANNOVAR_EXOME_SUMMARY_FILE = "annovar.exome_summary.csv"
 ANNOVAR_GENOME_SUMMARY_FILE = "annovar.genome_summary.csv"
+ANNOVAR_COSMIC_FILE_FUNC = lambda p, bv, cv: "%s.%s_%s_dropped" % (p, bv, cv)
 # job complete
 JOB_DONE_FILE = "job.done"
 # job memory and runtime
@@ -203,7 +204,7 @@ def check_library_metrics(filename):
     return is_valid
 
 class RnaseqResults(object):
-    def __init__(self, library, output_dir):
+    def __init__(self, library, pipeline, output_dir):
         self.library_id = library.library_id
         self.output_dir = output_dir
         self.tmp_dir = os.path.join(self.output_dir, "tmp")
@@ -313,6 +314,11 @@ class RnaseqResults(object):
         self.annovar_input_file = os.path.join(self.tmp_dir, ANNOVAR_INPUT_FILE)
         self.annovar_output_prefix = os.path.join(self.output_dir, ANNOVAR_OUTPUT_PREFIX)
         self.annovar_genome_summary_file = os.path.join(self.output_dir, ANNOVAR_GENOME_SUMMARY_FILE)
+        genome_local = pipeline.genomes[library.species]
+        annovar_cosmic_file = ANNOVAR_COSMIC_FILE_FUNC(ANNOVAR_OUTPUT_PREFIX,
+                                                       genome_local.annovar_buildver,
+                                                       genome_local.annovar_cosmicver)
+        self.annovar_cosmic_file = os.path.join(self.output_dir, annovar_cosmic_file)
         # job finished file
         self.job_done_file = os.path.join(self.output_dir, JOB_DONE_FILE)
         self.pbs_stdout_file = os.path.join(self.log_dir, PBS_STDOUT_FILE)
@@ -510,6 +516,10 @@ class RnaseqResults(object):
                     logging.error("Library %s missing annovar genome summary csv file" % (self.library_id))
                     missing_files.append(self.annovar_genome_summary_file)
                     is_valid = False
+                if not os.path.exists(self.annovar_cosmic_file):
+                    logging.error("Library %s missing annovar cosmic file" % (self.library_id))
+                    missing_files.append(self.annovar_cosmic_file)
+                    is_valid = False
         return is_valid, missing_files
 
 class GenomeConfig(object):
@@ -528,8 +538,7 @@ class GenomeConfig(object):
               "known_genes_gtf",
               "transcriptome_bowtie1_index",
               "transcriptome_bowtie2_index",
-              "cufflinks_mask_genes",
-              "annovar_db")
+              "cufflinks_mask_genes")
     
     @staticmethod
     def from_xml_elem(elem):
@@ -539,8 +548,11 @@ class GenomeConfig(object):
         ucsc_elem = elem.find("ucsc")
         g.ucsc_db = ucsc_elem.get("db")
         g.ucsc_org = ucsc_elem.get("org")
-        g.annovar_summary_args = elem.findtext("annovar_summary_args")
-        g.annovar_cosmic_args = elem.findtext("annovar_cosmic_args")
+        annovar_elem = elem.find("annovar")
+        g.annovar_db = annovar_elem.findtext("db")
+        g.annovar_buildver = annovar_elem.findtext("buildver")
+        g.annovar_cosmicver = annovar_elem.findtext("cosmicver")
+        g.annovar_summary_args = annovar_elem.findtext("summary_args")
         for attrname in GenomeConfig.fields:
             setattr(g, attrname, elem.findtext(attrname))
         return g
@@ -551,24 +563,29 @@ class GenomeConfig(object):
         ucsc_elem = etree.SubElement(root, "ucsc")
         ucsc_elem.set("db", self.ucsc_db)
         ucsc_elem.set("org", self.ucsc_org)
-        elem = etree.SubElement(root, "annovar_summary_args")
+        annovar_elem = etree.SubElement(root, "annovar")
+        elem = etree.SubElement(annovar_elem, "db")        
+        elem.text = self.annovar_db
+        elem = etree.SubElement(annovar_elem, "buildver")        
+        elem.text = self.annovar_buildver
+        elem = etree.SubElement(annovar_elem, "cosmicver")        
+        elem.text = self.annovar_cosmic_args           
+        elem = etree.SubElement(annovar_elem, "summary_args")        
         elem.text = self.annovar_summary_args
-        elem = etree.SubElement(root, "annovar_cosmic_args")
-        elem.text = self.annovar_cosmic_args
         for attrname in GenomeConfig.fields:
             elem = etree.SubElement(root, attrname)
-            elem.text = str(getattr(self, attrname))            
+            elem.text = str(getattr(self, attrname))
 
     def resolve_paths(self, root_dir=''):
-        # copy genome config object
         g = GenomeConfig()
         g.name = self.name
         g.root_dir = self.root_dir
         g.ucsc_db = self.ucsc_db
         g.ucsc_org = self.ucsc_org
+        g.annovar_db = os.path.join(str(root_dir), g.root_dir, self.annovar_db)
+        g.annovar_buildver = self.annovar_buildver
+        g.annovar_cosmicver = self.annovar_cosmicver
         g.annovar_summary_args = self.annovar_summary_args
-        g.annovar_cosmic_args = self.annovar_cosmic_args
-        # expand paths
         for attrname in GenomeConfig.fields:
             abspath = os.path.join(str(root_dir), g.root_dir, getattr(self, attrname))
             setattr(g, attrname, abspath)

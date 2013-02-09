@@ -36,13 +36,24 @@ def main():
     header_fields.extend(["total_fragments",
                           "total_aligned_reads", 
                           "mean_read_length", 
-                          "bam_file", 
-                          "gtf_file"])
+                          'aligned_bases',
+                          'pct_mrna_bases',
+                          'pct_intronic_bases',
+                          'pct_intergenic_bases',
+                          'median_5prime_to_3prime_bias',
+                          'median_cv_coverage',
+                          'bam_file', 
+                          'gtf_file'])
     print '\t'.join(header_fields)
     for library_id in sorted(libraries):
         library = libraries[library_id]
         output_dir = os.path.join(args.root_dir, library.library_id)
-        results = config.RnaseqResults(library, output_dir)
+        config_xml_file = os.path.join(output_dir, config.CONFIG_XML_FILE)
+        if not os.path.exists(config_xml_file):
+            logging.error("Configuration xml file not found")
+            continue
+        pipeline = config.PipelineConfig.from_xml(args.config_xml_file)
+        results = config.RnaseqResults(library, pipeline, output_dir)
         is_valid, missing_files = results.validate()
         if not is_valid:
             setattr(library, 'description', 'invalid')
@@ -68,6 +79,14 @@ def main():
             fields.append(obj.get_mean_read_length()) 
         else:
             fields.extend(['na', 'na'])
+        if os.path.exists(results.rnaseq_metrics):
+            metrics_dict = picard.get_rnaseq_metrics(results.rnaseq_metrics)
+            fields.extend([metrics_dict['PF_ALIGNED_BASES'],
+                           metrics_dict['PCT_MRNA_BASES'],
+                           metrics_dict['PCT_INTRONIC_BASES'],
+                           metrics_dict['PCT_INTERGENIC_BASES'],
+                           metrics_dict['MEDIAN_5PRIME_TO_3PRIME_BIAS'],
+                           metrics_dict['MEDIAN_CV_COVERAGE']])
         if os.path.exists(results.tophat_bam_file):
             fields.append(results.tophat_bam_file)
         else:

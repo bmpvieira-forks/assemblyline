@@ -190,7 +190,7 @@ def create_job(library, pipeline, server, config_xml_file,
     genome_static = genome_local.resolve_paths(server.references_dir)    
     # setup results
     output_dir = os.path.join(server.output_dir, library.library_id)
-    results = config.RnaseqResults(library, output_dir)
+    results = config.RnaseqResults(library, pipeline, output_dir)
     # create output directories
     if os.path.exists(results.output_dir):
         if not overwrite:
@@ -805,6 +805,7 @@ def create_job(library, pipeline, server, config_xml_file,
         shell_commands.append(bash_log(msg, "INFO"))
         log_file = os.path.join(results.log_dir, 'annovar_summary.log')
         args = ["perl $ANNOVARPATH/summarize_annovar.pl",
+                "--buildver", genome_static.annovar_buildver,
                 genome_static.annovar_summary_args,
                 "--outfile", results.annovar_output_prefix,
                 results.annovar_input_file,
@@ -825,7 +826,9 @@ def create_job(library, pipeline, server, config_xml_file,
         shell_commands.append(bash_log(msg, "INFO"))
         log_file = os.path.join(results.log_dir, 'annovar_cosmic.log')
         args = ["perl $ANNOVARPATH/annotate_variation.pl", 
-                genome_static.annovar_cosmic_args,
+                "--buildver", genome_static.annovar_buildver,
+                "--filter",
+                "--dbtype", genome_static.annovar_cosmicver,
                 results.annovar_input_file,
                 genome_static.annovar_db,
                 '> %s 2>&1' % (log_file)]
