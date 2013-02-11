@@ -173,3 +173,4 @@ def check_executable(filename):
         return False
     devnullfh.close()
     return True
+

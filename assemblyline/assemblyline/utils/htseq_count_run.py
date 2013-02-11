@@ -26,12 +26,94 @@ import os
 import sys
 import xml.etree.cElementTree as etree
 
-import oncoseq.rnaseq.pipeline
-_pipeline_dir = assemblyline.rnaseq.pipeline.__path__[0]
+import assemblyline.utils
+_script_dir = assemblyline.utils.__path__[0]
+from assemblyline.lib.librarytable import LibraryInfo
 
-from oncoseq.lib.librarytable import LibraryInfo
-from oncoseq.rnaseq.lib.base import parse_bool
-from oncoseq.rnaseq.create_jobs import get_pbs_header, bash_log, bash_check_retcode
+def parse_bool(s):
+    firstchar = s[0].lower()
+    if (firstchar == "t") or (firstchar == "y"):
+        return True
+    return False
+
+def bash_log(msg, level="DEBUG"):
+    return 'echo "[`date`] - %s - %s" >&2' % (level, msg)
+
+def bash_check_retcode(msg="ERROR", level="ERROR"):
+    echo_command = bash_log(msg, level)
+    return 'ERRCODE=$?; if [ $ERRCODE -gt 0 ]; then %s; exit $ERRCODE; fi' % (echo_command)
+
+def get_pbs_header(job_name,
+                   num_processors=1,
+                   node_processors=1,
+                   node_memory=4096,
+                   pbs_script_lines=None, 
+                   working_dir=None, 
+                   walltime=None, 
+                   pmem=None, 
+                   mem=None,
+                   deps=None,
+                   email=None,
+                   stdout_filename=None,
+                   stderr_filename=None):
+    '''
+    job_name: string name of job
+    num_processors: number of processors to submit with (cannot be greater than the number of processors per node)
+    node_processors: number of cores available per node
+    node_memory: amount of memory per node (MB)
+    pbs_script_lines: list of PBS directives to be added to the script
+    working_dir: the "working directory" of the job (allows scripts to access files using relative pathnames)
+    walltime: the walltime passed to qsub
+    pmem: amount of memory allocated to each processor of this job in MB
+    mem: amount of total memory to split across all processors (overrides pmem setting)
+    deps: 'None' if no dependencies, or a python list of job ids
+    email: 'None', or string containing codes 'b', 'a', or 'e' describing when to email
+    stdout_filename: string filename for storing stdout
+    stderr_filename: string filename for storing stderr    
+    '''    
+    if pbs_script_lines is None:
+        pbs_script_lines = []
+    if isinstance(deps, basestring):
+        deps = [deps]
+    # ensure number of processors can fit on node
+    num_processors = min(num_processors, node_processors)
+    resource_fields = ["nodes=%d:ppn=%d" % (1, num_processors)]    
+    # setup memory resources
+    if mem is not None:
+        if mem > node_memory:
+            logging.warning("Job requested more memory than node supports (%dmb > %dmb)" % (mem, node_memory))        
+        mem = min(mem, node_memory)
+        resource_fields.append("mem=%dmb" % (mem))
+    elif pmem is not None:
+        max_pmem = float(node_memory) / num_processors
+        if pmem > max_pmem:
+            logging.warning("Job requested more memory-per-process (pmem) than node supports (%dmb > %dmb)" % (pmem, max_pmem))
+        pmem = min(pmem, max_pmem)
+        resource_fields.append("pmem=%dmb" % (pmem))
+    else:
+        pmem = int(round(float(node_memory) / node_processors, 0))
+        mem = pmem * num_processors
+        resource_fields.append("mem=%dmb" % (mem))
+    # set job walltime
+    if walltime is not None:
+        resource_fields.append("walltime=%s" % (walltime))
+    # add PBS parameters
+    lines = ["#PBS -N %s" % job_name,
+             "#PBS -l %s" % (",".join(resource_fields))]
+    if email is not None:
+        lines.append("#PBS -m %s" % (email))
+    if stdout_filename is None:
+        stdout_filename = "/dev/null"
+    lines.append("#PBS -o %s" % (stdout_filename))
+    if stderr_filename is None:
+        stderr_filename = "/dev/null"        
+    lines.append("#PBS -e %s" % (stderr_filename))
+    if deps is not None:
+        lines.append("#PBS -W depend=afterok:%s" % (":".join([d for d in deps])))    
+    lines.extend(pbs_script_lines)
+    if working_dir is not None: 
+        lines.append("cd %s" % (working_dir))
+    return lines
 
 class PluginConfig(object):
     @staticmethod
@@ -154,7 +236,7 @@ def htseq_count_plugin(libs, config, plugin_elem, keep_tmp, dryrun):
         shell_commands.append(bash_log(msg, "INFO"))
         output_file = os.path.join(lib_output_dir, "htseq.txt")
         log_file = os.path.join(lib_output_dir, 'htseq.log')
-        args = ["python", os.path.join(_pipeline_dir, "run_htseq_count.py"),
+        args = ["python", os.path.join(_script_dir, "run_htseq_count.py"),
                 "--tmp-dir", tmp_dir]
         if run_as_pe:
             args.append("--pe")
