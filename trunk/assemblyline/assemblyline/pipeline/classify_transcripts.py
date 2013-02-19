@@ -172,8 +172,6 @@ def classify_transcripts(results, cutoff_type, num_processors):
         if retcode == 0:
             expressed_gtf_files.append(prefix + ".expr.gtf")
             background_gtf_files.append(prefix + ".bkgd.gtf")
-            print 'done', 'prefix', prefix, 'expr', expressed_gtf_files
-            print 'done', 'prefix', prefix, 'bkgd', background_gtf_files
         else:
             errors = True
     pool.close()
@@ -187,7 +185,7 @@ def classify_transcripts(results, cutoff_type, num_processors):
                          tmp_dir=results.tmp_dir)
     logging.info("Merging and sorting background GTF files")
     merge_sort_gtf_files(background_gtf_files, 
-                         results.expressed_gtf_file, 
+                         results.background_gtf_file, 
                          tmp_dir=results.tmp_dir)
     logging.info("Done")
     return 0
