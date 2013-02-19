@@ -7,6 +7,7 @@ import os
 
 from assemblyline.lib.transcript import parse_gtf
 from assemblyline.lib.assemble.transcript_graph import create_transcript_graphs
+from assemblyline.lib.base import GTFAttr
 
 GTF_DIR = "gtf_files"
 
@@ -19,7 +20,7 @@ def read_gtf(filename):
 def read_first_locus(filename):
     loci = read_gtf(filename)
     for t in loci[0]:
-        t.score = float(t.attrs["FPKM"])
+        t.score = float(t.attrs[GTFAttr.SCORE])
     return loci[0]
 
 def get_transcript_graphs(transcripts):

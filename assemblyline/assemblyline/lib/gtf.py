@@ -28,14 +28,6 @@ GTF_EMPTY_FIELD = '.'
 GTF_ATTR_SEP = ';'
 GTF_ATTR_TAGVALUE_SEP = ' '
 
-class GTFAttr:
-    GENE_ID = 'gene_id'
-    TRANSCRIPT_ID = 'transcript_id'
-    COHORT_ID = 'cohort_id'
-    SAMPLE_ID = 'sample_id'
-    LIBRARY_ID = 'library_id'
-    REF = 'ref'
-
 class GTFError(Exception):
     pass
 
@@ -71,9 +63,13 @@ def parse_loci(line_iter):
         return (a[1] <= b[2]) and (b[1] <= a[2])
     def get_intervals(line_iter):
         for line in line_iter:
+            if line.startswith("#"):
+                continue
             # read the essential part of the GTF line
             line = line.rstrip()
             fields = line.split('\t', 5)
+            if len(fields) < 5:
+                continue
             seqid = fields[0]
             start = int(fields[3])-1
             end = int(fields[4])

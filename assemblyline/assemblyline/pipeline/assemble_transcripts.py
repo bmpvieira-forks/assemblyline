@@ -46,7 +46,7 @@ from assemblyline.lib.assemble.assembler import assemble_transcript_graph
 SCORING_MODES = ("unweighted", "gtf_attr")
 STRAND_NAMES = ('pos', 'neg', 'none')
 STRAND_COLORS = ('255,0,0', '0,0,255', '0,0,0')
-                        
+                 
 class RunConfig(object):
     def __init__(self):
         self.gtf_input_file = None

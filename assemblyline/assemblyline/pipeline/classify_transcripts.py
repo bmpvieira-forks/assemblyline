@@ -25,130 +25,173 @@ import argparse
 import os
 import subprocess
 import sys
-import shutil
 import multiprocessing
+import collections
 
 import assemblyline
-from assemblyline.lib.gtf import GTFAttr
+import assemblyline.lib.config as config
 from assemblyline.lib.transcript import parse_gtf
-from assemblyline.lib.batch_sort import batch_sort
-from assemblyline.lib.base import LIB_COUNTS_FILE, CATEGORIES, \
-    category_int_to_str, ANNOTATED, CATEGORY, MEAN_SCORE, \
-    MEAN_RECURRENCE, LibCounts, CategoryInfo, get_classification_header, \
-    get_classification_result_header, check_executable
+from assemblyline.lib.base import CategoryCounts, Category, \
+    GTFAttr, get_classify_header_fields, get_classify_fields, \
+    check_executable 
+from assemblyline.lib.gtf import GTFFeature, merge_sort_gtf_files
 
 # R script to call for classifying transcripts
 _module_dir = assemblyline.__path__[0]
-R_SCRIPT = os.path.join(_module_dir, "lib", "classify_transcripts.R")
+CLASSIFY_KDE2D_R_SCRIPT = os.path.join(_module_dir, "lib", 
+                                       "classify_transcripts_kde2d.R")
+DInfo = collections.namedtuple('DecisionInfo', ['pred', 'log10lr', 'is_test'])
 
-def get_classification_fields(t):
-    # setup list of annotation fields
-    fields = [t.chrom,
-              t.start,
-              t.attrs[GTFAttr.LIBRARY_ID],
-              t.attrs[GTFAttr.TRANSCRIPT_ID],
-              int(t.attrs[ANNOTATED]),
-              int(t.attrs[CATEGORY]),
-              t.length,
-              len(t.exons),
-              t.score,
-              t.attrs[MEAN_SCORE],
-              t.attrs[MEAN_RECURRENCE]]
-    return fields
+def write_transcript_table(gtf_file, table_file):
+    fileh = open(table_file, 'w')
+    print >>fileh, '\t'.join(get_classify_header_fields())
+    for transcripts in parse_gtf(open(gtf_file)):
+        for t in transcripts:
+            fields = get_classify_fields(t)
+            print >>fileh, '\t'.join(map(str, fields))
+    fileh.close()
+    
+def read_classify_stats(filename):
+    field_dict = {}
+    for line in open(filename):
+        fields = line.strip().split('\t')
+        field_dict[fields[0]] = fields[1:]
+    return field_dict
 
-def run_classification_r_script(args):
-    library_id, filename = args
-    logging.debug("\t[STARTED]  library_id='%s'" % (library_id))
-    # setup classification result files on per-library basis
-    prefix = os.path.splitext(filename)[0]
-    logfile = prefix + ".classify.log"
+def read_classify_decisions(filename, cutoff_type):
+    fileh = open(filename)
+    header_fields = fileh.next().strip().split('\t')
+    t_id_ind = header_fields.index('t_id')
+    category_ind = header_fields.index('category')
+    test_ind = header_fields.index('test')
+    num_exons_ind = header_fields.index('num_exons')
+    log10lr_intronic_ind = header_fields.index('log10lr.intronic')
+    log10lr_intergenic_ind = header_fields.index('log10lr.intergenic')
+    if cutoff_type == "test":
+        #intronic_pred_ind = header_fields.index("pred.test.intronic")
+        intergenic_pred_ind = header_fields.index("pred.test.intergenic")
+    else:
+        #intronic_pred_ind = header_fields.index("pred.train.intronic")
+        intergenic_pred_ind = header_fields.index("pred.train.intergenic")
+    decision_dict = {}
+    for line in fileh:
+        fields = line.strip().split('\t')
+        t_id = fields[t_id_ind]
+        category = int(fields[category_ind])
+        is_test = bool(int(fields[test_ind]))
+        multi_exon = int(fields[num_exons_ind]) > 1        
+        if is_test or category == Category.SAME_STRAND:
+            intronic_log10lr = fields[log10lr_intronic_ind]
+            intergenic_log10lr = fields[log10lr_intergenic_ind]
+            if intronic_log10lr == "NA" and intergenic_log10lr == "NA":
+                log10lr = "NA"
+            elif intronic_log10lr != "NA" and intergenic_log10lr != "NA":
+                log10lr = str(max(intronic_log10lr, intergenic_log10lr))
+            elif intergenic_log10lr != "NA":
+                log10lr = intergenic_log10lr
+            else:
+                log10lr = intronic_log10lr
+            pred = True
+        elif category in Category.INTRONIC_LIKE:
+            pred = multi_exon
+            log10lr = fields[log10lr_intronic_ind]
+            #pred = fields[intronic_pred_ind] == "TRUE"
+        elif category in Category.INTERGENIC_LIKE:
+            pred = fields[intergenic_pred_ind] == "TRUE"
+            log10lr = fields[log10lr_intergenic_ind]
+        decision_dict[t_id] = DInfo(pred=pred,
+                                    log10lr=log10lr,
+                                    is_test=is_test)
+    fileh.close()
+    return decision_dict 
+
+def classify_library_transcripts(args):
+    library_id, gtf_file, cutoff_type = args
+    logging.debug("[STARTED]  library_id='%s'" % (library_id))
+    # setup result files on per-library basis
+    output_dir = os.path.dirname(gtf_file)
+    prefix = os.path.join(output_dir, library_id)
+    logfile = prefix + ".log"
+    tablefile = prefix + '.inp.txt'
+    # write table of observations
+    write_transcript_table(gtf_file, tablefile)
     # run R script to do classification
     logfh = open(logfile, "w")
-    retcode = subprocess.call(["Rscript", R_SCRIPT, filename, prefix], 
+    retcode = subprocess.call(["Rscript", "--vanilla",
+                               CLASSIFY_KDE2D_R_SCRIPT, 
+                               tablefile, prefix], 
                               stdout=logfh, stderr=logfh)
     logfh.close()
     if retcode != 0:
-        logging.error("\t[FAILED]   library_id='%s'" % (library_id))
+        logging.error("[FAILED]   library_id='%s'" % (library_id))
         return retcode, prefix
-    # store cutoff
-    logging.debug("\t[FINISHED] library_id='%s'" % (library_id))
+    # output files
+    stats_file = prefix + ".stats.txt"
+    output_res_file = prefix + ".out.txt"
+    expr_gtf_file = prefix + ".expr.gtf"
+    bkgd_gtf_file = prefix + ".bkgd.gtf"
+    # get library stats
+    stats_field_dict = read_classify_stats(stats_file)
+    has_tests = int(stats_field_dict["tests"][0]) > 0
+    if not has_tests:
+        cutoff_type = "train"
+    # get transcript predictions
+    decision_dict = read_classify_decisions(output_res_file, cutoff_type)
+    # partition input into expressed vs background
+    expr_fileh = open(expr_gtf_file, 'w')
+    bkgd_fileh = open(bkgd_gtf_file, 'w')
+    output_file_handles = [bkgd_fileh, expr_fileh]
+    for feature in GTFFeature.parse(open(gtf_file)):
+        t_id = feature.attrs[GTFAttr.TRANSCRIPT_ID]
+        dinf = decision_dict[t_id]
+        feature.attrs[GTFAttr.LOG10LR] = dinf.log10lr
+        fileh = output_file_handles[int(dinf.pred)]
+        print >>fileh, str(feature)
+    for fileh in output_file_handles:
+        fileh.close()
+    logging.debug("[FINISHED] library_id='%s'" % (library_id))
     return retcode, prefix
 
-def classify_category(cinfo, tasks, num_processes, tmp_dir):
-    # open output file
-    result_fh = open(cinfo.ctree_file, "w")
-    print >>result_fh, '\t'.join(get_classification_result_header())
+def classify_transcripts(results, cutoff_type, num_processors):
+    # read library category statistics
+    counts_list = list(CategoryCounts.from_file(results.category_counts_file))
+    # get tasks
+    tasks = []
+    for countsobj in counts_list:
+        library_id = countsobj.library_id
+        library_gtf_file = os.path.join(results.classify_dir, "%s.gtf" % (library_id)) 
+        tasks.append((library_id, library_gtf_file, cutoff_type))
     # use multiprocessing to parallelize
+    num_processes = max(1, num_processors - 1)
     pool = multiprocessing.Pool(processes=num_processes)
-    result_iter = pool.imap_unordered(run_classification_r_script, tasks)
+    result_iter = pool.imap_unordered(classify_library_transcripts, tasks)
     errors = False
-    for retcode, output_prefix in result_iter:        
+    expressed_gtf_files = []
+    background_gtf_files = []
+    for retcode, prefix in result_iter:
         if retcode == 0:
-            result_table_file = output_prefix + ".classify.txt"
-            shutil.copyfileobj(open(result_table_file), result_fh)
+            expressed_gtf_files.append(prefix + ".expr.gtf")
+            background_gtf_files.append(prefix + ".bkgd.gtf")
+            print 'done', 'prefix', prefix, 'expr', expressed_gtf_files
+            print 'done', 'prefix', prefix, 'bkgd', background_gtf_files
         else:
             errors = True
     pool.close()
     pool.join()
-    result_fh.close()
     if errors:
         logging.error("Errors occurred during classification")
+    # merge sort gtf files
+    logging.info("Merging and sorting expressed GTF files")
+    merge_sort_gtf_files(expressed_gtf_files, 
+                         results.expressed_gtf_file, 
+                         tmp_dir=results.tmp_dir)
+    logging.info("Merging and sorting background GTF files")
+    merge_sort_gtf_files(background_gtf_files, 
+                         results.expressed_gtf_file, 
+                         tmp_dir=results.tmp_dir)
+    logging.info("Done")
+    return 0
 
-def sort_classification_results(input_file, output_file, tmp_dir):
-    # sort classification results
-    def sort_by_chrom_start(line):
-        fields = line.strip().split('\t', 2)
-        if fields[0] == "chrom":
-            return chr(0), 0
-        return fields[0], int(fields[1])
-    batch_sort(input=input_file,
-               output=output_file,
-               key=sort_by_chrom_start,
-               buffer_size=(1 << 21),
-               tempdirs=[tmp_dir])
-
-def classify_transcripts(classify_dir, num_processors, gtf_score_attr, 
-                         tmp_dir):
-    # setup input and output files
-    lib_counts_file = os.path.join(classify_dir, LIB_COUNTS_FILE)
-    lib_counts_list = list(LibCounts.from_file(lib_counts_file))
-    library_ids = [x.library_id for x in lib_counts_list]
-    category_info_dict = {}
-    for category_key in CATEGORIES:
-        category_str = category_int_to_str[category_key]
-        cinfo = CategoryInfo.create(library_ids, category_key, 
-                                    category_str, classify_dir)
-        category_info_dict[category_key] = cinfo
-        # write input files for classifier
-        logging.info("Writing classification input files category='%s'" % (cinfo.category_str))
-        for transcripts in parse_gtf(open(cinfo.output_gtf_file)):
-            for t in transcripts:
-                # set transcript score
-                t.score = float(t.attrs.get(gtf_score_attr, 0.0))
-                library_id = t.attrs[GTFAttr.LIBRARY_ID]
-                fields = get_classification_fields(t)
-                # lookup file handle and open new file if necessary
-                if not library_id in cinfo.result_fh_dict:
-                    cinfo.result_fh_dict[library_id] = open(cinfo.result_file_dict[library_id], "w")        
-                    print >>cinfo.result_fh_dict[library_id], '\t'.join(get_classification_header())
-                # write to file
-                print >>cinfo.result_fh_dict[library_id], '\t'.join(map(str, fields))        
-        # close open file handles
-        for fh in cinfo.result_fh_dict.itervalues():
-            fh.close()
-    for category_key, cinfo in category_info_dict.iteritems():
-        classify_tasks = []
-        for lib_counts in lib_counts_list:
-            # see if can run classifier on this file
-            if lib_counts.category_counts[category_key] > 0:
-                filename = cinfo.result_file_dict[lib_counts.library_id]
-                classify_tasks.append((lib_counts.library_id, filename))
-        # run classification
-        logging.info("Classifying transcripts category='%s'" % (cinfo.category_str))
-        classify_category(cinfo, classify_tasks, num_processors, tmp_dir)
-        # sort results
-        sort_classification_results(cinfo.ctree_file, cinfo.sorted_ctree_file, tmp_dir)
-        os.remove(cinfo.ctree_file)
 
 def main():
     multiprocessing.freeze_support()
@@ -158,19 +201,22 @@ def main():
                         dest="verbose", default=False)
     parser.add_argument("-p", "--num-processors", type=int, 
                         dest="num_processors", default=1)
-    parser.add_argument("--gtf-score-attr", dest="gtf_score_attr", 
-                        default="FPKM", metavar="ATTR",
-                        help="GTF attribute field containing node weight "
-                        " [default=%(default)s]")
-    parser.add_argument("classify_dir")
+    parser.add_argument("--cutoff-type", dest="cutoff_type",
+                        choices=["train", "test"], default="test",
+                        help="Whether to choose classification "
+                        "cutoff based on 'test' data or 'train' data "
+                        "[default=%(default)s]")
+    parser.add_argument("run_dir")
     args = parser.parse_args()
     # check command line parameters
-    if not os.path.exists(args.classify_dir):
-        parser.error("Classification directory %s not found" % (args.classify_dir))
-    if not os.path.exists(R_SCRIPT):
+    if not os.path.exists(args.run_dir):
+        parser.error("Run directory %s not found" % (args.run_dir))
+    # check command line parameters
+    if not os.path.exists(CLASSIFY_KDE2D_R_SCRIPT):
         parser.error("Classification R script not found")
     if not check_executable("Rscript"):
         parser.error("Rscript binary not found")        
+    num_processors = max(1, args.num_processors)
     # set logging level
     if args.verbose:
         level = logging.DEBUG
@@ -182,20 +228,14 @@ def main():
     logging.info("----------------------------------")   
     # show parameters
     logging.info("Parameters:")
-    logging.info("verbose logging:         %s" % (args.verbose))
-    logging.info("num processors:          %s" % (args.num_processors))
-    logging.info("gtf score attribute:   %s" % (args.gtf_score_attr))
-    logging.info("classify directory:      %s" % (args.classify_dir))
-    tmp_dir = os.path.join(args.classify_dir, "tmp")
-    if not os.path.exists(tmp_dir):
-        logging.info("Creating tmp directory '%s'" % (tmp_dir))
-        os.makedirs(tmp_dir)
-    # run classification procedure        
-    classify_transcripts(args.classify_dir, args.num_processors, 
-                         args.gtf_score_attr, tmp_dir)
-    # cleanup
-    if os.path.exists(tmp_dir):
-        shutil.rmtree(tmp_dir)
+    logging.info("run directory:        %s" % (args.run_dir))
+    logging.info("num processors:       %d" % (args.num_processors))
+    logging.info("verbose logging:      %s" % (args.verbose))
+    logging.info("----------------------------------")   
+    # setup results
+    results = config.AssemblylineResults(args.run_dir)
+    return classify_transcripts(results, args.cutoff_type, 
+                                num_processors)
 
 if __name__ == "__main__":
     sys.exit(main())
