@@ -61,6 +61,8 @@ TRANSCRIPT_STATS_FILE = "transcript_stats.txt"
 ANNOTATED_TRANSCRIPTS_GTF_FILE = 'transcripts.annotated.gtf'
 CATEGORY_COUNTS_FILE = "category_counts.txt"
 CLASSIFY_DIR = 'classify'
+REF_GTF_FILE = 'ref.gtf'
+CLASSIFY_REPORT_FILE = "classification_report.txt"
 BACKGROUND_GTF_FILE = 'background.gtf'
 EXPRESSED_GTF_FILE = 'expressed.gtf'
 
@@ -76,6 +78,8 @@ class AssemblylineResults(object):
         self.annotated_transcripts_gtf_file = os.path.join(output_dir, ANNOTATED_TRANSCRIPTS_GTF_FILE)
         self.classify_dir = os.path.join(output_dir, CLASSIFY_DIR)
         self.category_counts_file = os.path.join(output_dir, CATEGORY_COUNTS_FILE)
+        self.ref_gtf_file = os.path.join(output_dir, REF_GTF_FILE)
         self.background_gtf_file = os.path.join(output_dir, BACKGROUND_GTF_FILE)
         self.expressed_gtf_file = os.path.join(output_dir, EXPRESSED_GTF_FILE)
+        self.classify_report_file = os.path.join(output_dir, CLASSIFY_REPORT_FILE)
         

@@ -23,7 +23,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os
 import subprocess
 import math
-import collections
 import logging
 
 # float precision threshold
@@ -152,96 +151,6 @@ class Library(object):
             logging.error("Library %s BAM file not found" % (self.library_id))
             return False
         return True
-
-class CategoryInfo():
-    def __init__(self):
-        self.category_key = None
-        self.category_str = None
-        self.library_ids = set()
-        self.output_dir = None
-        self.ctree_dir = None
-        self.result_file_dict = {}
-        self.result_fh_dict = {}
-        self.cutoff_file_dict = {}
-        self.output_gtf_file = None
-        self.output_gtf_fh = None
-        self.ctree_file = None
-        self.sorted_ctree_file = None
-        self.ann_expr_gtf_file = None
-        self.unann_expr_gtf_file = None
-        self.ann_bkgd_gtf_file = None
-        self.unann_bkgd_gtf_file = None
-        self.skipped_gtf_file = None
-        self.decision_file_dict = {}
-        self.decision_fh_dict = {}
-        self.pred_stats_file = None
-
-    @staticmethod
-    def create(library_ids, category_key, category_str, output_dir):
-        # make category info object
-        cinfo = CategoryInfo()
-        cinfo.category_key = category_key
-        cinfo.category_str = category_str
-        cinfo.library_ids = set(library_ids)
-        category_dir = os.path.join(output_dir, category_str)
-        if not os.path.exists(category_dir):
-            os.makedirs(category_dir)
-        cinfo.output_dir = category_dir
-        ctree_dir = os.path.join(category_dir, "ctrees")
-        if not os.path.exists(ctree_dir):
-            os.makedirs(ctree_dir)
-        cinfo.ctree_dir = ctree_dir
-        result_file_dict = collections.defaultdict(lambda: {})
-        cutoff_file_dict = collections.defaultdict(lambda: {})
-        for library_id in library_ids:
-            filename = os.path.join(ctree_dir, "%s.txt" % (library_id))
-            result_file_dict[library_id] = filename
-            filename = os.path.join(ctree_dir, "%s.cutoffs.txt" % (library_id))
-            cutoff_file_dict[library_id] = filename
-        cinfo.result_file_dict = result_file_dict
-        cinfo.cutoff_file_dict = cutoff_file_dict
-        cinfo.output_gtf_file = os.path.join(category_dir, "transcripts.gtf")
-        cinfo.ctree_file = os.path.join(category_dir, "transcripts.classify.txt")
-        cinfo.sorted_ctree_file = os.path.join(category_dir, "transcripts.classify.srt.txt")
-        # filtered result files
-        cinfo.ann_expr_gtf_file = os.path.join(category_dir, "ann_expr.gtf")
-        cinfo.unann_expr_gtf_file = os.path.join(category_dir, "unann_expr.gtf")
-        cinfo.ann_bkgd_gtf_file = os.path.join(category_dir, "ann_bkgd.gtf")
-        cinfo.unann_bkgd_gtf_file = os.path.join(category_dir, "unann_bkgd.gtf")
-        cinfo.skipped_gtf_file = os.path.join(category_dir, "skipped.gtf")
-        cinfo.decision_file_dict = {ANN_EXPR: cinfo.ann_expr_gtf_file,
-                                    ANN_BKGD: cinfo.ann_bkgd_gtf_file,
-                                    UNANN_EXPR: cinfo.unann_expr_gtf_file,
-                                    UNANN_BKGD: cinfo.unann_bkgd_gtf_file,
-                                    SKIPPED: cinfo.skipped_gtf_file}
-        cinfo.pred_stats_file = os.path.join(category_dir, "pred_stats.txt") 
-        return cinfo
-
-def get_classify_header_fields():
-    header = ["chrom", "start", "library_id", "t_id", "category", 
-              "test", "ann_ref_id", "ann_cov_ratio", "ann_intron_ratio", 
-              "mean_score", "mean_recurrence", "mean_pctrank", "pctrank",
-              "length", "num_exons"]
-    return header
-
-def get_classify_fields(t):
-    # setup list of annotation fields
-    fields = [t.chrom,
-              t.start,
-              t.attrs[GTFAttr.LIBRARY_ID],
-              t.attrs[GTFAttr.TRANSCRIPT_ID],
-              t.attrs[GTFAttr.CATEGORY],
-              t.attrs[GTFAttr.TEST],
-              t.attrs[GTFAttr.ANN_REF_ID],
-              t.attrs[GTFAttr.ANN_COV_RATIO],
-              t.attrs[GTFAttr.ANN_INTRON_RATIO],
-              t.attrs[GTFAttr.MEAN_SCORE],
-              t.attrs[GTFAttr.MEAN_RECURRENCE],
-              t.attrs[GTFAttr.MEAN_PCTRANK],
-              t.attrs[GTFAttr.PCTRANK],
-              t.length,
-              len(t.exons)]
-    return fields
 
 imax2 = lambda x,y: x if x>=y else y
 imin2 = lambda x,y: x if x<=y else y
