@@ -78,6 +78,7 @@ def add_reference_gtf_file(ref_gtf_file, test_transcript_ids,
         f.attrs[GTFAttr.REF] = '1'
         f.attrs[GTFAttr.TEST] = '1' if is_test else '0'
         print >>outfh, str(f)
+    del transcript_dict
 
 def read_gtf_file(library, gtf_score_attr):
     # read all transcripts

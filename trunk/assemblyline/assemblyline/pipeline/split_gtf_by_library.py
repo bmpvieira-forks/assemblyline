@@ -70,15 +70,17 @@ class FileHandleCache(object):
         for fileh in self.fileh_dict.itervalues():
             fileh.close()
 
-def split_gtf_file(gtf_file, split_dir, category_counts_file):
+def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_counts_file):
     # split input gtf by library and mark test ids
     keyfunc = lambda myid: os.path.join(split_dir, "%s.gtf" % (myid))
     cache = FileHandleCache(keyfunc)
+    ref_fileh = open(ref_gtf_file, 'w')
     counts_dict = collections.defaultdict(lambda: CategoryCounts())
     logging.info("Splitting transcripts by library")
     for f in GTFFeature.parse(open(gtf_file)):
         is_ref = bool(int(f.attrs[GTFAttr.REF]))
         if is_ref:
+            print >>ref_fileh, str(f)
             continue
         library_id = f.attrs[GTFAttr.LIBRARY_ID]
         # keep statistics
@@ -91,6 +93,7 @@ def split_gtf_file(gtf_file, split_dir, category_counts_file):
         fileh = cache.get_file_handle(library_id)
         print >>fileh, str(f)
     # close open file handles
+    ref_fileh.close()
     cache.close()
     logging.debug("File handle cache hits: %d" % (cache.hits))
     logging.debug("File handle cache misses: %d" % (cache.misses))
@@ -135,6 +138,7 @@ def main():
     # split gtf file
     split_gtf_file(results.annotated_transcripts_gtf_file, 
                    results.classify_dir,
+                   results.ref_gtf_file,
                    results.category_counts_file)
     logging.info("Done")
     return 0

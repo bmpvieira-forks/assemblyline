@@ -313,7 +313,8 @@ classifyAndWriteResults <- function(inp,
 
 # parse command line
 args <- commandArgs(trailingOnly=TRUE)
-input_file <- args[1]
+prefix <- args[1]
+input_file <- paste(prefix, ".inp.txt", sep="")
 output_prefix <- args[2]
 min_obs <- 50
 max_frac_test_obs <- 0.05

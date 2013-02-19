@@ -32,15 +32,41 @@ import assemblyline
 import assemblyline.lib.config as config
 from assemblyline.lib.transcript import parse_gtf
 from assemblyline.lib.base import CategoryCounts, Category, \
-    GTFAttr, get_classify_header_fields, get_classify_fields, \
-    check_executable 
-from assemblyline.lib.gtf import GTFFeature, merge_sort_gtf_files
+    GTFAttr, check_executable 
+from assemblyline.lib.gtf import GTFFeature
 
 # R script to call for classifying transcripts
 _module_dir = assemblyline.__path__[0]
 CLASSIFY_KDE2D_R_SCRIPT = os.path.join(_module_dir, "lib", 
                                        "classify_transcripts_kde2d.R")
 DInfo = collections.namedtuple('DecisionInfo', ['pred', 'log10lr', 'is_test'])
+
+
+def get_classify_header_fields():
+    header = ["chrom", "start", "library_id", "t_id", "category", 
+              "test", "ann_ref_id", "ann_cov_ratio", "ann_intron_ratio", 
+              "mean_score", "mean_recurrence", "mean_pctrank", "pctrank",
+              "length", "num_exons"]
+    return header
+
+def get_classify_fields(t):
+    # setup list of annotation fields
+    fields = [t.chrom,
+              t.start,
+              t.attrs[GTFAttr.LIBRARY_ID],
+              t.attrs[GTFAttr.TRANSCRIPT_ID],
+              t.attrs[GTFAttr.CATEGORY],
+              t.attrs[GTFAttr.TEST],
+              t.attrs[GTFAttr.ANN_REF_ID],
+              t.attrs[GTFAttr.ANN_COV_RATIO],
+              t.attrs[GTFAttr.ANN_INTRON_RATIO],
+              t.attrs[GTFAttr.MEAN_SCORE],
+              t.attrs[GTFAttr.MEAN_RECURRENCE],
+              t.attrs[GTFAttr.MEAN_PCTRANK],
+              t.attrs[GTFAttr.PCTRANK],
+              t.length,
+              len(t.exons)]
+    return fields
 
 def write_transcript_table(gtf_file, table_file):
     fileh = open(table_file, 'w')
@@ -106,30 +132,30 @@ def read_classify_decisions(filename, cutoff_type):
     return decision_dict 
 
 def classify_library_transcripts(args):
-    library_id, gtf_file, cutoff_type = args
-    logging.debug("[STARTED]  library_id='%s'" % (library_id))
-    # setup result files on per-library basis
-    output_dir = os.path.dirname(gtf_file)
+    library_id, output_dir, cutoff_type = args
     prefix = os.path.join(output_dir, library_id)
+    # input files
+    input_gtf_file = prefix + ".gtf"
     logfile = prefix + ".log"
     tablefile = prefix + '.inp.txt'
-    # write table of observations
-    write_transcript_table(gtf_file, tablefile)
-    # run R script to do classification
-    logfh = open(logfile, "w")
-    retcode = subprocess.call(["Rscript", "--vanilla",
-                               CLASSIFY_KDE2D_R_SCRIPT, 
-                               tablefile, prefix], 
-                              stdout=logfh, stderr=logfh)
-    logfh.close()
-    if retcode != 0:
-        logging.error("[FAILED]   library_id='%s'" % (library_id))
-        return retcode, prefix
     # output files
     stats_file = prefix + ".stats.txt"
     output_res_file = prefix + ".out.txt"
     expr_gtf_file = prefix + ".expr.gtf"
     bkgd_gtf_file = prefix + ".bkgd.gtf"
+    # write table of observations
+    logging.debug("[STARTED]  library_id='%s'" % (library_id))
+    write_transcript_table(input_gtf_file, tablefile)
+    # run R script to do classification
+    logfh = open(logfile, "w")
+    retcode = subprocess.call(["Rscript", "--vanilla",
+                               CLASSIFY_KDE2D_R_SCRIPT, 
+                               prefix], 
+                              stdout=logfh, stderr=logfh)
+    logfh.close()
+    if retcode != 0:
+        logging.error("[FAILED]   library_id='%s'" % (library_id))
+        return retcode, library_id
     # get library stats
     stats_field_dict = read_classify_stats(stats_file)
     has_tests = int(stats_field_dict["tests"][0]) > 0
@@ -141,7 +167,7 @@ def classify_library_transcripts(args):
     expr_fileh = open(expr_gtf_file, 'w')
     bkgd_fileh = open(bkgd_gtf_file, 'w')
     output_file_handles = [bkgd_fileh, expr_fileh]
-    for feature in GTFFeature.parse(open(gtf_file)):
+    for feature in GTFFeature.parse(open(input_gtf_file)):
         t_id = feature.attrs[GTFAttr.TRANSCRIPT_ID]
         dinf = decision_dict[t_id]
         feature.attrs[GTFAttr.LOG10LR] = dinf.log10lr
@@ -150,7 +176,7 @@ def classify_library_transcripts(args):
     for fileh in output_file_handles:
         fileh.close()
     logging.debug("[FINISHED] library_id='%s'" % (library_id))
-    return retcode, prefix
+    return retcode, library_id
 
 def classify_transcripts(results, cutoff_type, num_processors):
     # read library category statistics
@@ -159,8 +185,7 @@ def classify_transcripts(results, cutoff_type, num_processors):
     tasks = []
     for countsobj in counts_list:
         library_id = countsobj.library_id
-        library_gtf_file = os.path.join(results.classify_dir, "%s.gtf" % (library_id)) 
-        tasks.append((library_id, library_gtf_file, cutoff_type))
+        tasks.append((library_id, results.classify_dir, cutoff_type))
     # use multiprocessing to parallelize
     num_processes = max(1, num_processors - 1)
     pool = multiprocessing.Pool(processes=num_processes)
@@ -168,8 +193,11 @@ def classify_transcripts(results, cutoff_type, num_processors):
     errors = False
     expressed_gtf_files = []
     background_gtf_files = []
-    for retcode, prefix in result_iter:
+    library_ids = []
+    for retcode, library_id in result_iter:
         if retcode == 0:
+            library_ids.append(library_id)
+            prefix = os.path.join(results.classify_dir, library_id)
             expressed_gtf_files.append(prefix + ".expr.gtf")
             background_gtf_files.append(prefix + ".bkgd.gtf")
         else:
@@ -178,18 +206,7 @@ def classify_transcripts(results, cutoff_type, num_processors):
     pool.join()
     if errors:
         logging.error("Errors occurred during classification")
-    # merge sort gtf files
-    logging.info("Merging and sorting expressed GTF files")
-    merge_sort_gtf_files(expressed_gtf_files, 
-                         results.expressed_gtf_file, 
-                         tmp_dir=results.tmp_dir)
-    logging.info("Merging and sorting background GTF files")
-    merge_sort_gtf_files(background_gtf_files, 
-                         results.background_gtf_file, 
-                         tmp_dir=results.tmp_dir)
-    logging.info("Done")
-    return 0
-
+    return int(errors)
 
 def main():
     multiprocessing.freeze_support()
@@ -226,9 +243,10 @@ def main():
     logging.info("----------------------------------")   
     # show parameters
     logging.info("Parameters:")
-    logging.info("run directory:        %s" % (args.run_dir))
-    logging.info("num processors:       %d" % (args.num_processors))
-    logging.info("verbose logging:      %s" % (args.verbose))
+    logging.info("run directory:    %s" % (args.run_dir))
+    logging.info("num processors:   %d" % (args.num_processors))
+    logging.info("verbose logging:  %s" % (args.verbose))
+    logging.info("cutoff type:      %s" % (args.cutoff_type))
     logging.info("----------------------------------")   
     # setup results
     results = config.AssemblylineResults(args.run_dir)
