@@ -223,13 +223,11 @@ classifyAndWriteResults <- function(inp,
 
 	# performance of classification
 	has_tests <- (sum(cl == 0) > 0)
-	aucFile <- paste(prefix, ".auc.txt", sep="")
-	cat("type", "auc\n", file=aucFile, sep="\t")
-	cutoffFile <- paste(prefix, ".cutoff.txt", sep="")
-	cat("type", "cutoff", 
+	perfFile <- paste(prefix, ".perf.txt", sep="")
+	cat("type", "auc", "cutoff", 
 		"train.tp", "train.fp", "train.fn", "train.tn", "train.sens", "train.spec", "train.balacc",
 		"test.tp", "test.fp", "test.fn", "test.tn", "test.sens", "test.spec", "test.balacc", "\n",
-		file=cutoffFile, sep="\t")
+		file=perfFile, sep="\t")
 	# training data
 	res.train <- res[(cl == 1) | (cl == 2),]
 	pred.obj <- prediction(res.train$log10lr, res.train$cl == 2)
@@ -257,13 +255,9 @@ classifyAndWriteResults <- function(inp,
 		cutoff.test.ontrain <- rep(NA, 7)
 	}
 
-	# AUC
-	cat("train", auc.train, "\n", file=aucFile, sep="\t", append=TRUE)
-	cat("test", auc.test, "\n", file=aucFile, sep="\t", append=TRUE)		
-
-	# performance at cutoff
-	cat("train", cutoff.train, cutoff.train.perf, cutoff.train.ontest, "\n", file=cutoffFile, sep="\t", append=TRUE)
-	cat("test", cutoff.test, cutoff.test.ontrain, cutoff.test.perf, "\n", file=cutoffFile, sep="\t", append=TRUE)
+	# performance
+	cat("train", auc.train, cutoff.train, cutoff.train.perf, cutoff.train.ontest, "\n", file=perfFile, sep="\t", append=TRUE)
+	cat("test", auc.test, cutoff.test, cutoff.test.ontrain, cutoff.test.perf, "\n", file=perfFile, sep="\t", append=TRUE)
 	
 	# result table
 	pred.train <- (res[,"log10lr"] > cutoff.train)
@@ -371,7 +365,7 @@ do_intronic <- (num_mrna >= min_obs) & (sum(intronic) >= min_obs)
 do_intergenic <- (num_mrna >= min_obs) & (sum(intergenic) >= min_obs)
 
 # write stats information
-statsFile <- paste(output_prefix, ".stats.txt", sep="")
+statsFile <- paste(output_prefix, ".info.txt", sep="")
 cat("mrna", num_mrna, frac_mrna, "\n", file=statsFile, sep="\t")
 cat("tests", num_tests, "\n", file=statsFile, append=TRUE, sep="\t")
 cat("intronic", sum(intronic), frac_intronic, "\n", sep="\t", file=statsFile, append=TRUE)
