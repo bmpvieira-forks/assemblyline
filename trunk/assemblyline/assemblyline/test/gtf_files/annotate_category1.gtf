@@ -1,0 +1,45 @@
+# reference transcript
+chr1	test	transcript	1	5000	1000	+	.	gene_id "G1"; transcript_id "T1"; score "1.0"; ref "1"; pct "1.0"; tst "0"
+chr1	test	exon	1	100	1000	+	.	gene_id "G1"; transcript_id "T1"; exon_number "1"; score "1.0"; ref "1"; pct "1.0"; tst "0"
+chr1	test	exon	1001	1100	1000	+	.	gene_id "G1"; transcript_id "T1"; exon_number "2"; score "1.0"; ref "1"; pct "1.0"; tst "0"
+chr1	test	exon	2001	2100	1000	+	.	gene_id "G1"; transcript_id "T1"; exon_number "3"; score "1.0"; ref "1"; pct "1.0"; tst "0"
+chr1	test	exon	3001	3100	1000	+	.	gene_id "G1"; transcript_id "T1"; exon_number "4"; score "1.0"; ref "1"; pct "1.0"; tst "0"
+chr1	test	exon	4901	5000	1000	+	.	gene_id "G1"; transcript_id "T1"; exon_number "5"; score "1.0"; ref "1"; pct "1.0"; tst "0"
+# intronic same strand
+chr1	test	transcript	201	300	1000	+	.	gene_id "G2"; transcript_id "T2"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+chr1	test	exon	201	300	1000	+	.	gene_id "G2"; transcript_id "T2"; exon_number "1"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+# intronic opp strand
+chr1	test	transcript	401	500	1000	-	.	gene_id "G3"; transcript_id "T3"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+chr1	test	exon	401	500	1000	-	.	gene_id "G3"; transcript_id "T3"; exon_number "1"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+# intronic opp strand
+chr1	test	transcript	601	980	1000	-	.	gene_id "G5"; transcript_id "T5"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+chr1	test	exon	601	700	1000	-	.	gene_id "G5"; transcript_id "T5"; exon_number "1"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+chr1	test	exon	911	980	1000	-	.	gene_id "G5"; transcript_id "T5"; exon_number "1"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+# intronic ambiguous
+chr1	test	transcript	751	775	1000	-	.	gene_id "G6"; transcript_id "T6"; score "1.0"; ref "0"; sample_id "G"; pct "1.0"
+chr1	test	exon	751	775	1000	-	.	gene_id "G6"; transcript_id "T6"; exon_number "1"; score "1.0"; ref "0"; sample_id "G"; pct "1.0"
+# interleaving
+chr1	test	transcript	801	1500	1000	+	.	gene_id "G4"; transcript_id "T4"; score "1.0"; ref "0"; sample_id "F"; pct "1.0"
+chr1	test	exon	801	900	1000	+	.	gene_id "G4"; transcript_id "T4"; exon_number "1"; score "1.0"; ref "0"; sample_id "F"; pct "1.0"
+chr1	test	exon	1301	1500	1000	+	.	gene_id "G4"; transcript_id "T4"; exon_number "2"; score "1.0"; ref "0"; sample_id "F"; pct "1.0"
+# opposite strand
+chr1	test	transcript	2001	2100	1000	-	.	gene_id "G7"; transcript_id "T7"; score "1.0"; ref "0"; sample_id "E"; pct "1.0"
+chr1	test	exon	2001	2100	1000	-	.	gene_id "G7"; transcript_id "T7"; exon_number "1"; score "1.0"; ref "0"; sample_id "E"; pct "1.0"
+# same strand
+chr1	test	transcript	2001	2600	1000	+	.	gene_id "G8"; transcript_id "T8"; score "1.0"; ref "0"; sample_id "D"; pct "1.0"
+chr1	test	exon	2001	2600	1000	+	.	gene_id "G8"; transcript_id "T8"; exon_number "1"; score "1.0"; ref "0"; sample_id "D"; pct "1.0"
+# same strand with introns
+chr1	test	transcript	1	5100	1000	+	.	gene_id "G9"; transcript_id "T9"; score "1.0"; ref "0"; sample_id "C"; pct "1.0"
+chr1	test	exon	1	100	1000	+	.	gene_id "G9"; transcript_id "T9"; exon_number "1"; score "1.0"; ref "0"; sample_id "C"; pct "1.0"
+chr1	test	exon	1001	1100	1000	+	.	gene_id "G9"; transcript_id "T9"; exon_number "2"; score "1.0"; ref "0"; sample_id "C"; pct "1.0"
+chr1	test	exon	2001	2100	1000	+	.	gene_id "G9"; transcript_id "T9"; exon_number "3"; score "1.0"; ref "0"; sample_id "C"; pct "1.0"
+chr1	test	exon	4901	5100	1000	+	.	gene_id "G9"; transcript_id "T9"; exon_number "4"; score "1.0"; ref "0"; sample_id "C"; pct "1.0"
+# same strand with partial introns
+chr1	test	transcript	1	2100	1000	+	.	gene_id "G10"; transcript_id "T10"; score "1.0"; ref "0"; sample_id "B"; pct "1.0"
+chr1	test	exon	1	100	1000	+	.	gene_id "G10"; transcript_id "T10"; exon_number "1"; score "1.0"; ref "0"; sample_id "B"; pct "1.0"
+chr1	test	exon	1001	1100	1000	+	.	gene_id "G10"; transcript_id "T10"; exon_number "2"; score "1.0"; ref "0"; sample_id "B"; pct "1.0"
+chr1	test	exon	2001	2100	1000	+	.	gene_id "G10"; transcript_id "T10"; exon_number "3"; score "1.0"; ref "0"; sample_id "B"; pct "1.0"
+# interleaving
+#chr1	test	transcript	801	1500	1000	+	.	gene_id "G4"; transcript_id "T4"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+#chr1	test	exon	801	900	1000	+	.	gene_id "G4"; transcript_id "T4"; exon_number "1"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+#chr1	test	exon	1301	1500	1000	+	.	gene_id "G4"; transcript_id "T4"; exon_number "2"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"

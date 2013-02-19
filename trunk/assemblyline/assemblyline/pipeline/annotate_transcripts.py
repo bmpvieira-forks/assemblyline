@@ -25,237 +25,361 @@ import argparse
 import os
 import collections
 import sys
-import shutil
-import numpy as np
 from multiprocessing import Process, JoinableQueue
 
+# project imports
 import assemblyline
+import assemblyline.lib.config as config
 from assemblyline.lib.bx.intersection import Interval, IntervalTree
-from assemblyline.lib.gtf import GTFAttr, parse_loci, merge_sort_gtf_files
-from assemblyline.lib.librarytable import LibraryInfo
-from assemblyline.lib.transcript import parse_gtf, \
-    transcripts_from_gtf_lines, NO_STRAND, POS_STRAND, NEG_STRAND
-from assemblyline.lib.base import LIB_COUNTS_FILE, SENSE, ANTISENSE, \
-    INTRONIC, INTERGENIC, CATEGORIES, category_int_to_str, ANNOTATED, \
-    CATEGORY, MEAN_SCORE, MEAN_RECURRENCE, LibCounts, CategoryInfo
-
-from assemblyline.lib.assemble.base import STRAND_SCORE, TRANSCRIPT_IDS
+from assemblyline.lib.gtf import parse_loci, merge_sort_gtf_files
+from assemblyline.lib.transcript import transcripts_from_gtf_lines, Exon, \
+    POS_STRAND, NEG_STRAND, NO_STRAND, strand_int_to_str
+from assemblyline.lib.base import Category, GTFAttr, FLOAT_PRECISION
 from assemblyline.lib.assemble.transcript_graph import \
-    create_undirected_transcript_graph, get_transcript_node_map
+    find_exon_boundaries, split_exon
 
-# graph attributes
-IS_REF = 'isref'
-SAMPLE_IDS = 'sids'
-# default parameters
-DEFAULT_ANNOTATION_FRAC_THRESHOLD = 0.9
+CInfo = collections.namedtuple('CategoryInfo',
+                               ['category',
+                                'ref',
+                                'ann_intron_ratio',
+                                'ann_cov_ratio',
+                                'is_test'])
 
-def get_strand_score_fraction(G, nodes):
-    # sum the coverage score across the transcript
-    score_arr = np.zeros(3,float)
-    for n in nodes:
-        score_arr += G.node[n][STRAND_SCORE]
-    # calculate total mass across transcript
-    total_strand_score = score_arr[POS_STRAND] + score_arr[NEG_STRAND]
-    # if there is "stranded" mass on any of the nodes comprising
-    # this transcript, then use the proportion of fwd/rev mass
-    # to redistribute
-    if total_strand_score > 0:
-        # proportionally assign unstranded mass based on amount of
-        # plus and minus strand mass
-        pos_frac = score_arr[POS_STRAND] / float(total_strand_score)
-        return pos_frac
-    return None
+def compute_coverage_overlap(nodes1, nodes2):
+    a = set(nodes1)
+    b = set(nodes2)
+    shared_nodes = a.intersection(b)
+    union_nodes = a.union(b)
+    shared_length = sum((n.end - n.start) for n in shared_nodes)    
+    total_length = sum((n.end - n.start) for n in union_nodes)
+    return shared_length, total_length
 
-def get_annotated_length(G, nodes, strand):
-    if strand != NEG_STRAND:
-        sense_strand, asense_strand = POS_STRAND, NEG_STRAND
+def find_best_coverage_overlap(nodes, reftuples, ignore_test=False):
+    # find the reference transcript with the best overlap
+    best_ref_t = None
+    best_shared_cov_ratio = 0.0
+    for ref_t, ref_nodes in reftuples:
+        is_test = bool(int(ref_t.attrs[GTFAttr.TEST]))
+        if is_test and ignore_test:
+            continue
+        shared_cov, union_cov = compute_coverage_overlap(nodes, ref_nodes)
+        shared_ratio = float(shared_cov) / union_cov
+        if shared_ratio > best_shared_cov_ratio:
+            best_ref_t = ref_t
+            best_shared_cov_ratio = shared_ratio
+    return best_ref_t, best_shared_cov_ratio
+
+def find_best_intron_overlap(test_nodes, test_introns, reftuples, 
+                             ignore_test=False):
+    best_ref_t = None
+    best_shared_intron_ratio = 0.0
+    best_shared_cov_ratio = 0.0    
+    for ref_t, ref_nodes in reftuples:
+        is_test = bool(int(ref_t.attrs[GTFAttr.TEST]))
+        if is_test and ignore_test:
+            continue
+        ref_introns = set(ref_t.iterintrons())
+        shared_introns = test_introns.intersection(ref_introns)
+        union_introns = test_introns.union(ref_introns)
+        shared_intron_ratio = float(len(shared_introns)) / len(union_introns)
+        shared_cov, total_cov = compute_coverage_overlap(test_nodes, ref_nodes)
+        shared_cov_ratio = float(shared_cov) / total_cov
+        if ((shared_intron_ratio > best_shared_intron_ratio) or
+            ((shared_intron_ratio == best_shared_intron_ratio) and
+             (shared_cov_ratio > best_shared_cov_ratio))):
+            best_ref_t = ref_t
+            best_shared_intron_ratio = shared_intron_ratio
+            best_shared_cov_ratio = shared_cov_ratio
+    return best_ref_t, best_shared_intron_ratio, best_shared_cov_ratio
+
+def categorize_transcript(t, nodes, introns, 
+                          shared_intron_refs,
+                          same_strand_refs,
+                          opp_strand_refs,
+                          intron_tree,
+                          ignore_test=False):
+    if len(shared_intron_refs) > 0:
+        # find reference transcript with best intron overlap
+        # and break ties using total coverage overlap
+        best_ref_t, ann_intron_ratio, ann_cov_ratio = \
+            find_best_intron_overlap(nodes, introns, 
+                                     shared_intron_refs,                                         
+                                     ignore_test)
+        if best_ref_t is not None:    
+            # determine whether this is a 'test' transcript
+            is_test = bool(int(best_ref_t.attrs[GTFAttr.TEST]))
+            return CInfo(category=Category.SAME_STRAND ,
+                         ref=best_ref_t,
+                         ann_cov_ratio=ann_cov_ratio,
+                         ann_intron_ratio=ann_intron_ratio,
+                         is_test=is_test)                
+            
+    if len(same_strand_refs) > 0:
+        # find the reference transcript with the best overlap
+        best_ref_t, ann_cov_ratio = \
+            find_best_coverage_overlap(nodes, 
+                                       same_strand_refs, 
+                                       ignore_test)
+        if best_ref_t is not None:
+            # determine whether this is a 'test' transcript
+            is_test = bool(int(best_ref_t.attrs[GTFAttr.TEST]))
+            return CInfo(category=Category.SAME_STRAND,
+                         ref=best_ref_t,
+                         ann_cov_ratio=ann_cov_ratio,
+                         ann_intron_ratio=0.0,
+                         is_test=is_test)                
+
+    # not a reference transcript
+    best_ref_t = None
+    is_test = False
+    ann_cov_ratio = 0.0
+    if len(opp_strand_refs) > 0:
+        # transcript has coverage overlapping on the opposite strand
+        # compared to reference transcripts
+        category = Category.OPP_STRAND
+        # find the reference transcript with the best overlap
+        best_ref_t, ann_cov_ratio = \
+            find_best_coverage_overlap(nodes, 
+                                       opp_strand_refs, 
+                                       ignore_test=False)
     else:
-        sense_strand, asense_strand = NEG_STRAND, POS_STRAND
-    sense_ann_length = 0
-    asense_ann_length = 0
-    total_length = 0
-    for n in nodes:
-        length = (n.end - n.start)
-        total_length += length
-        isref = G.node[n][IS_REF]
-        sense_isref = isref[sense_strand]
-        asense_isref = isref[asense_strand]
-        if sense_isref:
-            sense_ann_length += length
-        if asense_isref:
-            asense_ann_length += length    
-    return sense_ann_length, asense_ann_length, total_length
+        # transcript has no coverage overlapping a reference transcript
+        # so it must be either intronic, interleaving, or intergenic
+        # search for introns overlapping transcript
+        found_hit = False
+        categories = set()
+        for hit in intron_tree.find(t.start, t.end):
+            if ((t.strand == hit.strand) and 
+                ((hit.start,hit.end) in introns)):
+                continue
+            found_hit = True
+            # check if there is an intron that encompasses the 
+            # entire transcript
+            if (hit.start < t.start) and (hit.end > t.end):
+                if t.strand == NO_STRAND:
+                    categories.add(Category.INTRONIC_AMBIGUOUS)
+                    # no need to check other introns for unstranded 
+                    break
+                elif hit.strand == t.strand:
+                    categories.add(Category.INTRONIC_SAME_STRAND)
+                else:
+                    categories.add(Category.INTRONIC_OPP_STRAND)
+        if not found_hit:
+            # no overlap with introns
+            category = Category.INTERGENIC
+        elif len(categories) == 1:
+            category = categories.pop()
+        elif len(categories) > 1:
+            # overlaps introns on both strand
+            category = Category.INTRONIC_AMBIGUOUS
+        else:
+            # a single intron does not encompass the transcript
+            category = Category.INTERLEAVING
+    return CInfo(category=category,
+                 ref=best_ref_t,
+                 ann_cov_ratio=ann_cov_ratio,
+                 ann_intron_ratio=0.0,
+                 is_test=is_test)
 
-def get_recurrence_and_score(G, nodes, strand):
+def compute_recurrence_and_score(nodes, node_data):
     # gather recurrence and scores across each node
     total_length = 0.0
     total_score = 0.0
     total_recur = 0.0
+    total_pctrank = 0.0
     for n in nodes:
-        nd = G.node[n]
+        nd = node_data[n]
         length = float(n.end - n.start)
-        total_score += (nd[STRAND_SCORE][strand] + nd[STRAND_SCORE][NO_STRAND]) * length
-        total_recur += len(nd[SAMPLE_IDS]) * length
+        total_score += nd['score'] * length
+        total_pctrank += nd['pct'] * length
+        total_recur += len(nd['ids']) * length       
         total_length += length
     # calculate statistics
     mean_score = total_score / total_length
+    mean_pctrank = total_pctrank / total_length
     mean_recur = total_recur / total_length
-    return mean_score, mean_recur
+    return mean_score, mean_pctrank, mean_recur
 
-def resolve_strand(G, nodes):
-    # first try to use score fraction
-    pos_frac = get_strand_score_fraction(G, nodes)
-    if pos_frac is not None:
-        strand = POS_STRAND if pos_frac >= 0.5 else NEG_STRAND
-    else:
-        # get length of annotated regions
-        pos_ann_bp, neg_ann_bp, total_bp = \
-            get_annotated_length(G, nodes, POS_STRAND)
-        # use whichever of the two strands better matches an 
-        # annotated gene
-        pos_ann_frac = pos_ann_bp / float(total_bp)
-        neg_ann_frac = neg_ann_bp / float(total_bp)
-        if pos_ann_frac >= neg_ann_frac:
-            strand = POS_STRAND
+def resolve_strand(nodes, inp_node_scores, ref_node_dict):
+    # find strand with highest score
+    total_scores = [0.0, 0.0]
+    for n in nodes:
+        if n in inp_node_scores:
+            scores = inp_node_scores[n]
+            total_scores[POS_STRAND] += scores[POS_STRAND]
+            total_scores[NEG_STRAND] += scores[NEG_STRAND]
+    if sum(total_scores) > FLOAT_PRECISION:
+        if total_scores[POS_STRAND] >= total_scores[NEG_STRAND]:
+            return POS_STRAND
         else:
-            strand = NEG_STRAND
-    return strand
-
-def add_node_annotate(G, n, t, **kwargs):
-    if n not in G: 
-        attr_dict = {TRANSCRIPT_IDS: set(),
-                     IS_REF: np.zeros(3,bool),
-                     SAMPLE_IDS: set(),
-                     STRAND_SCORE: np.zeros(3,float)} 
-        G.add_node(n, attr_dict=attr_dict)
-    t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
-    is_ref = bool(int(t.attrs[GTFAttr.REF]))
-    sample_id = None
-    if "gtf_sample_attr" in kwargs:
-        sample_id_attr = kwargs["gtf_sample_attr"]
-        if sample_id_attr in t.attrs:
-            sample_id = t.attrs[sample_id_attr]
-    nd = G.node[n]
-    nd[TRANSCRIPT_IDS].add(t_id)
-    if sample_id is not None:
-        nd[SAMPLE_IDS].add(sample_id)
-    nd[IS_REF][t.strand] |= is_ref
-    nd[STRAND_SCORE][t.strand] += t.score
+            return NEG_STRAND
+    # find strand best supported by reference genes
+    ann_bp = [0, 0]
+    for n in nodes:
+        length = (n.end - n.start)
+        if n in ref_node_dict:
+            strand_ref_ids = ref_node_dict[n]
+            if len(strand_ref_ids[POS_STRAND]) > 0:
+                ann_bp[POS_STRAND] += length
+            if len(strand_ref_ids[NEG_STRAND]) > 0:
+                ann_bp[NEG_STRAND] += length
+    if sum(ann_bp) > 0:
+        if ann_bp[POS_STRAND] >= ann_bp[NEG_STRAND]:
+            return POS_STRAND
+        else:
+            return NEG_STRAND
+    return NO_STRAND
 
 def annotate_locus(transcripts, 
-                   gtf_sample_attr, 
-                   gtf_score_attr,
-                   annotation_frac_threshold):                   
-    # get reference introns and score transcripts
-    ref_introns = {POS_STRAND: set(), 
-                   NEG_STRAND: set()}
-    ref_transcripts = {POS_STRAND: [],
-                       NEG_STRAND: []}
+                   gtf_sample_attr): 
+    # store reference introns
+    # (strand,start,end) -> ids (set) 
+    ref_intron_dict = collections.defaultdict(lambda: [])
+    ref_node_dict = collections.defaultdict(lambda: ([],[]))
+    inp_node_scores = collections.defaultdict(lambda: [0.0, 0.0])
+    # index introns for fast intersection
     intron_tree = IntervalTree()
-    inp_transcripts = []
+    # find the intron domains of the transcripts
+    boundaries = find_exon_boundaries(transcripts)
+    def split_exons(t, boundaries):
+        # split exons that cross boundaries and to get the
+        # nodes in the transcript path
+        nodes = []
+        for exon in t.exons:
+            for start,end in split_exon(exon, boundaries):
+                nodes.append(Exon(start, end))
+        return nodes
+    # add transcript to intron and graph data structures
+    inp_transcript_nodes = []
+    ref_transcript_dict = {}
     for t in transcripts:
-        # set transcript score
-        t.score = float(t.attrs.get(gtf_score_attr, 0.0))
-        # separate ref and nonref transcripts
+        # get transcript attributes
+        t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
         is_ref = bool(int(t.attrs[GTFAttr.REF]))
+        # split exons that cross boundaries and get the
+        # nodes in the transcript path
+        nodes = split_exons(t, boundaries)
+        # separate ref and nonref transcripts
         if is_ref:
-            ref_transcripts[t.strand].append(t)
+            # add to nodes
+            for n in nodes:
+                ref_node_dict[n][t.strand].append(t_id)
+            # add to introns
             for start,end in t.iterintrons():
-                ref_introns[t.strand].add((start,end))
-                intron_tree.insert_interval(Interval(start,end))
+                ref_intron_dict[(t.strand, start, end)].append(t_id)
+                intron_tree.insert_interval(Interval(start,end,strand=t.strand))
+            # keep dict of reference transcripts
+            ref_transcript_dict[t_id] = (t, set(nodes))
         else:
-            inp_transcripts.append(t)
+            score = float(t.attrs[GTFAttr.SCORE])
+            if t.strand != NO_STRAND:
+                for n in nodes:
+                    inp_node_scores[n][t.strand] += score
+            inp_transcript_nodes.append((t,nodes))
+            # add to introns
             for start,end in t.iterintrons():
-                intron_tree.insert_interval(Interval(start,end))
-    # create undirected transcript graph from all transcripts
-    G = create_undirected_transcript_graph(transcripts, 
-                                           add_node_func=add_node_annotate,
-                                           gtf_sample_attr=gtf_sample_attr)
-    # build a mapping from transcripts to graph nodes using the 
-    # transcript id attributes of the nodes
-    transcript_node_map = get_transcript_node_map(G)
-    strand_transcripts_dict = {POS_STRAND: [], NEG_STRAND: []}
-    for t in inp_transcripts:
-        nodes = transcript_node_map[t.attrs[GTFAttr.TRANSCRIPT_ID]]
-        # resolve strand of unstranded transcripts 
-        if t.strand == NO_STRAND:
-            strand = resolve_strand(G, nodes)
-        else:
-            strand = t.strand
-        # check if all introns are annotated
-        myintrons = set(t.iterintrons())
-        introns_annotated = True
-        for intron in myintrons:
-            if intron not in ref_introns[strand]:
-                introns_annotated = False
-                break
-        # get length of annotated regions
-        sense_ann_bp, asense_ann_bp, total_bp = \
-            get_annotated_length(G, nodes, strand)
-        # calc fraction of transcript that is annotated
-        sense_ann_frac = sense_ann_bp / float(total_bp)
-        is_annotated = (introns_annotated and 
-                        (sense_ann_frac >= annotation_frac_threshold))
-        # determine transcript category
-        if is_annotated:
-            category = SENSE
-        elif (sense_ann_bp == 0) and (asense_ann_bp == 0):
-            # search for introns overlapping transcript
-            found_intron = False
-            for hit in intron_tree.find(t.start, t.end):
-                # ignore contained introns
-                if (hit.start > t.start) and (hit.end < t.end):
-                    continue
-                # ignore introns of this transcript
-                if (hit.start,hit.end) in myintrons:
-                    continue
-                found_intron = True
-                break
-            if found_intron:
-                category = INTRONIC
-            else:
-                category = INTERGENIC
-        elif sense_ann_bp > asense_ann_bp:
-            category = SENSE
-        else:
-            category = ANTISENSE
-        # add attributes
-        t.attrs[ANNOTATED] = 1 if is_annotated else 0                                    
-        t.attrs[CATEGORY] = category
-        # update transcript attributes and save to list
-        strand_transcripts_dict[strand].append(t)
+                intron_tree.insert_interval(Interval(start,end,strand=t.strand))
+    # convert to regular dicts
+    ref_intron_dict = dict(ref_intron_dict)
+    ref_node_dict = dict(ref_node_dict)
+    inp_node_scores = dict(inp_node_scores)
+    # categorize transcripts
+    strand_transcript_lists = [[], [], []]
+    for t,nodes in inp_transcript_nodes:
+        strand = t.strand
+        if strand == NO_STRAND:
+            # try to resolve strand
+            strand = resolve_strand(nodes, inp_node_scores, ref_node_dict)
+            if strand != NO_STRAND:
+                # write new strand as an attribute
+                t.attrs[GTFAttr.RESOLVED_STRAND] = strand_int_to_str(strand)
+        # get all reference transcripts that share introns
+        introns = set(t.iterintrons())
+        intron_ref_ids = set()
+        for start,end in introns:
+            if (strand, start, end) in ref_intron_dict:
+                intron_ref_ids.update(ref_intron_dict[(strand, start, end)])
+        # get all reference transcripts that share coverage
+        same_strand_ref_ids = set()
+        opp_strand_ref_ids = set()
+        opp_strand = (strand + 1) % 2
+        for n in nodes:
+            if n in ref_node_dict:
+                strand_ref_ids = ref_node_dict[n]
+                same_strand_ref_ids.update(strand_ref_ids[strand])
+                opp_strand_ref_ids.update(strand_ref_ids[opp_strand])
+        # categorize
+        intron_refs = [ref_transcript_dict[x]
+                       for x in intron_ref_ids]
+        same_strand_refs = [ref_transcript_dict[x] 
+                            for x in same_strand_ref_ids]
+        opp_strand_refs = [ref_transcript_dict[x] 
+                           for x in opp_strand_ref_ids]
+        cinf = categorize_transcript(t, nodes, introns, 
+                                     intron_refs,
+                                     same_strand_refs,
+                                     opp_strand_refs,
+                                     intron_tree,
+                                     ignore_test=False)
+        if cinf.is_test:
+            # recategorize test transcripts
+            cinf2 = categorize_transcript(t, nodes, introns, 
+                                          intron_refs,
+                                          same_strand_refs,
+                                          opp_strand_refs,
+                                          intron_tree,
+                                          ignore_test=True)
+            cinf = cinf._replace(category=cinf2.category)
+        # add annotation attributes
+        best_ref_id = (cinf.ref.attrs[GTFAttr.TRANSCRIPT_ID] 
+                       if cinf.ref is not None else 'na')
+        t.attrs[GTFAttr.CATEGORY] = cinf.category
+        t.attrs[GTFAttr.TEST] = '1' if cinf.is_test else '0'
+        t.attrs[GTFAttr.ANN_REF_ID] = best_ref_id
+        t.attrs[GTFAttr.ANN_COV_RATIO] = cinf.ann_cov_ratio
+        t.attrs[GTFAttr.ANN_INTRON_RATIO] = cinf.ann_intron_ratio
+        # group transcripts by strand
+        strand_transcript_lists[strand].append(t) 
     # annotate score and recurrence for transcripts
-    for strand, strand_transcripts in strand_transcripts_dict.iteritems():
-        # create undirected transcript graph for transcripts on 
-        # specific strand
-        G = create_undirected_transcript_graph(strand_transcripts,
-                                               add_node_func=add_node_annotate,
-                                               gtf_sample_attr=gtf_sample_attr)
-        # build a mapping from transcripts to graph nodes using the 
-        # transcript id attributes of the nodes
-        transcript_node_map = get_transcript_node_map(G)
+    for strand_transcripts in strand_transcript_lists:
+        # find the intron domains of the transcripts
+        boundaries = find_exon_boundaries(transcripts)
+        # gather node score/recurrence data
+        new_data_func = lambda: {'ids': set(), 
+                                 'score': 0.0, 
+                                 'pct': 0.0}
+        node_data = collections.defaultdict(new_data_func)
+        transcript_nodes = []
         for t in strand_transcripts:
-            nodes = transcript_node_map[t.attrs[GTFAttr.TRANSCRIPT_ID]]
-            # calculate recurrence and score statistics
-            mean_score, mean_recur = get_recurrence_and_score(G, nodes, strand)
-            t.attrs[MEAN_SCORE] = mean_score
-            t.attrs[MEAN_RECURRENCE] = mean_recur
-    return inp_transcripts
+            sample_id = t.attrs[gtf_sample_attr]
+            score = float(t.attrs[GTFAttr.SCORE])
+            pctrank = float(t.attrs[GTFAttr.PCTRANK])
+            # split exons that cross boundaries and to get the
+            # nodes in the transcript path
+            nodes = split_exons(t, boundaries)
+            for n in nodes:
+                nd = node_data[n]
+                nd['ids'].add(sample_id)
+                nd['score'] += score
+                nd['pct'] += pctrank
+            transcript_nodes.append((t, nodes))
+        # calculate recurrence and score statistics
+        for t,nodes in transcript_nodes:
+            mean_score, mean_pctrank, mean_recur = \
+                compute_recurrence_and_score(nodes, node_data)
+            t.attrs[GTFAttr.MEAN_SCORE] = mean_score
+            t.attrs[GTFAttr.MEAN_PCTRANK] = mean_pctrank
+            t.attrs[GTFAttr.MEAN_RECURRENCE] = mean_recur
 
-def annotate_gtf_worker(input_queue, gtf_file, gtf_sample_attr, 
-                        gtf_score_attr, 
-                        annotation_frac_threshold):
+def annotate_gtf_worker(input_queue, gtf_file, gtf_sample_attr): 
     fileh = open(gtf_file, 'w')
     while True:
         lines = input_queue.get()
         if len(lines) == 0:
             break
         transcripts = transcripts_from_gtf_lines(lines)
-        annotated_transcripts = annotate_locus(transcripts, 
-                                               gtf_sample_attr, 
-                                               gtf_score_attr,
-                                               annotation_frac_threshold) 
-        for t in annotated_transcripts:
+        annotate_locus(transcripts, gtf_sample_attr) 
+        for t in transcripts:
             features = t.to_gtf_features()
             for f in features:
                 print >>fileh, str(f) 
@@ -266,8 +390,6 @@ def annotate_gtf_worker(input_queue, gtf_file, gtf_sample_attr,
 def annotate_gtf_parallel(input_gtf_file,
                           output_gtf_file, 
                           gtf_sample_attr, 
-                          gtf_score_attr, 
-                          annotation_frac_threshold,                          
                           num_processors, 
                           tmp_dir):
     # create queue
@@ -278,8 +400,7 @@ def annotate_gtf_parallel(input_gtf_file,
     for i in xrange(num_processors):
         worker_gtf_file = os.path.join(tmp_dir, "annotate_worker%03d.gtf" % (i))
         worker_gtf_files.append(worker_gtf_file)
-        args = (input_queue, worker_gtf_file, gtf_sample_attr, gtf_score_attr, 
-                annotation_frac_threshold)
+        args = (input_queue, worker_gtf_file, gtf_sample_attr)
         p = Process(target=annotate_gtf_worker, args=args)
         p.daemon = True
         p.start()
@@ -296,64 +417,12 @@ def annotate_gtf_parallel(input_gtf_file,
     for p in procs:
         p.join()
     # merge/sort worker gtf files
-    logging.info("Merging %d worker GTF files" % (num_processors))
+    logging.debug("Merging %d worker GTF file(s)" % (num_processors))
     merge_sort_gtf_files(worker_gtf_files, output_gtf_file, tmp_dir=tmp_dir)
     # remove worker gtf files
     for filename in worker_gtf_files:
         if os.path.exists(filename):
             os.remove(filename)
-
-def output_by_category(gtf_file, library_ids, output_dir):
-    # setup output by category
-    category_info_dict = {}
-    for category_key, category_str in category_int_to_str.iteritems():
-        cinfo = CategoryInfo.create(library_ids, category_key, 
-                                    category_str, output_dir)
-        cinfo.output_gtf_fh = open(cinfo.output_gtf_file, "w")
-        category_info_dict[category_key] = cinfo
-    # function to gather transcript attributes
-    lib_counts_dict = collections.defaultdict(lambda: LibCounts())
-    for locus_transcripts in parse_gtf(open(gtf_file)):
-        # write classification table files
-        category_features = collections.defaultdict(lambda: [])
-        for t in locus_transcripts:
-            library_id = t.attrs[GTFAttr.LIBRARY_ID]
-            category = int(t.attrs[CATEGORY])
-            is_annotated = int(t.attrs[ANNOTATED])
-            features = t.to_gtf_features()
-            # keep statistics
-            lib_counts = lib_counts_dict[library_id]
-            lib_counts.library_id = library_id
-            lib_counts.annotated_counts[is_annotated] += 1
-            if is_annotated:
-                # write annotated transcripts to all categories
-                for category_key in CATEGORIES:
-                    category_features[category_key].extend(features)
-            else:
-                category_features[category].extend(features)
-                # update stats
-                lib_counts.category_counts[category] += 1
-        # sort and output category GTF features
-        for category_key, features in category_features.iteritems():
-            # sort so that 'transcript' features appear before 'exon'
-            features.sort(key=lambda f: f.feature_type, reverse=True)
-            features.sort(key=lambda f: f.start)
-            # output transcripts to gtf
-            output_gtf_fh = category_info_dict[category_key].output_gtf_fh
-            for f in features:
-                print >>output_gtf_fh, str(f) 
-    # close open file handles
-    for category_key, cinfo in category_info_dict.iteritems():
-        cinfo.output_gtf_fh.close()
-    # write library category statistics
-    logging.info("Writing library transcript count statistics")
-    lib_counts_file = os.path.join(output_dir, LIB_COUNTS_FILE)
-    fh = open(lib_counts_file, "w")
-    print >>fh, '\t'.join(LibCounts.header_fields())
-    for lib_counts in lib_counts_dict.itervalues():
-        fields = lib_counts.to_fields()
-        print >>fh, '\t'.join(map(str, fields))
-    fh.close()
 
 def main():
     # parse command line
@@ -364,33 +433,16 @@ def main():
                         help="Number of processes to run in parallel "
                         "[default=%(default)s]")
     parser.add_argument("--gtf-sample-attr", dest="gtf_sample_attr", 
-                        default="sample_id", metavar="ATTR",
+                        default=GTFAttr.SAMPLE_ID, metavar="ATTR",
                         help="GTF attribute field used to distinguish "
                         "independent samples in order to compute "
                         "recurrence [default=%(default)s]")
-    parser.add_argument("--gtf-score-attr", dest="gtf_score_attr", 
-                        default="FPKM", metavar="ATTR",
-                        help="GTF attribute field containing node weight "
-                        " [default=%(default)s]")
-    parser.add_argument("--annotation-frac", 
-                        dest="annotation_frac_threshold", 
-                        type=float, 
-                        default=DEFAULT_ANNOTATION_FRAC_THRESHOLD,
-                        help="fraction of transcript bases that must "
-                        "overlap a reference transcript in order for "
-                        "to be considered 'annotated' "
-                        "[default=%(default)s]")
-    parser.add_argument("-o", "--output-dir", dest="output_dir", 
-                        default="transcripts",
-                        help="output directory [default=%(default)s]")
-    parser.add_argument("gtf_file")
-    parser.add_argument("library_table_file")
+    parser.add_argument("run_dir")
     args = parser.parse_args()
     # check command line parameters
-    if not os.path.exists(args.gtf_file):
-        parser.error("Reference GTF file %s not found" % (args.ref_gtf_file))
-    if not os.path.exists(args.library_table_file):
-        parser.error("Library table file %s not found" % (args.library_table_file))
+    if not os.path.exists(args.run_dir):
+        parser.error("Run directory %s not found" % (args.run_dir))
+    num_processors = max(1, args.num_processors)
     # set logging level
     if args.verbose:
         level = logging.DEBUG
@@ -401,41 +453,20 @@ def main():
     logging.info("AssemblyLine %s" % (assemblyline.__version__))
     logging.info("----------------------------------")   
     # show parameters
+    logging.info("Parameters:")
     logging.info("num processors:       %d" % (args.num_processors))
     logging.info("gtf sample attribute: %s" % (args.gtf_sample_attr))
-    logging.info("gtf score attribute:  %s" % (args.gtf_score_attr))
-    logging.info("output directory:     %s" % (args.output_dir))
-    logging.info("gtf file:             %s" % (args.gtf_file))
-    logging.info("library table file:   %s" % (args.library_table_file))
+    logging.info("run directory:        %s" % (args.run_dir))
     logging.info("----------------------------------")   
-    if not os.path.exists(args.output_dir):
-        logging.debug("Creating output directory '%s'" % (args.output_dir))
-        os.makedirs(args.output_dir)
-    tmp_dir = os.path.join(args.output_dir, "tmp")
-    if not os.path.exists(tmp_dir):
-        logging.info("Creating tmp directory '%s'" % (tmp_dir))
-        os.makedirs(tmp_dir)
-    # parse library table
-    logging.info("Parsing library table")
-    library_ids = []
-    for lib in LibraryInfo.from_file(args.library_table_file):
-        library_ids.append(lib.library_id)
+    # setup results
+    results = config.AssemblylineResults(args.run_dir)
     # function to gather transcript attributes
     logging.info("Annotating GTF file")
-    annotated_gtf_file = os.path.join(args.output_dir, "annotated_transcripts.gtf")
-    annotate_gtf_parallel(args.gtf_file,
-                          annotated_gtf_file,
-                          args.gtf_sample_attr, 
-                          args.gtf_score_attr, 
-                          args.annotation_frac_threshold,                          
-                          args.num_processors, 
-                          tmp_dir)
-    # output annotated transcripts by category
-    logging.info("Outputting transcripts by category")
-    output_by_category(annotated_gtf_file, library_ids, args.output_dir)
-    # cleanup
-    if os.path.exists(tmp_dir):
-        shutil.rmtree(tmp_dir)
+    annotate_gtf_parallel(results.transcripts_gtf_file,
+                          results.annotated_transcripts_gtf_file,
+                          args.gtf_sample_attr,
+                          num_processors,
+                          results.tmp_dir)
     logging.info("Done")
     return 0
 

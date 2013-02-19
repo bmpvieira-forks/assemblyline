@@ -1,0 +1,45 @@
+# reference transcripts
+chr1	test	transcript	1	5000	1000	+	.	gene_id "A"; transcript_id "A"; score "1.0"; ref "1"; pct "1.0"; tst "0"
+chr1	test	exon	1	100	1000	+	.	gene_id "A"; transcript_id "A"; exon_number "1"; score "1.0"; ref "1"; pct "1.0"; tst "0"
+chr1	test	exon	1001	1100	1000	+	.	gene_id "A"; transcript_id "A"; exon_number "2"; score "1.0"; ref "1"; pct "1.0"; tst "0"
+chr1	test	exon	2001	2100	1000	+	.	gene_id "A"; transcript_id "A"; exon_number "3"; score "1.0"; ref "1"; pct "1.0"; tst "0"
+chr1	test	exon	3001	3100	1000	+	.	gene_id "A"; transcript_id "A"; exon_number "4"; score "1.0"; ref "1"; pct "1.0"; tst "0"
+chr1	test	exon	4901	5000	1000	+	.	gene_id "A"; transcript_id "A"; exon_number "5"; score "1.0"; ref "1"; pct "1.0"; tst "0"
+
+chr1	test	transcript	1	5000	1000	+	.	gene_id "B"; transcript_id "B"; score "1.0"; ref "1"; pct "1.0"; tst "1"
+chr1	test	exon	1	100	1000	+	.	gene_id "B"; transcript_id "B"; exon_number "1"; score "1.0"; ref "1"; pct "1.0"; tst "1"
+chr1	test	exon	1001	1100	1000	+	.	gene_id "B"; transcript_id "B"; exon_number "2"; score "1.0"; ref "1"; pct "1.0"; tst "1"
+chr1	test	exon	2001	2100	1000	+	.	gene_id "B"; transcript_id "B"; exon_number "3"; score "1.0"; ref "1"; pct "1.0"; tst "1"
+chr1	test	exon	4901	5000	1000	+	.	gene_id "B"; transcript_id "B"; exon_number "4"; score "1.0"; ref "1"; pct "1.0"; tst "1"
+
+chr1	test	transcript	2001	10000	1000	-	.	gene_id "C"; transcript_id "C"; score "1.0"; ref "1"; pct "1.0"; tst "1"
+chr1	test	exon	2001	2100	1000	-	.	gene_id "C"; transcript_id "C"; exon_number "1"; score "1.0"; ref "1"; pct "1.0"; tst "1"
+chr1	test	exon	4501	4600	1000	-	.	gene_id "C"; transcript_id "C"; exon_number "2"; score "1.0"; ref "1"; pct "1.0"; tst "1"
+chr1	test	exon	8001	8200	1000	-	.	gene_id "C"; transcript_id "C"; exon_number "3"; score "1.0"; ref "1"; pct "1.0"; tst "1"
+chr1	test	exon	9801	10000	1000	-	.	gene_id "C"; transcript_id "C"; exon_number "4"; score "1.0"; ref "1"; pct "1.0"; tst "1"
+
+# not test opposite strand
+chr1	test	transcript	1	200	1000	-	.	gene_id "AA"; transcript_id "AA"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+chr1	test	exon	1	200	1000	-	.	gene_id "AA"; transcript_id "AA"; exon_number "1"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+
+# test same strand
+chr1	test	transcript	1	200	1000	+	.	gene_id "BB"; transcript_id "BB"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+chr1	test	exon	1	200	1000	+	.	gene_id "BB"; transcript_id "BB"; exon_number "1"; score "1.0"; ref "0"; sample_id "A"; pct "1.0"
+
+# test opposite strand
+chr1	test	transcript	2001	2100	1000	-	.	gene_id "CC"; transcript_id "CC"; score "1.0"; ref "0"; sample_id "E"; pct "1.0"
+chr1	test	exon	2001	2100	1000	-	.	gene_id "CC"; transcript_id "CC"; exon_number "1"; score "1.0"; ref "0"; sample_id "E"; pct "1.0"
+
+# test intronic
+chr1	test	transcript	4501	4600	1000	-	.	gene_id "DD"; transcript_id "DD"; score "1.0"; ref "0"; sample_id "E"; pct "1.0"
+chr1	test	exon	4501	4600	1000	-	.	gene_id "DD"; transcript_id "DD"; exon_number "1"; score "1.0"; ref "0"; sample_id "E"; pct "1.0"
+
+# test interleaving
+chr1	test	transcript	4501	8200	1000	-	.	gene_id "EE"; transcript_id "EE"; score "1.0"; ref "0"; sample_id "E"; pct "1.0"
+chr1	test	exon	4501	4600	1000	-	.	gene_id "EE"; transcript_id "EE"; exon_number "1"; score "1.0"; ref "0"; sample_id "E"; pct "1.0"
+chr1	test	exon	8001	8200	1000	-	.	gene_id "EE"; transcript_id "EE"; exon_number "1"; score "1.0"; ref "0"; sample_id "E"; pct "1.0"
+
+# test intergenic
+chr1	test	transcript	8001	8200	1000	-	.	gene_id "FF"; transcript_id "FF"; score "1.0"; ref "0"; sample_id "E"; pct "1.0"
+chr1	test	exon	8001	8200	1000	-	.	gene_id "FF"; transcript_id "FF"; exon_number "1"; score "1.0"; ref "0"; sample_id "E"; pct "1.0"
+

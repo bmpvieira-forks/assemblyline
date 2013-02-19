@@ -35,7 +35,7 @@ def get_extension_modules():
 
 def main():
     setup(name="assemblyline",
-          version='0.1.6',
+          version='0.2.0',
           description="transcriptome meta-assembly from RNA-Seq",
           long_description=__doc__,
           author = "Matthew Iyer",
@@ -49,11 +49,7 @@ def main():
                     'assemblyline.lib.assemble',
                     'assemblyline.pipeline',
                     'assemblyline.test',
-                    'assemblyline.utils',
-                    'assemblyline.rnaseq',
-                    'assemblyline.rnaseq.lib',
-                    'assemblyline.rnaseq.pipeline',
-                    'assemblyline.rnaseq.utils'],
+                    'assemblyline.utils'],
           package_data={'assemblyline.lib': ['classify_transcripts.R']},                             
           ext_modules=get_extension_modules(),
           cmdclass= {'build_ext': build_ext})
