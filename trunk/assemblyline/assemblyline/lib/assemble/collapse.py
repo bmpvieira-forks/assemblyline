@@ -122,7 +122,7 @@ def add_chains(G, chains, node_chain_map):
             H.node[u_chain_node][CHAIN_EDGES].append((u,v,d))
     return H
 
-def recalc_strand_specific_graph_attributes(G):
+def recalc_strand_specific_graph_attributes(G, transcript_map):
     """
     computes score, length, and transcript ids after graph
     is divided into strand-specific subgraphs and collapsed
@@ -130,29 +130,22 @@ def recalc_strand_specific_graph_attributes(G):
     for n,d in G.nodes_iter(data=True):
         chain_nodes = d[CHAIN_NODES]
         chain_data = d[CHAIN_DATA]
-        node_ids = set()
-        total_score = 0.0
-        min_score = None
-        max_score = None
+        transcript_ids = set()
         total_length = 0
         for cn in chain_nodes:
             total_length += (cn.end - cn.start)
             cattrs = chain_data[cn]
-            node_ids.update(cattrs[TRANSCRIPT_IDS])
-            score = cattrs[NODE_SCORE]
-            total_score += score
-            if (min_score is None) or (score < min_score):
-                min_score = score
-            if (max_score is None) or (score > max_score):
-                max_score = score
+            transcript_ids.update(cattrs[TRANSCRIPT_IDS])
         # set attributes
-        d[TRANSCRIPT_IDS] = node_ids
+        d[TRANSCRIPT_IDS] = transcript_ids
         d[NODE_LENGTH] = total_length
-        d[NODE_SCORE] = max_score
-        #d[NODE_SCORE] = min_score
-        #d[NODE_SCORE] = total_score / float(len(chain_nodes))
+        # new score is sum of scores of all transcripts
+        # in the collapsed chain of nodes
+        total_score = sum(transcript_map[t_id].score 
+                          for t_id in transcript_ids)
+        d[NODE_SCORE] = total_score
 
-def collapse_strand_specific_graph(G):
+def collapse_strand_specific_graph(G, transcript_map):
     """
     find groups of nodes that have a single path through them
     and merges them into chains
@@ -166,5 +159,5 @@ def collapse_strand_specific_graph(G):
     """
     node_chain_map, chains = get_chains(G)
     H = add_chains(G, chains, node_chain_map)
-    recalc_strand_specific_graph_attributes(H)
+    recalc_strand_specific_graph_attributes(H, transcript_map)
     return H

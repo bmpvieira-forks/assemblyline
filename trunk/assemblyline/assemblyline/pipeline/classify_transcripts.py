@@ -77,7 +77,7 @@ def write_transcript_table(gtf_file, table_file):
             print >>fileh, '\t'.join(map(str, fields))
     fileh.close()
     
-def read_classify_stats(filename):
+def read_classify_info(filename):
     field_dict = {}
     for line in open(filename):
         fields = line.strip().split('\t')
@@ -139,7 +139,7 @@ def classify_library_transcripts(args):
     logfile = prefix + ".log"
     tablefile = prefix + '.inp.txt'
     # output files
-    stats_file = prefix + ".stats.txt"
+    info_file = prefix + ".info.txt"
     output_res_file = prefix + ".out.txt"
     expr_gtf_file = prefix + ".expr.gtf"
     bkgd_gtf_file = prefix + ".bkgd.gtf"
@@ -157,8 +157,8 @@ def classify_library_transcripts(args):
         logging.error("[FAILED]   library_id='%s'" % (library_id))
         return retcode, library_id
     # get library stats
-    stats_field_dict = read_classify_stats(stats_file)
-    has_tests = int(stats_field_dict["tests"][0]) > 0
+    info_field_dict = read_classify_info(info_file)
+    has_tests = int(info_field_dict["tests"][0]) > 0
     if not has_tests:
         cutoff_type = "train"
     # get transcript predictions
@@ -187,20 +187,11 @@ def classify_transcripts(results, cutoff_type, num_processors):
         library_id = countsobj.library_id
         tasks.append((library_id, results.classify_dir, cutoff_type))
     # use multiprocessing to parallelize
-    num_processes = max(1, num_processors - 1)
-    pool = multiprocessing.Pool(processes=num_processes)
+    pool = multiprocessing.Pool(processes=num_processors)
     result_iter = pool.imap_unordered(classify_library_transcripts, tasks)
     errors = False
-    expressed_gtf_files = []
-    background_gtf_files = []
-    library_ids = []
     for retcode, library_id in result_iter:
-        if retcode == 0:
-            library_ids.append(library_id)
-            prefix = os.path.join(results.classify_dir, library_id)
-            expressed_gtf_files.append(prefix + ".expr.gtf")
-            background_gtf_files.append(prefix + ".bkgd.gtf")
-        else:
+        if retcode != 0:
             errors = True
     pool.close()
     pool.join()

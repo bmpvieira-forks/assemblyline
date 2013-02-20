@@ -36,7 +36,7 @@ from assemblyline.lib.transcript import transcripts_from_gtf_lines, Exon, \
     POS_STRAND, NEG_STRAND, NO_STRAND, strand_int_to_str
 from assemblyline.lib.base import Category, GTFAttr, FLOAT_PRECISION
 from assemblyline.lib.assemble.transcript_graph import \
-    find_exon_boundaries, split_exon
+    find_exon_boundaries, split_exons
 
 CInfo = collections.namedtuple('CategoryInfo',
                                ['category',
@@ -203,26 +203,24 @@ def compute_recurrence_and_score(nodes, node_data):
 def resolve_strand(nodes, inp_node_scores, ref_node_dict):
     # find strand with highest score
     total_scores = [0.0, 0.0]
-    for n in nodes:
-        if n in inp_node_scores:
-            scores = inp_node_scores[n]
-            total_scores[POS_STRAND] += scores[POS_STRAND]
-            total_scores[NEG_STRAND] += scores[NEG_STRAND]
-    if sum(total_scores) > FLOAT_PRECISION:
-        if total_scores[POS_STRAND] >= total_scores[NEG_STRAND]:
-            return POS_STRAND
-        else:
-            return NEG_STRAND
-    # find strand best supported by reference genes
     ann_bp = [0, 0]
     for n in nodes:
         length = (n.end - n.start)
+        if n in inp_node_scores:
+            scores = inp_node_scores[n]
+            total_scores[POS_STRAND] += (scores[POS_STRAND]*length)
+            total_scores[NEG_STRAND] += (scores[NEG_STRAND]*length)
         if n in ref_node_dict:
             strand_ref_ids = ref_node_dict[n]
             if len(strand_ref_ids[POS_STRAND]) > 0:
                 ann_bp[POS_STRAND] += length
             if len(strand_ref_ids[NEG_STRAND]) > 0:
                 ann_bp[NEG_STRAND] += length
+    if sum(total_scores) > FLOAT_PRECISION:
+        if total_scores[POS_STRAND] >= total_scores[NEG_STRAND]:
+            return POS_STRAND
+        else:
+            return NEG_STRAND
     if sum(ann_bp) > 0:
         if ann_bp[POS_STRAND] >= ann_bp[NEG_STRAND]:
             return POS_STRAND
@@ -241,14 +239,6 @@ def annotate_locus(transcripts,
     intron_tree = IntervalTree()
     # find the intron domains of the transcripts
     boundaries = find_exon_boundaries(transcripts)
-    def split_exons(t, boundaries):
-        # split exons that cross boundaries and to get the
-        # nodes in the transcript path
-        nodes = []
-        for exon in t.exons:
-            for start,end in split_exon(exon, boundaries):
-                nodes.append(Exon(start, end))
-        return nodes
     # add transcript to intron and graph data structures
     inp_transcript_nodes = []
     ref_transcript_dict = {}

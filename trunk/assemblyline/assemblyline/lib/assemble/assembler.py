@@ -326,9 +326,9 @@ def assemble_transcript_graph(G, strand, partial_paths,
     logging.debug("\tFinding suboptimal paths in k-mer graph with %d nodes" % (len(K)))
     path_info_list = []   
     for kmer_path, score in find_suboptimal_paths(K, source_kmer, 
-                                                    sink_kmer,
-                                                    fraction_major_path, 
-                                                    max_paths):
+                                                  sink_kmer,
+                                                  fraction_major_path, 
+                                                  max_paths):
         # get nodes from kmer path
         path = list(kmer_path[0])
         path.extend(kmer[-1] for kmer in kmer_path[1:])

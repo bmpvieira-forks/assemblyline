@@ -31,7 +31,7 @@ from multiprocessing import Process, JoinableQueue, Value
 
 import assemblyline
 from assemblyline.lib.bx.cluster import ClusterTree
-from assemblyline.lib.base import float_check_nan
+from assemblyline.lib.base import float_check_nan, GTFAttr
 from assemblyline.lib.gtf import GTFFeature
 from assemblyline.lib.gtf import parse_loci, merge_sort_gtf_files
 from assemblyline.lib.transcript import transcripts_from_gtf_lines, \
@@ -40,7 +40,8 @@ from assemblyline.lib.transcript import transcripts_from_gtf_lines, \
 from assemblyline.lib.assemble.base import NODE_SCORE
 from assemblyline.lib.assemble.filter import filter_transcripts
 from assemblyline.lib.assemble.transcript_graph import \
-    create_transcript_graphs, prune_transcript_graph
+    create_transcript_graphs, \
+    prune_transcript_graph
 from assemblyline.lib.assemble.assembler import assemble_transcript_graph
 
 SCORING_MODES = ("unweighted", "gtf_attr")
@@ -53,11 +54,12 @@ class RunConfig(object):
         self.verbose = False
         self.num_processors = 1
         self.scoring_mode = "gtf_attr"
-        self.gtf_score_attr = "FPKM"
-        self.min_transcript_length = 100
+        self.gtf_score_attr = GTFAttr.PCTRANK
+        self.min_transcript_length = 250
         self.min_trim_length = 25
         self.trim_utr_fraction = 0.1
         self.trim_intron_fraction = 0.25
+        self.guided = False
         self.kmax = 3
         self.ksensitivity = 0.0
         self.fraction_major_isoform = 0.01
@@ -113,6 +115,10 @@ class RunConfig(object):
                             "equal to FRAC fraction of the downstream exon "
                             "[default=%(default)s]")
         grp = parser.add_argument_group("Assembly options")
+        grp.add_argument("--guided", dest="guided", action="store_true",
+                         default=self.guided,
+                         help="Use reference transcripts as a template "
+                         "during assembly (default: not set)")
         grp.add_argument("--kmax", dest="kmax", 
                          type=int, default=self.kmax, metavar="k",
                          help="Constrain de Bruijn graph parameter 'k' "
@@ -184,6 +190,7 @@ class RunConfig(object):
         self.gtf_input_file = args.gtf_input_file
         self.trim_utr_fraction = args.trim_utr_fraction
         self.trim_intron_fraction = args.trim_intron_fraction
+        self.guided = args.guided
         self.kmax = args.kmax
         self.ksensitivity = args.ksensitivity
         self.fraction_major_isoform = args.fraction_major_isoform
@@ -203,6 +210,7 @@ class RunConfig(object):
         logging.info("min trim length:         %d" % (self.min_trim_length))
         logging.info("trim utr fraction:       %f" % (self.trim_utr_fraction))
         logging.info("trim intron fraction:    %f" % (self.trim_intron_fraction))
+        logging.info("guided:                   %s" % (self.guided))
         logging.info("kmax:                    %d" % (self.kmax))
         logging.info("ksensitivity:            %f" % (self.ksensitivity))
         logging.info("fraction major isoform:  %f" % (self.fraction_major_isoform))
@@ -399,9 +407,11 @@ def assemble_locus(transcripts,
     locus_id_value_obj.value += 1
     # filter transcripts
     logging.debug("\tFiltering transcripts")
-    transcripts = filter_transcripts(transcripts, config.min_transcript_length)    
+    transcripts = filter_transcripts(transcripts, 
+                                     config.min_transcript_length,
+                                     config.guided)
     # build transcript graphs
-    for G, strand, strand_transcript_map in \
+    for G, strand, transcript_map in \
         create_transcript_graphs(transcripts):
         # output bedgraph
         if config.create_bedgraph:
@@ -409,13 +419,12 @@ def assemble_locus(transcripts,
                 print >>bedgraph_filehs[strand], '\t'.join(map(str,fields))
         # process transcript graphs
         for Gsub, strand, partial_paths in \
-            prune_transcript_graph(G, strand, strand_transcript_map,
+            prune_transcript_graph(G, strand, transcript_map,
                                    config.min_trim_length, 
                                    config.trim_utr_fraction,
                                    config.trim_intron_fraction):
-            logging.debug("[GENE][STRAND] (%s) graph has %d nodes and "
-                          "%d unique path fragments" % 
-                          (strand_int_to_str(strand), len(Gsub), 
+            logging.debug("\t\t(%s) subgraph %d nodes %d paths" %
+                           (strand_int_to_str(strand), len(Gsub),
                            len(partial_paths)))
             # assemble subgraph
             assemble_gene(locus_chrom, locus_id_str, 
@@ -435,17 +444,19 @@ def assembly_worker(input_queue,
                     worker_prefix,
                     config):
     # setup output files
+    gtf_fileh = None
+    bed_fileh = None
+    bedgraph_filehs = [None, None, None]
     if config.create_gtf:
         gtf_fileh = open(worker_prefix + ".gtf", "w")
     if config.create_bed:
         bed_fileh = open(worker_prefix + ".bed", "w")
     if config.create_bedgraph:
-        bedgraph_filehs = []
         for strand in xrange(0,3):
             filename = '%s_%s.bedgraph' % (worker_prefix, 
                                            STRAND_NAMES[strand])
             fileh = open(filename, 'w')
-            bedgraph_filehs.append(fileh)
+            bedgraph_filehs[strand] = fileh
     # process input
     while True:
         lines = input_queue.get()
@@ -453,12 +464,12 @@ def assembly_worker(input_queue,
             break
         transcripts = transcripts_from_gtf_lines(lines)
         # assign scores to each transcript
-        if config.scoring_mode == "unweighted":
-            for t in transcripts:
+        for t in transcripts:
+            if config.scoring_mode == "unweighted":
                 t.score = 1.0
-        elif config.scoring_mode == "gtf_attr":
-            for t in transcripts:
-                t.score = float_check_nan(t.attrs[config.gtf_score_attr])
+            elif config.scoring_mode == "gtf_attr":
+                score = t.attrs.get(config.gtf_score_attr, '0')
+                t.score = float_check_nan(score)
         # assemble
         assemble_locus(transcripts,
                        locus_id_value_obj,

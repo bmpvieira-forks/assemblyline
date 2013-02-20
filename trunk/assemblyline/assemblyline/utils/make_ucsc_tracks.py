@@ -14,34 +14,43 @@ from assemblyline.lib.base import check_executable
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--baseurl", dest="baseurl", default=None) 
-    parser.add_argument("prefix")
+    parser.add_argument("output_dir")
     parser.add_argument("chrom_sizes_file")
     args = parser.parse_args()
     if not check_executable("bedToBigBed"):
         parser.error("bedToBigBed binary not found in PATH")
     if not check_executable("bedGraphToBigWig"):
         parser.error("'bedGraphToBigWig' executable not found in PATH")
-    # find input files
     if not os.path.exists(args.chrom_sizes_file):
         parser.error("chrom sizes file %s not found" % (args.chrom_sizes_file))
-    bed_file = args.prefix + ".bed"
+    if not os.path.exists(args.output_dir):
+        parser.error("output dir %s not found" % (args.output_dir))
+    # input files
+    prefix = os.path.dirname(args.output_dir)
+    output_dir = os.path.abspath(args.output_dir)
+    bed_file = os.path.join(output_dir, "assembly.bed")
+    bed_track_file = bed_file + ".ucsc_track"
+    bedgraph_files = [os.path.join(output_dir, "assembly_none.bedgraph"),
+                      os.path.join(output_dir, "assembly_neg.bedgraph"),
+                      os.path.join(output_dir, "assembly_pos.bedgraph")]
+    bedgraph_track_files = [x + ".ucsc_track" for x in bedgraph_files]
     if not os.path.exists(bed_file):
         parser.error("BED file %s not found" % (bed_file))
-    bedgraph_files = [args.prefix + "_none.bedgraph",
-                      args.prefix + "_neg.bedgraph",
-                      args.prefix + "_pos.bedgraph"]
-    for bedgraph_file in bedgraph_files:
-        if not os.path.exists(bedgraph_file):
-            parser.error("Bedgraph file %s not found" % (bedgraph_file))
+    if not os.path.exists(bed_track_file):
+        parser.error("BED track file %s not found" % (bed_track_file))
+    for i in xrange(len(bedgraph_files)):
+        if not os.path.exists(bedgraph_files[i]):
+            parser.error("Bedgraph file %s not found" % (bedgraph_files[i]))
+        if not os.path.exists(bedgraph_track_files[i]):
+            parser.error("Bedgraph track file %s not found" % (bedgraph_track_files[i]))
     # convert to bigbed
-    bigbed_file = args.prefix + ".bb"
+    bigbed_file = os.path.join(output_dir, "assembly.bb")
     retcode = subprocess.call(["bedToBigBed", bed_file, args.chrom_sizes_file, bigbed_file])
     if retcode != 0:
         print >>sys.stderr, "bedToBigBed ERROR"
         return 1
     # print track lines
-    track_file = bed_file + ".ucsc_track"
-    f = open(track_file)
+    f = open(bed_track_file)
     fields = f.next().strip().split()
     f.close()
     track_options = ["track"]
@@ -57,7 +66,7 @@ def main():
     if args.baseurl is not None:
         track_options.append('bigDataUrl="%s%s"' % (args.baseurl, os.path.abspath(bigbed_file)))
     track_line = ' '.join(track_options)
-    print track_line        
+    print track_line
     # convert to bigwig
     for bedgraph_file in bedgraph_files:
         bwfile = os.path.splitext(bedgraph_file)[0] + ".bw"
