@@ -315,7 +315,6 @@ classifyAndWriteResults <- function(inp,
 args <- commandArgs(trailingOnly=TRUE)
 prefix <- args[1]
 input_file <- paste(prefix, ".inp.txt", sep="")
-output_prefix <- args[2]
 min_obs <- 50
 max_frac_test_obs <- 0.05
 kde2d.n <- 50
@@ -366,7 +365,7 @@ do_intronic <- (num_mrna >= min_obs) & (sum(intronic) >= min_obs)
 do_intergenic <- (num_mrna >= min_obs) & (sum(intergenic) >= min_obs)
 
 # write stats information
-statsFile <- paste(output_prefix, ".info.txt", sep="")
+statsFile <- paste(prefix, ".info.txt", sep="")
 cat("mrna", num_mrna, frac_mrna, "\n", file=statsFile, sep="\t")
 cat("tests", num_tests, "\n", file=statsFile, append=TRUE, sep="\t")
 cat("intronic", sum(intronic), frac_intronic, "\n", sep="\t", file=statsFile, append=TRUE)
@@ -386,8 +385,8 @@ if ( do_intronic ) {
 	inp <- tbl[intronicrows,]
 	cl <- ifelse(testintronic, 0, ifelse(intronic, 1, 2))[intronicrows]
 	clweights <- c(1, known_vs_intronic_ratio)
-	prefix <- paste(output_prefix, ".intronic", sep="")
-	res <- classifyAndWriteResults(inp, variables, cl, clweights, prefix, 
+	intronicprefix <- paste(prefix, ".intronic", sep="")
+	res <- classifyAndWriteResults(inp, variables, cl, clweights, intronicprefix, 
                                    kde2d.h=kde2d.h, kde2d.n=kde2d.n)
 	log10lr.intronic[intronicrows] <- res[,"log10lr"]
 	pred.train.intronic[intronicrows] <- res[,"pred.train"]
@@ -403,8 +402,8 @@ if ( do_intergenic ) {
 	inp <- tbl[intergenicrows,]
 	cl <- ifelse(testintergenic, 0, ifelse(intergenic, 1, 2))[intergenicrows]
 	clweights <- c(1, known_vs_intergenic_ratio)
-	prefix <- paste(output_prefix, ".intergenic", sep="")
-	res <- classifyAndWriteResults(inp, variables, cl, clweights, prefix, 
+	intergenicprefix <- paste(prefix, ".intergenic", sep="")
+	res <- classifyAndWriteResults(inp, variables, cl, clweights, intergenicprefix, 
                                    kde2d.h=kde2d.h, kde2d.n=kde2d.n)
 	log10lr.intergenic[intergenicrows] <- res[,"log10lr"]
 	pred.train.intergenic[intergenicrows] <- res[,"pred.train"]
@@ -414,5 +413,5 @@ if ( do_intergenic ) {
 # write results
 tbl <- cbind(tbl, log10lr.intronic, pred.train.intronic, pred.test.intronic,
 		     log10lr.intergenic, pred.train.intergenic, pred.test.intergenic)
-resultsFile <- paste(output_prefix, ".out.txt", sep="")
+resultsFile <- paste(prefix, ".out.txt", sep="")
 write.table(tbl, file=resultsFile, sep="\t", quote=FALSE, row.names=FALSE, col.names=TRUE)

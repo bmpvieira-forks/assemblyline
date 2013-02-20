@@ -42,9 +42,15 @@ def merge_transcripts(results):
         prefix = os.path.join(results.classify_dir, library_id)
         expressed_gtf_files.append(prefix + ".expr.gtf")
         background_gtf_files.append(prefix + ".bkgd.gtf")
+    library_id_map = {}
+    for line in open(results.library_id_map):
+        fields = line.strip().split('\t')
+        library_id_map[fields[0]] = fields[1]
     # make a classification report
+    logging.info("Writing classification report")
     fileh = open(results.classify_report_file, 'w')
-    header_fields = ["library_id", "category", "type", "auc", "cutoff",
+    header_fields = ["library_id", "library_name", "category", "type", 
+                     "auc", "cutoff",
                      "train.tp", "train.fp", "train.fn", "train.tn",
                      "train.sens", "train.spec", "train.balacc",
                      "test.tp", "test.fp", "test.fn", "test.tn",
@@ -52,18 +58,21 @@ def merge_transcripts(results):
     print >>fileh, '\t'.join(header_fields)
     for library_id in library_ids:
         prefix = os.path.join(results.classify_dir, library_id)
+        library_name = library_id_map[library_id]
         intergenic_perf_file = prefix + ".intergenic.perf.txt"
         intronic_perf_file = prefix + ".intronic.perf.txt"
         input_fileh = open(intergenic_perf_file)
         input_fileh.next()
         for line in input_fileh:
-            fields = [library_id, "intergenic"] + line.strip().split('\t')
+            fields = ([library_id, library_name, "intergenic"] 
+                      + line.strip().split('\t'))
             print >>fileh, '\t'.join(fields)
         input_fileh.close()
         input_fileh = open(intronic_perf_file)
         input_fileh.next()        
         for line in input_fileh:
-            fields = [library_id, "intronic"] + line.strip().split('\t')
+            fields = ([library_id, library_name, "intronic"] 
+                      + line.strip().split('\t'))
             print >>fileh, '\t'.join(fields)
         input_fileh.close()
     fileh.close()

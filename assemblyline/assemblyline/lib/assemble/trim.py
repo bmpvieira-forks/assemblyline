@@ -217,6 +217,7 @@ def trim_graph(G, strand,
                 trim_nodes.update(trim_utr(G, nodes, min_trim_length, trim_utr_fraction))
         all_trim_nodes.update(trim_nodes)
     if len(all_trim_nodes) > 0:
-        logging.debug("\t\t(%s) trimmed %d nodes from graph" % (strand_int_to_str(strand), len(all_trim_nodes)))
+        logging.debug("\t\t(%s) trimmed %d/%d nodes from graph" % 
+                      (strand_int_to_str(strand), len(all_trim_nodes), 
+                       len(G)))
     return all_trim_nodes
-
