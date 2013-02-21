@@ -1,0 +1,8 @@
+chr1	test	transcript	1	100	1000	+	.	gene_id "A"; transcript_id "A"; FPKM "1.0"
+chr1	test	exon	1	100	1000	+	.	gene_id "A"; transcript_id "A"; exon_number "1"; FPKM "1.0"
+chr1	test	transcript	101	200	1000	.	.	gene_id "AA"; transcript_id "AA"; FPKM "1.0"
+chr1	test	exon	101	200	1000	.	.	gene_id "AA"; transcript_id "AA"; exon_number "1"; FPKM "1.0"
+chr1	test	transcript	201	300	1000	-	.	gene_id "B"; transcript_id "B"; FPKM "2.0"
+chr1	test	exon	201	300	1000	-	.	gene_id "B"; transcript_id "B"; exon_number "1"; FPKM "2.0"
+chr1	test	transcript	301	400	1000	.	.	gene_id "BB"; transcript_id "BB"; FPKM "2.0"
+chr1	test	exon	301	400	1000	.	.	gene_id "BB"; transcript_id "BB"; exon_number "1"; FPKM "2.0"
