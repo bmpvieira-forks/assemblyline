@@ -27,7 +27,7 @@ import argparse
 import collections
 import subprocess
 import shutil
-from multiprocessing import Process, JoinableQueue, Value
+from multiprocessing import Process, JoinableQueue, Value, Lock
 
 import assemblyline
 from assemblyline.lib.bx.cluster import ClusterTree
@@ -43,6 +43,16 @@ from assemblyline.lib.assemble.transcript_graph import \
     create_transcript_graphs, \
     prune_transcript_graph
 from assemblyline.lib.assemble.assembler import assemble_transcript_graph
+
+class LockValue(object):
+    def __init__(self, initval=0):
+        self.val = Value('L', initval)
+        self.lock = Lock()
+    def next(self):
+        with self.lock:
+            cur_val = self.val.value
+            self.val.value += 1
+            return cur_val
 
 SCORING_MODES = ("unweighted", "gtf_attr")
 STRAND_NAMES = ('pos', 'neg', 'none')
@@ -318,16 +328,14 @@ def annotate_gene_and_tss_ids(path_info_list, strand,
         # map TSS positions to IDs
         tss_pos = end if strand == NEG_STRAND else start
         if tss_pos not in tss_pos_id_map:
-            tss_pos_id_map[tss_pos] = tss_id_value_obj.value
-            tss_id = tss_id_value_obj.value
-            tss_id_value_obj.value += 1
+            tss_id = tss_id_value_obj.next()
+            tss_pos_id_map[tss_pos] = tss_id
         else:
             tss_id = tss_pos_id_map[tss_pos]
         path_info.tss_id = tss_id
     # retrieve transcript clusters and assign gene ids
     for start, end, indexes in cluster_tree.getregions():
-        gene_id = gene_id_value_obj.value
-        gene_id_value_obj.value += 1
+        gene_id = gene_id_value_obj.next()
         for i in indexes:
             path_info_list[i].gene_id = gene_id
 
@@ -356,8 +364,7 @@ def assemble_gene(locus_chrom, locus_id_str,
         # create GTF features for each transcript path
         for p in gene_path_info_list:
             # assign transcript id
-            t_id = t_id_value_obj.value
-            t_id_value_obj.value += 1
+            t_id = t_id_value_obj.next()
             # get strings for each id
             t_id_str = "TU%d" % t_id
             tss_id_str = "TSS%d" % (p.tss_id)
@@ -403,8 +410,7 @@ def assemble_locus(transcripts,
     logging.debug("[LOCUS] %s:%d-%d %d transcripts" % 
                   (locus_chrom, locus_start, locus_end, 
                    len(transcripts)))
-    locus_id_str = "L%d" % (locus_id_value_obj.value)
-    locus_id_value_obj.value += 1
+    locus_id_str = "L%d" % (locus_id_value_obj.next())
     # filter transcripts
     logging.debug("\tFiltering transcripts")
     transcripts = filter_transcripts(transcripts, 
@@ -505,10 +511,10 @@ def run_parallel(config):
     # create queue
     input_queue = JoinableQueue(maxsize=config.num_processors*3)
     # shared memory values
-    locus_id_value_obj = Value('L', 1, lock=True)
-    gene_id_value_obj = Value('L', 1, lock=True)
-    tss_id_value_obj = Value('L', 1, lock=True)
-    t_id_value_obj = Value('L', 1, lock=True)
+    locus_id_value_obj = LockValue(1)
+    gene_id_value_obj = LockValue(1)
+    tss_id_value_obj = LockValue(1)
+    t_id_value_obj = LockValue(1)
     # start worker processes
     procs = []
     worker_prefixes = []

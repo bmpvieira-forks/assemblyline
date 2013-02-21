@@ -190,13 +190,51 @@ def classify_transcripts(results, cutoff_type, num_processors):
     pool = multiprocessing.Pool(processes=num_processors)
     result_iter = pool.imap_unordered(classify_library_transcripts, tasks)
     errors = False
+    library_ids = []
     for retcode, library_id in result_iter:
-        if retcode != 0:
+        if retcode == 0:
+            library_ids.append(library_id)
+        else:
             errors = True
     pool.close()
     pool.join()
     if errors:
         logging.error("Errors occurred during classification")
+    # write classification report
+    library_id_map = {}
+    for line in open(results.library_id_map):
+        fields = line.strip().split('\t')
+        library_id_map[fields[0]] = fields[1]
+    # make a classification report
+    logging.info("Writing classification report")
+    fileh = open(results.classify_report_file, 'w')
+    header_fields = ["library_id", "library_name", "category", "type", 
+                     "auc", "cutoff",
+                     "train.tp", "train.fp", "train.fn", "train.tn",
+                     "train.sens", "train.spec", "train.balacc",
+                     "test.tp", "test.fp", "test.fn", "test.tn",
+                     "test.sens", "test.spec", "test.balacc"]
+    print >>fileh, '\t'.join(header_fields)
+    for library_id in library_ids:
+        prefix = os.path.join(results.classify_dir, library_id)
+        library_name = library_id_map[library_id]
+        intergenic_perf_file = prefix + ".intergenic.perf.txt"
+        intronic_perf_file = prefix + ".intronic.perf.txt"
+        input_fileh = open(intergenic_perf_file)
+        input_fileh.next()
+        for line in input_fileh:
+            fields = ([library_id, library_name, "intergenic"] 
+                      + line.strip().split('\t'))
+            print >>fileh, '\t'.join(fields)
+        input_fileh.close()
+        input_fileh = open(intronic_perf_file)
+        input_fileh.next()        
+        for line in input_fileh:
+            fields = ([library_id, library_name, "intronic"] 
+                      + line.strip().split('\t'))
+            print >>fileh, '\t'.join(fields)
+        input_fileh.close()
+    fileh.close()
     return int(errors)
 
 def main():
@@ -241,8 +279,12 @@ def main():
     logging.info("----------------------------------")   
     # setup results
     results = config.AssemblylineResults(args.run_dir)
-    return classify_transcripts(results, args.cutoff_type, 
-                                num_processors)
+    retcode = classify_transcripts(results, args.cutoff_type, 
+                                   num_processors)
+    if retcode != 0:
+        logging.error("ERROR")
+        return retcode
+    logging.info("Done")
 
 if __name__ == "__main__":
     sys.exit(main())
