@@ -27,14 +27,14 @@ import sys
 import operator
 import collections
 import networkx as nx
-import numpy as np
 
 import assemblyline
 from assemblyline.lib.base import GTFAttr
 from assemblyline.lib.gtf import GTFFeature, sort_gtf
-from assemblyline.lib.transcript import parse_gtf, Exon, NO_STRAND, POS_STRAND, NEG_STRAND
-from assemblyline.lib.assemble.transcript_graph import find_exon_boundaries, split_exon, get_transcript_node_map
-from assemblyline.lib.assemble.base import NODE_LENGTH, STRAND_SCORE, TRANSCRIPT_IDS 
+from assemblyline.lib.transcript import parse_gtf, NO_STRAND, \
+    POS_STRAND, NEG_STRAND
+from assemblyline.lib.assemble.transcript_graph import \
+    find_exon_boundaries, split_exons, get_transcript_node_map
 
 TEST_IDS = 'test_ids'
 REF_IDS = 'ref_ids'
@@ -44,23 +44,7 @@ NODE_ID_ATTRS = [TEST_IDS, REF_IDS]
 STRAND_IS_REF = 'r'
 STRAND_IS_ASSEMBLY = 'a'
 
-
-def add_node_undirected(G, n, t, **kwargs):
-    """
-    add node to undirected graph
-    """
-    if n not in G: 
-        attr_dict = {TRANSCRIPT_IDS: set(),
-                     NODE_LENGTH: (n.end - n.start),
-                     STRAND_SCORE: np.zeros(3,float)} 
-        G.add_node(n, attr_dict=attr_dict)
-    nd = G.node[n]
-    nd[TRANSCRIPT_IDS].add(t.attrs[GTFAttr.TRANSCRIPT_ID])
-    nd[STRAND_SCORE][t.strand] += t.score
-
-def create_undirected_transcript_graph(transcripts, 
-                                       add_node_func=add_node_undirected,
-                                       **kwargs):
+def create_undirected_transcript_graph(transcripts, add_node_func, **kwargs):
     '''
     add all transcripts to a single undirected graph
     '''
@@ -72,10 +56,7 @@ def create_undirected_transcript_graph(transcripts,
     for t in transcripts:
         # split exons that cross boundaries and to get the
         # nodes in the transcript path
-        nodes = []
-        for exon in t.exons:
-            for start,end in split_exon(exon, boundaries):
-                nodes.append(Exon(start, end))
+        nodes = split_exons(t, boundaries)
         # add nodes/edges to graph
         u = nodes[0]
         add_node_func(G, u, t, **kwargs)
@@ -396,6 +377,8 @@ def _parse_gtf_by_chrom(gtf_file):
             transcript_dict[t_id] = feature
         elif feature.feature_type == "exon":
             exon_dict[t_id].append(feature)
+        else:
+            print "unknown_feature", feature
     if len(exon_dict) > 0:
         yield current_chrom, transcript_dict, exon_dict
 
@@ -493,8 +476,6 @@ def main():
                         default="compare")
     parser.add_argument("--gtf-score-attr", dest="gtf_score_attr", 
                         default=None)
-    parser.add_argument('--tmp-dir', dest="tmp_dir", default=None,
-                        help="directory for sort to store temp files")
     parser.add_argument("ref_gtf_file")
     parser.add_argument("test_gtf_file")
     args = parser.parse_args()
@@ -506,6 +487,10 @@ def main():
     if not os.path.exists(args.output_dir):
         logging.debug("Creating output directory '%s'" % (args.output_dir))
         os.makedirs(args.output_dir)
+    tmp_dir = os.path.join(args.output_dir, 'tmp')    
+    if not os.path.exists(tmp_dir):
+        logging.debug("Creating tmp directory '%s'" % (tmp_dir))
+        os.makedirs(tmp_dir)
     # set logging level
     if args.verbose:
         level = logging.DEBUG
@@ -524,7 +509,7 @@ def main():
     logging.info("test gtf score attr:   %s" % (args.gtf_score_attr))
     compare_assembly(args.ref_gtf_file, args.test_gtf_file,
                      args.output_dir, args.gtf_score_attr,
-                     args.tmp_dir)
+                     tmp_dir)
     return 0
 
 if __name__ == "__main__":
