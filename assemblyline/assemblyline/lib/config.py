@@ -26,7 +26,7 @@ MAX_OPEN_FILE_DESCRIPTORS = 1000
 # default parameter settings
 MIN_TRANSCRIPT_LENGTH = 250
 MIN_EXON_LENGTH = 15
-CLIP_HIGH_PERCENTILE = 99.5
+CLIP_HIGH_PERCENTILE = 99.9
 
 # prior observations of rna bases in genomic regions
 PRIOR_MRNA_PROB = 0.811

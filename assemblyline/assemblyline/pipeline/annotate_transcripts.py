@@ -32,8 +32,8 @@ import assemblyline
 import assemblyline.lib.config as config
 from assemblyline.lib.bx.intersection import Interval, IntervalTree
 from assemblyline.lib.gtf import parse_loci, merge_sort_gtf_files
-from assemblyline.lib.transcript import transcripts_from_gtf_lines, Exon, \
-    POS_STRAND, NEG_STRAND, NO_STRAND, strand_int_to_str
+from assemblyline.lib.transcript import transcripts_from_gtf_lines, \
+    POS_STRAND, NEG_STRAND, NO_STRAND
 from assemblyline.lib.base import Category, GTFAttr, FLOAT_PRECISION
 from assemblyline.lib.assemble.transcript_graph import \
     find_exon_boundaries, split_exons
