@@ -17,10 +17,10 @@ def get_gtf_path(filename):
 def read_gtf(filename):
     return list(parse_gtf(open(get_gtf_path(filename))))
 
-def read_first_locus(filename):
+def read_first_locus(filename, score_attr=GTFAttr.SCORE):
     loci = read_gtf(filename)
     for t in loci[0]:
-        t.score = float(t.attrs[GTFAttr.SCORE])
+        t.score = float(t.attrs.get(score_attr, "0.0"))
     return loci[0]
 
 def get_transcript_graphs(transcripts):

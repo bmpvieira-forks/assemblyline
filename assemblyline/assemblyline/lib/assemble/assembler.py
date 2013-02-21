@@ -229,9 +229,9 @@ def create_kmer_graph(G, partial_paths, k):
     # get kmer densities from linear graph
     kmer_score_dict = {}
     for kmer in K.nodes_iter():
-        node_densities = [G.node[n][NODE_SCORE] for n in kmer if n.start >= 0]
-        if len(node_densities) > 0:
-            kmer_score_dict[kmer] = min(node_densities)
+        node_scores = [G.node[n][NODE_SCORE] for n in kmer if n.start >= 0]
+        if len(node_scores) > 0:
+            kmer_score_dict[kmer] = min(node_scores)
     # extrapolate short kmers and add to graph
     for ksmall, short_partial_paths in short_partial_path_dict.iteritems():
         kmer_hash = hash_kmers(K.nodes_iter(), k, ksmall)

@@ -200,29 +200,29 @@ def compute_recurrence_and_score(nodes, node_data):
     mean_recur = total_recur / total_length
     return mean_score, mean_pctrank, mean_recur
 
-def resolve_strand(nodes, inp_node_scores, ref_node_dict):
+def resolve_strand(nodes, node_score_dict, ref_node_dict):
     # find strand with highest score
     total_scores = [0.0, 0.0]
-    ann_bp = [0, 0]
+    ref_bp = [0, 0]
     for n in nodes:
         length = (n.end - n.start)
-        if n in inp_node_scores:
-            scores = inp_node_scores[n]
+        if n in node_score_dict:
+            scores = node_score_dict[n]
             total_scores[POS_STRAND] += (scores[POS_STRAND]*length)
             total_scores[NEG_STRAND] += (scores[NEG_STRAND]*length)
         if n in ref_node_dict:
             strand_ref_ids = ref_node_dict[n]
             if len(strand_ref_ids[POS_STRAND]) > 0:
-                ann_bp[POS_STRAND] += length
+                ref_bp[POS_STRAND] += length
             if len(strand_ref_ids[NEG_STRAND]) > 0:
-                ann_bp[NEG_STRAND] += length
+                ref_bp[NEG_STRAND] += length
     if sum(total_scores) > FLOAT_PRECISION:
         if total_scores[POS_STRAND] >= total_scores[NEG_STRAND]:
             return POS_STRAND
         else:
             return NEG_STRAND
-    if sum(ann_bp) > 0:
-        if ann_bp[POS_STRAND] >= ann_bp[NEG_STRAND]:
+    if sum(ref_bp) > 0:
+        if ref_bp[POS_STRAND] >= ref_bp[NEG_STRAND]:
             return POS_STRAND
         else:
             return NEG_STRAND
@@ -234,7 +234,7 @@ def annotate_locus(transcripts,
     # (strand,start,end) -> ids (set) 
     ref_intron_dict = collections.defaultdict(lambda: [])
     ref_node_dict = collections.defaultdict(lambda: ([],[]))
-    inp_node_scores = collections.defaultdict(lambda: [0.0, 0.0])
+    node_score_dict = collections.defaultdict(lambda: [0.0, 0.0])
     # index introns for fast intersection
     intron_tree = IntervalTree()
     # find the intron domains of the transcripts
@@ -264,7 +264,7 @@ def annotate_locus(transcripts,
             score = float(t.attrs[GTFAttr.SCORE])
             if t.strand != NO_STRAND:
                 for n in nodes:
-                    inp_node_scores[n][t.strand] += score
+                    node_score_dict[n][t.strand] += score
             inp_transcript_nodes.append((t,nodes))
             # add to introns
             for start,end in t.iterintrons():
@@ -272,17 +272,19 @@ def annotate_locus(transcripts,
     # convert to regular dicts
     ref_intron_dict = dict(ref_intron_dict)
     ref_node_dict = dict(ref_node_dict)
-    inp_node_scores = dict(inp_node_scores)
+    node_score_dict = dict(node_score_dict)
     # categorize transcripts
     strand_transcript_lists = [[], [], []]
     for t,nodes in inp_transcript_nodes:
         strand = t.strand
+        # try to resolve strand
         if strand == NO_STRAND:
-            # try to resolve strand
-            strand = resolve_strand(nodes, inp_node_scores, ref_node_dict)
-            if strand != NO_STRAND:
-                # write new strand as an attribute
-                t.attrs[GTFAttr.RESOLVED_STRAND] = strand_int_to_str(strand)
+            strand = resolve_strand(nodes, node_score_dict, ref_node_dict)
+        # define opposite strand
+        if strand == NO_STRAND:
+            opp_strand = NO_STRAND
+        else:
+            opp_strand = (strand + 1) % 2
         # get all reference transcripts that share introns
         introns = set(t.iterintrons())
         intron_ref_ids = set()
@@ -292,7 +294,6 @@ def annotate_locus(transcripts,
         # get all reference transcripts that share coverage
         same_strand_ref_ids = set()
         opp_strand_ref_ids = set()
-        opp_strand = (strand + 1) % 2
         for n in nodes:
             if n in ref_node_dict:
                 strand_ref_ids = ref_node_dict[n]
@@ -333,7 +334,7 @@ def annotate_locus(transcripts,
     # annotate score and recurrence for transcripts
     for strand_transcripts in strand_transcript_lists:
         # find the intron domains of the transcripts
-        boundaries = find_exon_boundaries(transcripts)
+        boundaries = find_exon_boundaries(strand_transcripts)
         # gather node score/recurrence data
         new_data_func = lambda: {'ids': set(), 
                                  'score': 0.0, 

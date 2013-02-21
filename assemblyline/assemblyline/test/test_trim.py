@@ -13,7 +13,7 @@ from test_base import read_first_locus, get_transcript_graphs
 class TestTrim(unittest.TestCase):
 
     def test_trim_bidir(self):
-        transcripts = read_first_locus("trim_bidir1.gtf")
+        transcripts = read_first_locus("trim_bidir1.gtf", score_attr="FPKM")
         GG = get_transcript_graphs(transcripts)
         G,tmap = GG[POS_STRAND]
         # trim at three different thresholds
@@ -67,7 +67,7 @@ class TestTrim(unittest.TestCase):
         self.assertTrue(trim_nodes == correct)
 
     def test_trim_intron_bidir(self):
-        transcripts = read_first_locus("trim_intron_bidir1.gtf")
+        transcripts = read_first_locus("trim_intron_bidir1.gtf", score_attr="FPKM")
         GG = get_transcript_graphs(transcripts)
         G,tmap = GG[POS_STRAND]      
         # trim at different thresholds
@@ -144,7 +144,7 @@ class TestTrim(unittest.TestCase):
 
 
     def test_trim_utr(self):
-        transcripts = read_first_locus("trim_utr1.gtf")
+        transcripts = read_first_locus("trim_utr1.gtf", score_attr="FPKM")
         GG = get_transcript_graphs(transcripts)
         G,tmap = GG[POS_STRAND]
         # trim at different thresholds
@@ -220,7 +220,7 @@ class TestTrim(unittest.TestCase):
         self.assertTrue(trim_nodes == correct)  
 
     def test_trim_intronic_utr(self):
-        transcripts = read_first_locus("trim_intron_utr1.gtf")
+        transcripts = read_first_locus("trim_intron_utr1.gtf", score_attr="FPKM")
         GG = get_transcript_graphs(transcripts)
         G,tmap = GG[POS_STRAND]       
         # trim at different thresholds
@@ -296,7 +296,7 @@ class TestTrim(unittest.TestCase):
         self.assertTrue(trim_nodes == correct)
 
     def test_trim_intron_retention(self):
-        transcripts = read_first_locus("trim_intron_retention1.gtf")
+        transcripts = read_first_locus("trim_intron_retention1.gtf", score_attr="FPKM")
         GG = get_transcript_graphs(transcripts)
         G,tmap = GG[POS_STRAND]
         # trim at different thresholds
