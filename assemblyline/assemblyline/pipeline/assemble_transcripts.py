@@ -57,7 +57,7 @@ class LockValue(object):
 SCORING_MODES = ("unweighted", "gtf_attr")
 STRAND_NAMES = ('pos', 'neg', 'none')
 STRAND_COLORS = ('255,0,0', '0,0,255', '0,0,0')
-                 
+
 class RunConfig(object):
     def __init__(self):
         self.gtf_input_file = None
@@ -70,8 +70,8 @@ class RunConfig(object):
         self.trim_utr_fraction = 0.1
         self.trim_intron_fraction = 0.25
         self.guided = False
-        self.kmax = 3
-        self.ksensitivity = 0.0
+        self.kmax = 0
+        self.ksensitivity = 0.95
         self.fraction_major_isoform = 0.01
         self.max_paths = 1000
         self.output_dir = "assembly"
@@ -131,17 +131,19 @@ class RunConfig(object):
                          "during assembly (default: not set)")
         grp.add_argument("--kmax", dest="kmax", 
                          type=int, default=self.kmax, metavar="k",
-                         help="Constrain de Bruijn graph parameter 'k' "
-                         "to improve runtime performance "
-                         "[default=%(default)s]")
+                         help="Set maximum complexity of transcript "
+                         "overlap graph to improve runtime performance. "
+                         "Setting to zero places no limit on complexity "
+                         "and may impact runtime performance on huge "
+                         "datasets [default=%(default)s]")
         grp.add_argument("--ksensitivity", dest="ksensitivity", 
                          type=float, default=self.ksensitivity, 
                          metavar="X",
-                         help="Constrain de Bruijn graph parameter 'k' "
-                         "such that at least X fraction of total "
-                         "expression is retained in k-mer graphs. Setting "
-                         "to 0.0 disables the sensitivity calculation and "
-                         "sets 'k' equal to 'kmax' [default=%(default)s]")
+                         help="Optimize complexity of transcript graph "
+                         "construction under the constraint that no more "
+                         "than X fraction of total coverage is retained. "
+                         "Setting to zero disables the optimization process "
+                         "and sets 'k' equal to '--kmax' [default=%(default)s]")
         grp.add_argument("--fraction-major-isoform", 
                          dest="fraction_major_isoform", type=float, 
                          default=self.fraction_major_isoform, 
@@ -185,7 +187,11 @@ class RunConfig(object):
         if (args.trim_intron_fraction < 0) or (args.trim_intron_fraction > 1):
             parser.error("trim_intron_fraction out of range (0.0-1.0)")
         if (args.ksensitivity < 0) or (args.ksensitivity > 1):
-            parser.error("sensitivity_threshold out of range (0.0-1.0)")
+            parser.error("ksensitivity out of range (0.0-1.0)")
+        if (args.ksensitivity < 1e-8) and (args.kmax == 0):
+            parser.error("when ksensitivity set to zero please specify 'kmax' >= 1")
+        if (args.kmax < 0):
+            parser.error("kmax must be >= 0")
         if (args.fraction_major_isoform < 0) or (args.fraction_major_isoform > 1):
             parser.error("fraction_major_isoform out of range (0.0-1.0)")
         if (args.max_paths < 1):
@@ -220,7 +226,7 @@ class RunConfig(object):
         logging.info("min trim length:         %d" % (self.min_trim_length))
         logging.info("trim utr fraction:       %f" % (self.trim_utr_fraction))
         logging.info("trim intron fraction:    %f" % (self.trim_intron_fraction))
-        logging.info("guided:                   %s" % (self.guided))
+        logging.info("guided:                  %s" % (self.guided))
         logging.info("kmax:                    %d" % (self.kmax))
         logging.info("ksensitivity:            %f" % (self.ksensitivity))
         logging.info("fraction major isoform:  %f" % (self.fraction_major_isoform))

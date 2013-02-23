@@ -26,6 +26,7 @@ import os
 import sys
 import operator
 import collections
+import shutil
 import networkx as nx
 
 import assemblyline
@@ -377,8 +378,6 @@ def _parse_gtf_by_chrom(gtf_file):
             transcript_dict[t_id] = feature
         elif feature.feature_type == "exon":
             exon_dict[t_id].append(feature)
-        else:
-            print "unknown_feature", feature
     if len(exon_dict) > 0:
         yield current_chrom, transcript_dict, exon_dict
 
@@ -510,6 +509,7 @@ def main():
     compare_assembly(args.ref_gtf_file, args.test_gtf_file,
                      args.output_dir, args.gtf_score_attr,
                      tmp_dir)
+    shutil.rmtree(tmp_dir)
     return 0
 
 if __name__ == "__main__":
