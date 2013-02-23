@@ -39,4 +39,11 @@ CHAIN_EDGES = 'chain_edges'
 # constant minimum path score
 MIN_SCORE = 1.0e-8
 
-
+class PathInfo(object):
+    """object to store path finder results"""
+    __slots__ = ("score", "path", "gene_id", "tss_id")
+    def __init__(self, score, path):
+        self.score = score
+        self.path = path
+        self.gene_id = -1
+        self.tss_id = -1

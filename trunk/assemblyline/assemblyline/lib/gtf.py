@@ -157,7 +157,8 @@ class GTFFeature(object):
                     continue
                 tag, value = a.split(GTF_ATTR_TAGVALUE_SEP, 1)
                 # remove quotes
-                value = value.split('"')[1]
+                value = value.strip('"')
+                #value = value.split('"')[1]
                 # apply parsing function
                 if (attr_defs != None) and (tag in attr_defs) and (attr_defs[tag] != None):
                     value = attr_defs[tag](value)

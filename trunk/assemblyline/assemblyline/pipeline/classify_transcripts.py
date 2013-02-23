@@ -119,11 +119,20 @@ def read_classify_decisions(filename, cutoff_type):
                 log10lr = intronic_log10lr
             pred = True
         elif category in Category.INTRONIC_LIKE:
-            pred = multi_exon
+            if multi_exon:
+                pred = True
+            else:
+                # For now do not allow single exon intronic same-stranded 
+                # transcripts
+                pred = False
+                #pred = fields[intronic_pred_ind] == "TRUE"
             log10lr = fields[log10lr_intronic_ind]
-            #pred = fields[intronic_pred_ind] == "TRUE"
         elif category in Category.INTERGENIC_LIKE:
-            pred = fields[intergenic_pred_ind] == "TRUE"
+            pred = multi_exon
+            if multi_exon:
+                pred = True
+            else:
+                pred = fields[intergenic_pred_ind] == "TRUE"
             log10lr = fields[log10lr_intergenic_ind]
         decision_dict[t_id] = DInfo(pred=pred,
                                     log10lr=log10lr,
