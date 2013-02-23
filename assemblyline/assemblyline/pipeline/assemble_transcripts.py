@@ -71,7 +71,7 @@ class RunConfig(object):
         self.trim_intron_fraction = 0.25
         self.guided = False
         self.kmax = 0
-        self.ksensitivity = 0.95
+        self.ksensitivity = 0.90
         self.fraction_major_isoform = 0.01
         self.max_paths = 1000
         self.output_dir = "assembly"
@@ -435,9 +435,10 @@ def assemble_locus(transcripts,
                                    config.min_trim_length, 
                                    config.trim_utr_fraction,
                                    config.trim_intron_fraction):
-            logging.debug("\t\t(%s) subgraph %d nodes %d paths" %
-                           (strand_int_to_str(strand), len(Gsub),
-                           len(partial_paths)))
+            logging.debug("Subgraph %s:%d-%d(%s) %d nodes %d paths" %
+                           (locus_chrom, locus_start, locus_end,
+                            strand_int_to_str(strand), len(Gsub),
+                            len(partial_paths)))
             # assemble subgraph
             assemble_gene(locus_chrom, locus_id_str, 
                           gene_id_value_obj,

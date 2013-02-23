@@ -278,8 +278,8 @@ def optimize_k(G, partial_paths, kmin, kmax, sensitivity_threshold):
                       "lost_paths=%d(%.1f%%) score=%.3f(%.1f%%) "
                       "total=%.1f/%.3f(%.1f%%) " 
                       "sens=%.3f" %
-                      (k, len(K), K.number_of_edges(), len(partial_paths),
-                       len(clip_nodes), 100*float(len(clip_nodes))/len(K),
+                      (k, len(G), G.number_of_edges(), len(partial_paths),
+                       len(clip_nodes), 100*float(len(clip_nodes))/len(G),
                        clip_score, 100*clip_score/total_score,
                        len(lost_paths), 100*float(len(lost_paths))/len(partial_paths),
                        lost_path_score, 100*lost_path_score/total_score,
@@ -348,12 +348,12 @@ def assemble_transcript_graph(G, strand, partial_paths,
         kmin = 1
     else:
         kmin = kmax
+    logging.debug("\tConstructing k-mer graph")
     K, k = optimize_k(G, partial_paths, kmin, kmax, ksensitivity)
-    logging.debug("\tConstructing k-mer graph with k=%d" % (k))
     # smooth kmer graph
     smooth_graph(K)
     # find up to 'max_paths' paths through graph
-    logging.debug("\tFinding suboptimal paths in k-mer graph with %d nodes" % (len(K)))
+    logging.debug("\tFinding suboptimal paths in k=%d graph with %d nodes" % (k,len(K)))
     path_info_list = []
     id_kmer_map = K.graph['id_kmer_map']   
     for kmer_path, score in find_suboptimal_paths(K, K.graph['source'], 
