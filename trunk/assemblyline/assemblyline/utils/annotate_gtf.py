@@ -21,35 +21,6 @@ def build_interval_tree_from_bed(bed_file):
             tree.insert_interval(Interval(start, end, strand=f.strand, value=f.name))
     return trees
 
-def get_gtf_features(self):
-    # transcript feature
-    f = GTFFeature()
-    f.seqid = self.chrom
-    f.source = 'assemblyline'
-    f.feature_type = 'transcript'
-    f.start = self.start
-    f.end = self.end
-    f.score = 1000.0
-    f.strand = strand_int_to_str(self.strand)
-    f.phase = '.'
-    f.attrs = self.attrs
-    features = [f]
-    # exon features
-    for i,e in enumerate(self.exons):
-        f = GTFFeature()
-        f.seqid = self.chrom
-        f.source = 'assemblyline'
-        f.feature_type = 'exon'
-        f.start = e.start
-        f.end = e.end
-        f.score = 1000.0
-        f.strand = strand_int_to_str(self.strand)
-        f.phase = '.'
-        f.attrs = self.attrs.copy()
-        f.attrs["exon_number"] = i
-        features.append(f)
-    return features
-
 def annotate_gtf(gtf_file, bed_dbs):
     # read reference databases
     bed_trees = []
