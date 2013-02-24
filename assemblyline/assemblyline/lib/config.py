@@ -20,9 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 import os
 
-# file I/O parameters
-MAX_OPEN_FILE_DESCRIPTORS = 1000 
-
 # default parameter settings
 MIN_TRANSCRIPT_LENGTH = 250
 MIN_EXON_LENGTH = 15
@@ -57,7 +54,7 @@ LIBRARY_ID_MAP = 'library_id.map'
 SAMPLE_ID_MAP = 'sample_id.map'
 TRANSCRIPTS_DROPPED_GTF_FILE = "transcripts.dropped.gtf"
 TRANSCRIPTS_GTF_FILE = "transcripts.gtf"
-TRANSCRIPT_STATS_FILE = "transcript_stats.txt"
+TRANSCRIPT_STATS_FILE = "aggregate_library_stats.txt"
 ANNOTATED_TRANSCRIPTS_GTF_FILE = 'transcripts.annotated.gtf'
 CATEGORY_COUNTS_FILE = "category_counts.txt"
 CLASSIFY_DIR = 'classify'

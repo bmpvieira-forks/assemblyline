@@ -32,8 +32,8 @@ import assemblyline
 import assemblyline.lib.config as config
 from assemblyline.lib.transcript import parse_gtf
 from assemblyline.lib.base import CategoryCounts, Category, \
-    GTFAttr, check_executable 
-from assemblyline.lib.gtf import GTFFeature
+    GTFAttr, check_executable, FileHandleCache
+from assemblyline.lib.gtf import GTFFeature, merge_sort_gtf_files
 
 # R script to call for classifying transcripts
 _module_dir = assemblyline.__path__[0]
@@ -209,7 +209,20 @@ def classify_transcripts(results, cutoff_type, num_processors):
     pool.join()
     if errors:
         logging.error("Errors occurred during classification")
-    # write classification report
+    return int(errors)
+
+def merge_transcripts(results):
+    # read library category statistics
+    counts_list = list(CategoryCounts.from_file(results.category_counts_file))
+    library_ids = []
+    expressed_gtf_files = []
+    background_gtf_files = []
+    for countsobj in counts_list:
+        library_id = countsobj.library_id
+        library_ids.append(library_id)
+        prefix = os.path.join(results.classify_dir, library_id)
+        expressed_gtf_files.append(prefix + ".expr.gtf")
+        background_gtf_files.append(prefix + ".bkgd.gtf")
     library_id_map = {}
     for line in open(results.library_id_map):
         fields = line.strip().split('\t')
@@ -244,7 +257,55 @@ def classify_transcripts(results, cutoff_type, num_processors):
             print >>fileh, '\t'.join(fields)
         input_fileh.close()
     fileh.close()
-    return int(errors)
+    # add reference gtf file
+    expressed_gtf_files.append(results.ref_gtf_file)
+    background_gtf_files.append(results.ref_gtf_file)
+    # merge sort gtf files
+    logging.info("Merging and sorting expressed GTF files")
+    merge_sort_gtf_files(expressed_gtf_files, 
+                         results.expressed_gtf_file, 
+                         tmp_dir=results.tmp_dir)
+    logging.info("Merging and sorting background GTF files")
+    merge_sort_gtf_files(background_gtf_files, 
+                         results.background_gtf_file, 
+                         tmp_dir=results.tmp_dir)
+    return 0
+
+def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_counts_file):
+    # split input gtf by library and mark test ids
+    keyfunc = lambda myid: os.path.join(split_dir, "%s.gtf" % (myid))
+    cache = FileHandleCache(keyfunc)
+    ref_fileh = open(ref_gtf_file, 'w')
+    counts_dict = collections.defaultdict(lambda: CategoryCounts())
+    logging.info("Splitting transcripts by library")
+    for f in GTFFeature.parse(open(gtf_file)):
+        is_ref = bool(int(f.attrs[GTFAttr.REF]))
+        if is_ref:
+            print >>ref_fileh, str(f)
+            continue
+        library_id = f.attrs[GTFAttr.LIBRARY_ID]
+        # keep statistics
+        if f.feature_type == 'transcript':
+            category = int(f.attrs[GTFAttr.CATEGORY])           
+            countsobj = counts_dict[library_id]
+            countsobj.library_id = library_id
+            countsobj.counts[category] += 1
+        # write features from each library to separate files
+        fileh = cache.get_file_handle(library_id)
+        print >>fileh, str(f)
+    # close open file handles
+    ref_fileh.close()
+    cache.close()
+    logging.debug("File handle cache hits: %d" % (cache.hits))
+    logging.debug("File handle cache misses: %d" % (cache.misses))
+    # write library category statistics
+    logging.info("Writing category count statistics")
+    fh = open(category_counts_file, "w")
+    print >>fh, '\t'.join(CategoryCounts.header_fields())
+    for countsobj in counts_dict.itervalues():
+        fields = countsobj.to_fields()
+        print >>fh, '\t'.join(map(str, fields))
+    fh.close()
 
 def main():
     multiprocessing.freeze_support()
@@ -255,7 +316,7 @@ def main():
     parser.add_argument("-p", "--num-processors", type=int, 
                         dest="num_processors", default=1)
     parser.add_argument("--cutoff-type", dest="cutoff_type",
-                        choices=["train", "test"], default="test",
+                        choices=["train", "test"], default="train",
                         help="Whether to choose classification "
                         "cutoff based on 'test' data or 'train' data "
                         "[default=%(default)s]")
@@ -288,12 +349,23 @@ def main():
     logging.info("----------------------------------")   
     # setup results
     results = config.AssemblylineResults(args.run_dir)
+    if not os.path.exists(results.classify_dir):
+        os.makedirs(results.classify_dir)
+    # split gtf file
+    split_gtf_file(results.annotated_transcripts_gtf_file, 
+                   results.classify_dir,
+                   results.ref_gtf_file,
+                   results.category_counts_file)
+    # run classification
     retcode = classify_transcripts(results, args.cutoff_type, 
                                    num_processors)
     if retcode != 0:
         logging.error("ERROR")
         return retcode
+    # merge results
+    retcode = merge_transcripts(results)
     logging.info("Done")
+    return retcode
 
 if __name__ == "__main__":
     sys.exit(main())

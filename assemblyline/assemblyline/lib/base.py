@@ -24,9 +24,12 @@ import os
 import subprocess
 import math
 import logging
+import collections
 
 # float precision threshold
 FLOAT_PRECISION = 1e-10
+# file I/O parameters
+MAX_OPEN_FILE_DESCRIPTORS = 1000 
 
 # assemblyline GTF attributes
 class GTFAttr:
@@ -150,8 +153,43 @@ class Library(object):
             return False
         return True
 
-imax2 = lambda x,y: x if x>=y else y
-imin2 = lambda x,y: x if x<=y else y
+class FileHandleCache(object):
+    def __init__(self, keyfunc, maxsize=MAX_OPEN_FILE_DESCRIPTORS):
+        self.fileh_dict = collections.OrderedDict()
+        self.file_dict = {}
+        self.keyfunc = keyfunc
+        self.maxsize = maxsize
+        self.hits = 0
+        self.misses = 0
+
+    def get_file_handle(self, k):
+        if k in self.fileh_dict:
+            fileh = self.fileh_dict.pop(k)
+            self.hits += 1
+        else:
+            if k not in self.file_dict:
+                filename = self.keyfunc(k)
+                self.file_dict[k] = filename 
+                mode = 'w'
+            else:
+                # not opening for the first time so append
+                filename = self.file_dict[k]
+                mode = 'a'
+                self.misses += 1
+            # control number of open files
+            if len(self.fileh_dict) > self.maxsize:
+                # close least recently accessed file
+                lrufileh = self.fileh_dict.popitem(0)[1]
+                lrufileh.close()        
+            # open file                
+            fileh = open(filename, mode)
+        # update
+        self.fileh_dict[k] = fileh
+        return fileh
+    
+    def close(self):
+        for fileh in self.fileh_dict.itervalues():
+            fileh.close()
 
 def float_check_nan(x):
     x = float(x)
@@ -168,8 +206,3 @@ def check_executable(filename):
         return False
     devnullfh.close()
     return True
-
-def cmp_strand(a,b):
-    if a == "." or b == ".":
-        return True
-    return a == b
