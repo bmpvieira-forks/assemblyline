@@ -32,7 +32,7 @@ def smooth_iteration(G, score_attr, smooth_attr):
         succ = G.successors(u)
         if len(succ) == 0:
             continue
-        total_nbr_score = sum(G.node[v][score_attr] for v in succ)        
+        total_nbr_score = sum(G.node[v][score_attr] for v in succ)
         if total_nbr_score == 0:
             # if all successors have zero score apply smoothing evenly
             avg_score = smooth_score / len(succ)

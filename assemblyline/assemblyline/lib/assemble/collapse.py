@@ -145,7 +145,7 @@ def recalc_strand_specific_graph_attributes(G, transcript_map):
                           for t_id in transcript_ids)
         d[NODE_SCORE] = total_score
 
-def collapse_strand_specific_graph(G, transcript_map):
+def collapse_strand_specific_graph(G, transcript_map, introns=True):
     """
     find groups of nodes that have a single path through them
     and merges them into chains
@@ -157,7 +157,7 @@ def collapse_strand_specific_graph(G, transcript_map):
     have 'chain_data' and 'chain_edges' attributes with node 
     attribute data and edge data of child nodes  
     """
-    node_chain_map, chains = get_chains(G)
+    node_chain_map, chains = get_chains(G, introns)
     H = add_chains(G, chains, node_chain_map)
     recalc_strand_specific_graph_attributes(H, transcript_map)
     return H

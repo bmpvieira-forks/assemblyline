@@ -10,7 +10,8 @@ import collections
 import argparse
 import os
 
-from assemblyline.lib.gtf import GTFAttr, GTFFeature, sort_gtf
+from assemblyline.lib.base import GTFAttr
+from assemblyline.lib.gtf import GTFFeature, sort_gtf
 
 def gtf_add_transcript_features(gtf_file, outfh):
     transcript_dict = collections.defaultdict(lambda: [])

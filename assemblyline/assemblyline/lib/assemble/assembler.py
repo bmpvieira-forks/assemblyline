@@ -97,47 +97,11 @@ def find_short_path_kmers(kmer_hash, K, path, score):
         new_score = score * (kmer_score / float(total_score))
         yield ([kmer_id], new_score)
 
-def clip_dangling_ends(K):
-    """
-    fragmented transcripts can manifest as 0-degree
-    dangling ends of the overlap graph. clip these 
-    ends so that every node can be included in a path
-    from 'source' to 'sink'
-    """
-    # TODO: optimize this function using adjacency_iter graph traversal
-    source = K.graph['source']
-    sink = K.graph['sink']
-    clip_nodes = set()
-    clip_score = 0.0
-    test_nodes = set(K.nodes())
-    while len(test_nodes) > 0:
-        new_test_nodes = set()
-        new_clip_nodes = set()
-        for n in test_nodes:
-            if (n == source) or (n == sink):
-                continue
-            ind = K.in_degree(n)
-            outd = K.out_degree(n)
-            if (ind == 0) or (outd == 0):
-                new_clip_nodes.add(n)
-                # check the neighbors of this node after it is removed
-                if ind == 0:
-                    new_test_nodes.update(K.successors(n))
-                else:
-                    new_test_nodes.update(K.predecessors(n))
-        # update
-        test_nodes = new_test_nodes.difference(new_clip_nodes)
-        clip_nodes.update(new_clip_nodes)
-        clip_score += sum(K.node[n][NODE_SCORE] for n in new_clip_nodes)
-        # remove nodes
-        K.remove_nodes_from(new_clip_nodes)
-    return clip_nodes, clip_score
-
 def connect_dangling_ends(K):
     """
     fragmented transcripts can manifest as 0-degree dangling ends
-    of the overlap graph. unlike 'clip_dangling_ends' this function
-    connects these ends to the 'source' and/or 'sink' nodes
+    of the overlap graph. this function connects these ends to the 
+    'source' and/or 'sink' nodes
     """
     source = K.graph['source']
     sink = K.graph['sink']
@@ -150,7 +114,7 @@ def connect_dangling_ends(K):
         if K.in_degree(n) == 0:
             edges_to_add.append((source, n))
         if K.out_degree(n) == 0:
-            edges_to_add.append((n,sink))
+            edges_to_add.append((n, sink))
     # connect kmers
     for u,v in edges_to_add:
         K.add_edge(u,v)
@@ -164,6 +128,12 @@ def create_kmer_graph(G, partial_paths, k):
     def get_kmers(path, k):
         for i in xrange(0, len(path) - (k-1)):
             yield path[i:i+k]
+    # initialize k-mer graph
+    K = nx.DiGraph()
+    K.graph['source'] = SOURCE
+    K.graph['sink'] = SINK    
+    K.add_node(SOURCE, attr_dict=init_node_attrs())
+    K.add_node(SINK, attr_dict=init_node_attrs())               
     # find all beginning/end nodes in linear graph
     start_nodes, end_nodes = get_start_end_nodes(G)
     # convert paths to k-mers and create a k-mer to 
@@ -204,13 +174,9 @@ def create_kmer_graph(G, partial_paths, k):
             kmerpath.append(kmer_id)
         if is_end:
             kmerpath.append(SINK)
-
         kmer_paths.append((kmerpath, score))
-    # create a graph of k-mers
-    K = nx.DiGraph()
+    # store mapping from kmer_id to subpath tuple
     K.graph['id_kmer_map'] = id_kmer_map
-    K.graph['source'] = SOURCE
-    K.graph['sink'] = SINK
     for path, score in kmer_paths:
         add_path(K, path, score)
     # try to add short paths to graph if they are exact subpaths of 
@@ -229,39 +195,32 @@ def create_kmer_graph(G, partial_paths, k):
         add_path(K, path, score)
     # connect all kmer nodes with degree zero to the source/sink node
     # to account for fragmentation in the kmer graph when k > 2
-    clip_nodes, clip_score = clip_dangling_ends(K)
+    connect_dangling_ends(K)
     # cleanup
     del kmer_id_map
-    return K, lost_paths, clip_nodes, clip_score
+    return K, lost_paths
 
 def optimize_k(G, partial_paths, kmin, kmax, sensitivity_threshold):
     """
     determine optimal choice for parameter 'k' for assembly
     maximizes k while ensuring sensitivity constraint is met
     """
-    total_score = sum(len(path)*score for path,score in partial_paths)
+    total_score = sum(score for path,score in partial_paths)
     best_k = None
     best_graph = None
     for k in xrange(kmin, kmax+1):
         # create k-mer graph and add partial paths
-        K, lost_paths, clip_nodes, clip_score = \
+        K, lost_paths = \
             create_kmer_graph(G, partial_paths, k)
-        lost_path_score = sum(len(path)*score for path,score in lost_paths)
-        total_lost_score = lost_path_score + clip_score
-        kept_score = total_score - total_lost_score
-        score_sensitivity = kept_score / total_score
+        lost_path_score = sum(score for path,score in lost_paths)
+        path_sensitivity = float(len(lost_paths)) / len(partial_paths)
+        score_sensitivity = (total_score - lost_path_score) / total_score
         logging.debug("\t\toptimize k=%d n=%d e=%d p=%d kmers=%d "
-                      "clipped=%d(%.1f%%) score=%.3f(%.1f%%) "
                       "lost_paths=%d(%.1f%%) score=%.3f(%.1f%%) "
-                      "total=%.1f/%.3f(%.1f%%) " 
                       "sens=%.3f" %
                       (k, len(G), G.number_of_edges(), len(partial_paths), len(K),
-                       len(clip_nodes), 100*float(len(clip_nodes))/(len(K) + len(clip_nodes)),
-                       clip_score, 100*clip_score/total_score,
-                       len(lost_paths), 100*float(len(lost_paths))/len(partial_paths),
-                       lost_path_score, 100*lost_path_score/total_score,
-                       total_lost_score, total_score,
-                       100*total_lost_score/total_score,
+                       len(lost_paths), 100*path_sensitivity,
+                       lost_path_score, 100*score_sensitivity,
                        score_sensitivity))
         if score_sensitivity < sensitivity_threshold:
             break
@@ -316,11 +275,12 @@ def assemble_transcript_graph(G, strand, partial_paths,
     ksensitivity = min(max(0.0, ksensitivity), 1.0)
     # constrain fraction_major_path parameter
     fraction_major_path = min(max(0.0, fraction_major_path), 1.0)
-    # determine parameter 'k' for de bruijn graph assembly
+    # determine parameter 'k' for assembly
+    longest_path_length = max(len(x[0]) for x in partial_paths)
     if user_kmax > 0:
-        kmax = user_kmax
+        kmax = min(user_kmax, longest_path_length)
     else: 
-        kmax = max(len(x[0]) for x in partial_paths)
+        kmax = longest_path_length
     # allow optimization of 'k' if ksensitivity parameter is set
     if ksensitivity > 0:
         kmin = 1
@@ -345,5 +305,5 @@ def assemble_transcript_graph(G, strand, partial_paths,
         path = expand_path_chains(G, strand, path)
         # add to path list
         path_info_list.append(PathInfo(score, path))
-        logging.debug("\t\tscore=%f num_exons=%d" % (score, len(path)))
+        logging.debug("\t\tscore=%f length=%d" % (score, len(path)))
     return path_info_list

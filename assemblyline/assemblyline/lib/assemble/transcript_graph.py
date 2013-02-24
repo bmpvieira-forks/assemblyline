@@ -278,7 +278,7 @@ def prune_transcript_graph(G, strand, transcript_map,
                             trim_intron_fraction)
     G.remove_nodes_from(trim_nodes)
     # collapse consecutive nodes in graph
-    H = collapse_strand_specific_graph(G, transcript_map)
+    H = collapse_strand_specific_graph(G, transcript_map, introns=True)
     # get connected components of graph which represent independent genes
     # unconnected components are considered different genes
     Gsubs = nx.weakly_connected_component_subgraphs(H)

@@ -228,7 +228,7 @@ def main():
                         " [default=%(default)s]")
     parser.add_argument("--clip-high", dest="clip_high_percentile", type=float, 
                         default=config.CLIP_HIGH_PERCENTILE, metavar="PCT",
-                        help="Clip transcript scores above this fraction "
+                        help="Clip transcript scores above this percentile "
                         " [default=%(default)s]")
     parser.add_argument("--gtf-score-attr", dest="gtf_score_attr", 
                         default="FPKM", metavar="ATTR",
@@ -294,25 +294,24 @@ def main():
     sample_map_fileh = open(results.sample_id_map, 'w')
     for library in Library.from_file(args.library_table_file):
         # exclude samples
-        if not library.is_valid():
-            logging.warning("Library '%s' not valid" % (library.library_id)) 
-            valid = False
+        if not os.path.exists(library.gtf_file):
+            logging.warning("Library '%s' GTF file not found" % (library.library_id)) 
+            continue
+        # rename library id
+        new_library_id = "L%d" % (library_num)
+        print >>library_map_fileh, '\t'.join([new_library_id, library.library_id]) 
+        library_num += 1
+        library.library_id = new_library_id
+        # rename sample id
+        if library.sample_id not in sample_id_map:
+            new_sample_id = "S%d" % (sample_num)
+            print >>sample_map_fileh, '\t'.join([new_sample_id, library.sample_id]) 
+            sample_id_map[library.sample_id] = new_sample_id
+            sample_num += 1
         else:
-            # rename library id
-            new_library_id = "L%d" % (library_num)
-            print >>library_map_fileh, '\t'.join([new_library_id, library.library_id]) 
-            library_num += 1
-            library.library_id = new_library_id
-            # rename sample id
-            if library.sample_id not in sample_id_map:
-                new_sample_id = "S%d" % (sample_num)
-                print >>sample_map_fileh, '\t'.join([new_sample_id, library.sample_id]) 
-                sample_id_map[library.sample_id] = new_sample_id
-                sample_num += 1
-            else:
-                new_sample_id = sample_id_map[library.sample_id]
-            library.sample_id = new_sample_id
-            libraries.append(library)
+            new_sample_id = sample_id_map[library.sample_id]
+        library.sample_id = new_sample_id
+        libraries.append(library)
     if not valid:
         logging.warning("Invalid libraries in table file")
     library_map_fileh.close()
