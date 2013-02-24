@@ -32,7 +32,6 @@ FLOAT_PRECISION = 1e-10
 class GTFAttr:
     GENE_ID = 'gene_id'
     TRANSCRIPT_ID = 'transcript_id'
-    COHORT_ID = 'cohort_id'
     SAMPLE_ID = 'sid'
     LIBRARY_ID = 'lid'
     REF = 'ref'
@@ -109,8 +108,7 @@ class CategoryCounts(object):
         f.close()
 
 class Library(object):
-    fields = ('cohort_id', 'patient_id', 'sample_id', 'library_id',
-              'gtf_file', 'bam_file')
+    fields = ('sample_id', 'library_id', 'gtf_file', 'bam_file')
 
     def __init__(self):
         for f in Library.fields:
