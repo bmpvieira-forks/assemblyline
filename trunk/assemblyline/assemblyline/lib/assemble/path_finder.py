@@ -147,11 +147,11 @@ def find_suboptimal_paths(G, source, sink, fraction_major_path=1e-3,
     # iterate to find suboptimal paths
     iterations = 1
     highest_score = score
-    lowest_score = highest_score * fraction_major_path
+    lowest_score = max(MIN_SCORE, highest_score * fraction_major_path)
     while iterations < max_paths:
         # find path
         path, score = find_path(G, source, sink)
-        if score < lowest_score:
+        if score <= lowest_score:
             break
         # store path
         if path not in path_results:
