@@ -216,11 +216,12 @@ def optimize_k(G, partial_paths, kmin, kmax, sensitivity_threshold):
         path_sensitivity = float(len(lost_paths)) / len(partial_paths)
         score_sensitivity = (total_score - lost_path_score) / total_score
         logging.debug("\t\toptimize k=%d n=%d e=%d p=%d kmers=%d "
-                      "lost_paths=%d(%.1f%%) score=%.3f(%.1f%%) "
+                      "lost_paths=%d(%.1f%%) score=%.3f/%.3f(%.1f%%) "
                       "sens=%.3f" %
                       (k, len(G), G.number_of_edges(), len(partial_paths), len(K),
                        len(lost_paths), 100*path_sensitivity,
-                       lost_path_score, 100*score_sensitivity,
+                       lost_path_score, total_score, 
+                       100.0*lost_path_score/total_score,
                        score_sensitivity))
         if score_sensitivity < sensitivity_threshold:
             break

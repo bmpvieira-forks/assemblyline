@@ -24,7 +24,6 @@ import logging
 import collections
 import networkx as nx
 
-from assemblyline.lib.base import imax2, imin2
 from base import NODE_SCORE
 
 # constant minimum path score
@@ -34,6 +33,9 @@ MIN_SCORE = 1.0e-10
 TMP_NODE_SCORE = 'tmpns'
 PATH_MIN_SCORE = 'pmin'
 PATH_PREV = 'pprev'
+
+imax2 = lambda x,y: x if x>=y else y
+imin2 = lambda x,y: x if x<=y else y
 
 def init_tmp_attributes(G):
     '''
