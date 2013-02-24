@@ -76,30 +76,6 @@ def hash_kmers(id_kmer_map, k, ksmall):
             kmer_hash[kmer[i:i+ksmall]].add(kmer_id)
     return kmer_hash
 
-def extrapolate_short_path(kmer_hash, kmer_score_dict, path, score):
-    """
-    add the list of 'partial_paths' paths to graph 'K'
-
-    paths shorter than 'k' are extrapolated into k-mers before being added 
-    to the graph
-    """
-    if path not in kmer_hash:
-        return []
-    total_score = 0
-    matching_kmers = []
-    for kmer in kmer_hash[path]:
-        # get approximate score at kmer
-        kmer_score = kmer_score_dict[kmer]        
-        # compute total score at matching kmers
-        total_score += kmer_score
-        matching_kmers.append((kmer, kmer_score))
-    # now calculate fractional densities for matching kmers
-    new_partial_paths = [] 
-    for kmer,kmer_score in matching_kmers:
-        new_score = score * (kmer_score / total_score)
-        new_partial_paths.append((kmer, new_score))
-    return new_partial_paths
-
 def find_short_path_kmers(kmer_hash, K, path, score):
     """
     find kmers where 'path' is a subset and partition 'score'
@@ -264,7 +240,8 @@ def optimize_k(G, partial_paths, kmin, kmax, sensitivity_threshold):
     maximizes k while ensuring sensitivity constraint is met
     """
     total_score = sum(len(path)*score for path,score in partial_paths)
-    last = None
+    best_k = None
+    best_graph = None
     for k in xrange(kmin, kmax+1):
         # create k-mer graph and add partial paths
         K, lost_paths, clip_nodes, clip_score = \
@@ -273,13 +250,13 @@ def optimize_k(G, partial_paths, kmin, kmax, sensitivity_threshold):
         total_lost_score = lost_path_score + clip_score
         kept_score = total_score - total_lost_score
         score_sensitivity = kept_score / total_score
-        logging.debug("\t\toptimize k=%d n=%d e=%d p=%d "
+        logging.debug("\t\toptimize k=%d n=%d e=%d p=%d kmers=%d "
                       "clipped=%d(%.1f%%) score=%.3f(%.1f%%) "
                       "lost_paths=%d(%.1f%%) score=%.3f(%.1f%%) "
                       "total=%.1f/%.3f(%.1f%%) " 
                       "sens=%.3f" %
-                      (k, len(G), G.number_of_edges(), len(partial_paths),
-                       len(clip_nodes), 100*float(len(clip_nodes))/len(G),
+                      (k, len(G), G.number_of_edges(), len(partial_paths), len(K),
+                       len(clip_nodes), 100*float(len(clip_nodes))/(len(K) + len(clip_nodes)),
                        clip_score, 100*clip_score/total_score,
                        len(lost_paths), 100*float(len(lost_paths))/len(partial_paths),
                        lost_path_score, 100*lost_path_score/total_score,
@@ -288,9 +265,10 @@ def optimize_k(G, partial_paths, kmin, kmax, sensitivity_threshold):
                        score_sensitivity))
         if score_sensitivity < sensitivity_threshold:
             break
-        last = (K, k)
-    return last
-
+        if (best_k is None) or (len(K) >= len(best_graph)):
+            best_k = k
+            best_graph = K
+    return best_graph, best_k
 
 def expand_path_chains(G, strand, path):
     # reverse negative stranded data so that all paths go from 
@@ -353,7 +331,7 @@ def assemble_transcript_graph(G, strand, partial_paths,
     # smooth kmer graph
     smooth_graph(K)
     # find up to 'max_paths' paths through graph
-    logging.debug("\tFinding suboptimal paths in k=%d graph with %d nodes" % (k,len(K)))
+    logging.debug("\tFinding suboptimal paths in k=%d graph (%d nodes)" % (k,len(K)))
     path_info_list = []
     id_kmer_map = K.graph['id_kmer_map']   
     for kmer_path, score in find_suboptimal_paths(K, K.graph['source'], 

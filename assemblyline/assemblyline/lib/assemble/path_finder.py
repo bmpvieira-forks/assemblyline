@@ -25,7 +25,10 @@ import collections
 import networkx as nx
 
 from assemblyline.lib.base import imax2, imin2
-from base import NODE_SCORE, MIN_SCORE
+from base import NODE_SCORE
+
+# constant minimum path score
+MIN_SCORE = 1.0e-10
 
 # for dynamic programming algorithm
 TMP_NODE_SCORE = 'tmpns'
@@ -41,7 +44,7 @@ def init_tmp_attributes(G):
     # for dynamic programming
     for n,d in G.nodes_iter(data=True):
         d[TMP_NODE_SCORE] = d[NODE_SCORE]
-        d[PATH_MIN_SCORE] = None
+        d[PATH_MIN_SCORE] = MIN_SCORE
         d[PATH_PREV] = None
 
 def clear_tmp_attributes(G):
@@ -59,7 +62,7 @@ def reset_path_attributes(G):
     """
     # reset path attributes
     for n,d in G.nodes_iter(data=True):
-        d[PATH_MIN_SCORE] = None
+        d[PATH_MIN_SCORE] = MIN_SCORE
         d[PATH_PREV] = None
 
 def dynprog_search(G, source):
