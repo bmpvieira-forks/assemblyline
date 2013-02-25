@@ -28,14 +28,14 @@ import numpy as np
 import collections
 
 from assemblyline.lib.bx.cluster import ClusterTree
-from assemblyline.lib.librarytable import LibraryInfo
+from assemblyline.lib.base import Library
 from assemblyline.lib.gtf import GTFFeature
 
 htseq_special_fields = set(["no_feature", "ambiguous", "too_low_aQual", "not_aligned", "alignment_not_unique"])
 
-def get_gene_metadata(gtf_file, 
+def get_gtf_metadata(gtf_file, 
                       omit_attrs=None,
-                      gene_id_attr="gene_id", 
+                      group_by="gene_id", 
                       feature_type="exon"):
     if omit_attrs is None:
         omit_attrs = []
@@ -45,16 +45,16 @@ def get_gene_metadata(gtf_file,
     for feature in GTFFeature.parse(open(gtf_file)):
         if feature.feature_type != feature_type:
             continue
-        gene_id = feature.attrs[gene_id_attr]
-        gene_feature_map[gene_id].append(feature)
+        feature_id = feature.attrs[group_by]
+        gene_feature_map[feature_id].append(feature)
         gene_attrs_set.update(feature.attrs.keys())
     gene_attrs_set.difference_update(omit_attrs)
     gene_attrs_list = sorted(gene_attrs_set)
     metadata_fields = ["tracking_id", "locus", "strand", "num_exons", "transcript_length"] + gene_attrs_list
     metadata_inds = dict((x,i) for i,x in enumerate(metadata_fields))
-    gene_metadata_dict = {}
+    metadata_dict = {}
     # output metadata sorted by gene id
-    for gene_id,features in gene_feature_map.iteritems():
+    for feature_id,features in gene_feature_map.iteritems():
         # collect attributes for this gene
         attrdict = collections.defaultdict(lambda: set())
         # cluster exons together for each gene
@@ -79,13 +79,13 @@ def get_gene_metadata(gtf_file,
         strand = features[0].strand
         num_exons = len(exon_clusters)
         # make metadata row
-        metadata = [gene_id, locus_string, strand, num_exons, transcript_length] + ['NA'] * len(gene_attrs_list)
+        metadata = [feature_id, locus_string, strand, num_exons, transcript_length] + ['NA'] * len(gene_attrs_list)
         # get all attributes
         for k,vals in attrdict.iteritems():
             ind = metadata_inds[k]
             metadata[ind] = ','.join(map(str, sorted(vals)))
-        gene_metadata_dict[metadata[0]] = metadata
-    return metadata_fields, gene_metadata_dict
+        metadata_dict[metadata[0]] = metadata
+    return metadata_fields, metadata_dict
 
 def read_htseq_count_file(filename, genes, specials):
     gcounts = []
@@ -185,15 +185,15 @@ def main():
     del count_vectors
     # get gene metadata
     logging.info("Reading gene metadata")
-    metadata_fields, gene_metadata_dict = get_gene_metadata(args.gtf_file, omit_attrs=omit_list)
+    metadata_fields, metadata_dict = get_gtf_metadata(args.gtf_file, omit_attrs=omit_list)
     # write matrix file
     logging.info("Writing count file")
     header_fields = list(metadata_fields)
     header_fields.extend(library_ids)
     fileh = open(count_file, "w")
     print >>fileh, '\t'.join(header_fields)
-    for i,gene_id in enumerate(genes):
-        fields = list(map(str, gene_metadata_dict[gene_id]))
+    for i,feature_id in enumerate(genes):
+        fields = list(map(str, metadata_dict[feature_id]))
         fields.extend(map(str, mat[i,:]))
         print >>fileh, '\t'.join(fields)
     fileh.close()
