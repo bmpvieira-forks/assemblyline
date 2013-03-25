@@ -23,7 +23,6 @@ import os
 # default parameter settings
 MIN_TRANSCRIPT_LENGTH = 250
 MIN_EXON_LENGTH = 15
-CLIP_HIGH_PERCENTILE = 99.9
 
 # prior observations of rna bases in genomic regions
 PRIOR_MRNA_PROB = 0.811
@@ -33,9 +32,8 @@ MODEL_ANN_COV_RATIO = 0.90
 MODEL_ANN_INTRON_RATIO = 0.90
 
 # percentiles for transcript score statistics
-TRANSCRIPT_STATS_FIELDS = ['passed', 'failed', 'too_low_score', 
-                           'too_short',  'too_short_exon', 
-                           'clip_high_score', 'clipped'] 
+TRANSCRIPT_STATS_FIELDS = ['passed', 'failed', 'too_short',  
+                           'too_short_exon'] 
 TRANSCRIPT_SCORE_QUANTILES = [0, 1, 5, 10, 25, 50, 75, 90, 95, 99, 100]
 
 # maximum bp for nearest gene distance calculation
