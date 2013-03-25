@@ -50,35 +50,43 @@ def make_transcript_feature(exon_features):
         del f.attrs["exon_number"]
     return f
 
-def add_reference_gtf_file(ref_gtf_file, test_transcript_ids, 
+def add_reference_gtf_file(ref_gtf_file, test_gene_ids, 
                            random_test_frac, outfh):
-    transcript_dict = collections.defaultdict(lambda: [])
-    user_defined_tests = len(test_transcript_ids) > 0
+    gene_dict = collections.defaultdict(lambda: [])
+    user_defined_tests = len(test_gene_ids) > 0
+    # group by gene id
     for feature in GTFFeature.parse(open(ref_gtf_file)):
         if feature.feature_type != "exon":
             continue
-        # group by transcript id        
-        t_id = feature.attrs[GTFAttr.TRANSCRIPT_ID]
-        transcript_dict[t_id].append(feature)
+        # group by gene id        
+        g_id = feature.attrs[GTFAttr.GENE_ID]
+        gene_dict[g_id].append(feature)
     # output reference transcripts
-    for t_id, features in transcript_dict.iteritems():
-        # sort features (exons) by start position
-        features.sort(key=operator.attrgetter('start'))
+    for g_id, g_features in gene_dict.iteritems():
         # label test transcripts
         if user_defined_tests:
-            is_test = (t_id in test_transcript_ids)
+            is_test = (g_id in test_gene_ids)
         else:
             is_test = (random.random() < random_test_frac)
-        # annotate exons as reference features
-        for f in features:
+        # group by transcript id
+        transcript_dict = collections.defaultdict(lambda: [])
+        for feature in g_features:
+            t_id = feature.attrs[GTFAttr.TRANSCRIPT_ID]
+            transcript_dict[t_id].append(feature)
+        for t_id, t_features in transcript_dict.iteritems():
+            # sort features (exons) by start position
+            t_features.sort(key=operator.attrgetter('start'))
+            # annotate exons as reference features
+            for f in t_features:
+                f.attrs[GTFAttr.REF] = '1'
+                f.attrs[GTFAttr.TEST] = '1' if is_test else '0'
+                print >>outfh, str(f)
+            f = make_transcript_feature(t_features)
             f.attrs[GTFAttr.REF] = '1'
             f.attrs[GTFAttr.TEST] = '1' if is_test else '0'
             print >>outfh, str(f)
-        f = make_transcript_feature(features)
-        f.attrs[GTFAttr.REF] = '1'
-        f.attrs[GTFAttr.TEST] = '1' if is_test else '0'
-        print >>outfh, str(f)
-    del transcript_dict
+        del transcript_dict
+    del gene_dict
 
 def read_gtf_file(library, gtf_score_attr):
     # read all transcripts
@@ -120,13 +128,11 @@ def read_gtf_file(library, gtf_score_attr):
     return t_dict
 
 def filter_transcripts(library_id, t_dict, outfileh, dropfileh, statsfileh, 
-                       min_transcript_length, min_score, 
-                       clip_high_percentile):
+                       min_transcript_length):
     # filter transcripts
     passed = 0
     failed = 0
     too_short = 0
-    too_low_score = 0
     too_short_exon = 0
     passed_scores = []
     failed_scores = []
@@ -152,9 +158,6 @@ def filter_transcripts(library_id, t_dict, outfileh, dropfileh, statsfileh,
         score = float(features[0].attrs[GTFAttr.SCORE])
         transcript_length = sum((f.end - f.start) for f in features)
         keep = True
-        if (score <= min_score):
-            too_low_score += 1
-            keep = False
         if (transcript_length <= min_transcript_length):
             too_short += 1
             keep = False
@@ -169,18 +172,11 @@ def filter_transcripts(library_id, t_dict, outfileh, dropfileh, statsfileh,
             passed += 1
             passed_scores.append(score)
             filtered_t_dict[t_id] = (score, features) 
-
     # make empirical cdf for scores
     ecdf = ECDF(passed_scores, side="left")
-    clip_high_score = scoreatpercentile(passed_scores, clip_high_percentile) 
-    clipped = 0
-
     for t_id, vtuple in filtered_t_dict.iteritems():
         score, features = vtuple
         pctrank = 100.0 * ecdf(score)
-        if score > clip_high_score:
-            score = clip_high_score
-            clipped += 1
         # reverse features if this is negative strand
         if features[0].strand == "-":
             features.reverse()
@@ -201,9 +197,7 @@ def filter_transcripts(library_id, t_dict, outfileh, dropfileh, statsfileh,
                         for q in config.TRANSCRIPT_SCORE_QUANTILES]
     passed_quantiles = [scoreatpercentile(passed_scores, q) 
                         for q in config.TRANSCRIPT_SCORE_QUANTILES]
-    fields = [library_id, passed, failed, too_low_score,
-              too_short, too_short_exon, 
-              clip_high_score, clipped]
+    fields = [library_id, passed, failed, too_short, too_short_exon]
     fields.extend(failed_quantiles)
     fields.extend(passed_quantiles)
     print >>statsfileh, '\t'.join(map(str, fields))
@@ -222,14 +216,6 @@ def main():
                         default=config.MIN_TRANSCRIPT_LENGTH,
                         help="Skip ab initio transcripts equal to or below "
                         "this length [default=%(default)s]")
-    parser.add_argument("--min-score", dest="min_score", type=float, 
-                        default=0.0, metavar="X",
-                        help="Skip ab initio transcript with score <= X "
-                        " [default=%(default)s]")
-    parser.add_argument("--clip-high", dest="clip_high_percentile", type=float, 
-                        default=config.CLIP_HIGH_PERCENTILE, metavar="PCT",
-                        help="Clip transcript scores above this percentile "
-                        " [default=%(default)s]")
     parser.add_argument("--gtf-score-attr", dest="gtf_score_attr", 
                         default="FPKM", metavar="ATTR",
                         help="GTF attribute field containing transcript "
@@ -239,14 +225,14 @@ def main():
                         help="directory to store assemblyline results and "
                         "intermediate files [default=%(default)s]")
     parser.add_argument("--random-test-frac", dest="random_test_frac", 
-                        default=0.01, metavar="FRAC", type=float,
+                        default=0.1, metavar="FRAC", type=float,
                         help="if no user-defined tests are specified "
                         "using '--tests' randomly designate a fraction "
                         "of reference transcripts as test data for use "
-                        "in classification")
+                        "in classification [default=%(default)s]")
     parser.add_argument("--tests", dest="test_file", default=None,
                         help="(optional) text file containing "
-                        "reference 'transcript_id' attributes "
+                        "reference 'gene_id' attributes "
                         "(one per line) that define test cases "
                         "to use for validation purposes")
     parser.add_argument('ref_gtf_file')
@@ -266,8 +252,6 @@ def main():
     # show parameters
     logging.info("Parameters:")
     logging.info("min transcript length: %d" % (args.min_transcript_length))
-    logging.info("min score:             %f" % (args.min_score))
-    logging.info("clip high percentile:  %f" % (args.clip_high_percentile))
     logging.info("gtf score attr:        %s" % (args.gtf_score_attr))
     logging.info("output directory:      %s" % (args.output_dir))
     logging.info("reference GTF file:    %s" % (args.ref_gtf_file))
@@ -327,15 +311,15 @@ def main():
     header_fields.extend([("passed_q%d" % x) for x in config.TRANSCRIPT_SCORE_QUANTILES])
     print >>statsfileh, '\t'.join(header_fields)
     # read test transcripts
-    test_transcript_ids = set()
+    test_gene_ids = set()
     if args.test_file is not None:
         fileh = open(args.test_file)
-        test_transcript_ids.update(line.strip() for line in fileh)
+        test_gene_ids.update(line.strip() for line in fileh)
         fileh.close()
-        logging.info("Read %d test transcripts" % len(test_transcript_ids))
+        logging.info("Read %d test genes" % len(test_gene_ids))
     # read reference GTF file and aggregate
     logging.info("Adding reference GTF file")
-    add_reference_gtf_file(args.ref_gtf_file, test_transcript_ids, 
+    add_reference_gtf_file(args.ref_gtf_file, test_gene_ids, 
                            args.random_test_frac, tmpfileh)
     # parse sample table
     logging.info("Adding libraries")
@@ -349,9 +333,7 @@ def main():
         else:
             filter_transcripts(library.library_id, t_dict, 
                                tmpfileh, dropfileh, statsfileh, 
-                               args.min_transcript_length, 
-                               args.min_score, 
-                               args.clip_high_percentile)        
+                               args.min_transcript_length)
     statsfileh.close()
     tmpfileh.close()
     logging.info("Sorting GTF")
