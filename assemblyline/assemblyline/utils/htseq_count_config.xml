@@ -1,5 +1,5 @@
-<plugins>
-  <modules_init_script>/exds/sw/rhel6/init.sh</modules_init_script>
+<assemblyline>
+  <init_script>/mctp/wkgrps/bioinfo/sw/rhel6/init.sh</init_script>
   <pbs use="yes">
     <node_mem>128000</node_mem>
     <node_processors>32</node_processors>
@@ -24,4 +24,4 @@
     <arg>-m union</arg>
     <arg>-s no</arg>
   </plugin>
-</plugins>
+</assemblyline>

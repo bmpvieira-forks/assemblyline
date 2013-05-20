@@ -80,34 +80,41 @@ class Category(object):
     def to_str(catint):
         return Category.INT_TO_STR_DICT[catint]
 
-class CategoryCounts(object):
+class CategoryStats(object):
     def __init__(self):
         self.library_id = None
         self.counts = [0] * Category.NUM_CATEGORIES
+        self.signal = [0.0] * Category.NUM_CATEGORIES
+
     def to_fields(self):
-        return [self.library_id] + self.counts
+        return [self.library_id] + self.counts + self.signal
     @property
     def num_transcripts(self):
-        return sum(self.counts)        
+        return sum(self.counts)
     @staticmethod
     def header_fields():
         fields = ["library_id"]
-        fields.extend([Category.to_str(k) 
+        fields.extend(["%s_count" % (Category.to_str(k)) 
+                       for k in range(0, Category.NUM_CATEGORIES)])
+        fields.extend(["%s_signal" % (Category.to_str(k)) 
                        for k in range(0, Category.NUM_CATEGORIES)])
         return fields
     @staticmethod
     def from_line(line):
         fields = line.strip().split('\t')
-        c = CategoryCounts()
+        c = CategoryStats()
         c.library_id = fields[0]
-        c.counts = map(int, fields[1:])
+        i = 1
+        c.counts = map(int, fields[i:(i+Category.NUM_CATEGORIES)])
+        i += Category.NUM_CATEGORIES
+        c.signal = map(float, fields[i:(i+Category.NUM_CATEGORIES)])
         return c
     @staticmethod
     def from_file(filename):
         f = open(filename)
         f.next()
         for line in f:
-            yield CategoryCounts.from_line(line)
+            yield CategoryStats.from_line(line)
         f.close()
 
 class Library(object):

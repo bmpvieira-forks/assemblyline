@@ -319,7 +319,7 @@ min_obs <- 50
 max_frac_test_obs <- 0.05
 kde2d.n <- 50
 kde2d.h <- c(5,5)
-prior_mrna <- 0.85
+prior_mrna <- 0.80
 prior_intronic <- 0.1
 prior_intergenic <- 1 - (prior_mrna + prior_intronic)
 variables <- c("mean_recurrence", "pctrank")
@@ -329,17 +329,19 @@ tbl <- read.table(input_file, header=TRUE, sep="\t")
 
 # setup test cases
 num_mrna <- sum((tbl$category == SAME_STRAND) | (tbl$test == 1))
+num_tests <- sum(tbl$test == 1)
+
 # limit the size of the test data to a fraction of the total data
-frac_test <- sum(tbl$test == 1) / num_mrna
-pct_test_to_use <- min(max_frac_test_obs, frac_test) / frac_test
-num_tests <- round(pct_test_to_use * sum(tbl$test == 1))
-whichtests <- sample(which(tbl$test == 1), num_tests)
+#frac_test <- sum(tbl$test == 1) / num_mrna
+#pct_test_to_use <- min(max_frac_test_obs, frac_test) / frac_test
+#num_tests <- round(pct_test_to_use * sum(tbl$test == 1))
+#whichtests <- sample(which(tbl$test == 1), num_tests)
 # rewrite table with test case information
-whichtests.categories <- tbl[whichtests, "category"]
-tbl[tbl$test == 1, "category"] <- 0
-tbl$test <- 0
-tbl[whichtests, "test"] <- 1
-tbl[whichtests, "category"] <- whichtests.categories
+#whichtests.categories <- tbl[whichtests, "category"]
+#tbl[tbl$test == 1, "category"] <- 0
+#tbl$test <- 0
+#tbl[whichtests, "test"] <- 1
+#tbl[whichtests, "category"] <- whichtests.categories
 
 # divide known transcripts into training/test sets
 train <- (tbl$category == 0) & (tbl$test == 0)
@@ -350,11 +352,19 @@ testintronic <- (tbl$test == 1) & (tbl$category %in% INTRONIC_LIKE)
 testintergenic <- (tbl$test == 1) & (tbl$category %in% INTERGENIC_LIKE)
 intronic <- (tbl$test == 0) & (tbl$category %in% INTRONIC_LIKE)
 intergenic <- (tbl$test == 0) & (tbl$category %in% INTERGENIC_LIKE)
+mrna <- (tbl$category == SAME_STRAND) | (tbl$test == 1)
 
 # compute ratio of each type of transcript
-frac_mrna <- num_mrna / nrow(tbl)
-frac_intronic <- sum(intronic) / nrow(tbl)
-frac_intergenic <- sum(intergenic) / nrow(tbl)
+total_score_mrna <- sum(tbl[mrna, "score"])
+total_score_intronic <- sum(tbl[intronic, "score"])
+total_score_intergenic <- sum(tbl[intergenic, "score"])
+total_score <- sum(tbl$score)
+frac_mrna <- total_score_mrna / total_score 
+frac_intronic <- total_score_intronic / total_score
+frac_intergenic <- total_score_intergenic / total_score
+#frac_mrna <- num_mrna / nrow(tbl)
+#frac_intronic <- sum(intronic) / nrow(tbl)
+#frac_intergenic <- sum(intergenic) / nrow(tbl)
 
 # compute weights based on priors
 known_vs_intronic_ratio <- (frac_mrna / prior_mrna) / (frac_intronic / prior_intronic)
