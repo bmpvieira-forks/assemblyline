@@ -235,8 +235,7 @@ def annotate_locus(transcripts,
     ref_intron_dict = collections.defaultdict(lambda: [])
     ref_node_dict = collections.defaultdict(lambda: ([],[]))
     node_score_dict = collections.defaultdict(lambda: [0.0, 0.0])
-    # index introns for fast intersection
-    intron_tree = IntervalTree()
+    all_introns = set()
     # find the intron domains of the transcripts
     boundaries = find_exon_boundaries(transcripts)
     # add transcript to intron and graph data structures
@@ -257,9 +256,9 @@ def annotate_locus(transcripts,
             # add to introns
             for start,end in t.iterintrons():
                 ref_intron_dict[(t.strand, start, end)].append(t_id)
-                intron_tree.insert_interval(Interval(start,end,strand=t.strand))
+                all_introns.add((start,end,t.strand))
             # keep dict of reference transcripts
-            ref_transcript_dict[t_id] = (t, set(nodes))
+            ref_transcript_dict[t_id] = (t,nodes)
         else:
             score = float(t.attrs[GTFAttr.SCORE])
             if t.strand != NO_STRAND:
@@ -268,11 +267,16 @@ def annotate_locus(transcripts,
             inp_transcript_nodes.append((t,nodes))
             # add to introns
             for start,end in t.iterintrons():
-                intron_tree.insert_interval(Interval(start,end,strand=t.strand))
+                all_introns.add((start,end,t.strand))
     # convert to regular dicts
     ref_intron_dict = dict(ref_intron_dict)
     ref_node_dict = dict(ref_node_dict)
     node_score_dict = dict(node_score_dict)
+    # index introns for fast intersection
+    intron_tree = IntervalTree()
+    for start,end,strand in all_introns:
+        intron_tree.insert_interval(Interval(start,end,strand))
+    del all_introns
     # categorize transcripts
     strand_transcript_lists = [[], [], []]
     for t,nodes in inp_transcript_nodes:
@@ -330,7 +334,12 @@ def annotate_locus(transcripts,
         t.attrs[GTFAttr.ANN_COV_RATIO] = cinf.ann_cov_ratio
         t.attrs[GTFAttr.ANN_INTRON_RATIO] = cinf.ann_intron_ratio
         # group transcripts by strand
-        strand_transcript_lists[strand].append(t) 
+        strand_transcript_lists[strand].append(t)
+    # explictly delete data structures
+    del ref_intron_dict
+    del ref_node_dict
+    del node_score_dict
+    del intron_tree
     # annotate score and recurrence for transcripts
     for strand_transcripts in strand_transcript_lists:
         # find the intron domains of the transcripts
