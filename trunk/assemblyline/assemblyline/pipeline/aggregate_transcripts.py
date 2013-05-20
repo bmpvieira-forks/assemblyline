@@ -139,26 +139,26 @@ def filter_transcripts(library_id, t_dict, outfileh, dropfileh, statsfileh,
     filtered_t_dict = collections.OrderedDict()
     for t_id, features in t_dict.iteritems():
         strand = features[0].strand
+        score = float(features[0].attrs[GTFAttr.SCORE])            
         reverse = True if strand == "-" else False
-        features.sort(key=operator.attrgetter('start'), reverse=reverse)
+        num_exons = len(features)        
         # check first/last exon lengths and clip very short exons
-        num_exons = len(features)
+        features.sort(key=operator.attrgetter('start'), reverse=reverse)
+        new_features = collections.deque(features)
         if num_exons > 1:
-            f = features[0]
+            f = new_features[0]
             length = f.end - f.start
             if length < config.MIN_EXON_LENGTH:
                 too_short_exon += 1
-                features = features[1:]
-            f = features[-1]
+                new_features.popleft()
+            f = new_features[-1]
             length = f.end - f.start
             if length < config.MIN_EXON_LENGTH:
                 too_short_exon += 1
-                features = features[:-1]
-        # filter transcripts by various criteria
-        score = float(features[0].attrs[GTFAttr.SCORE])
-        transcript_length = sum((f.end - f.start) for f in features)
+                new_features.pop()
         keep = True
-        if (transcript_length <= min_transcript_length):
+        transcript_length = sum((f.end - f.start) for f in new_features)
+        if transcript_length <= min_transcript_length:
             too_short += 1
             keep = False
         if not keep:
@@ -171,7 +171,7 @@ def filter_transcripts(library_id, t_dict, outfileh, dropfileh, statsfileh,
         else:
             passed += 1
             passed_scores.append(score)
-            filtered_t_dict[t_id] = (score, features) 
+            filtered_t_dict[t_id] = (score, list(new_features))
     # make empirical cdf for scores
     ecdf = ECDF(passed_scores, side="left")
     for t_id, vtuple in filtered_t_dict.iteritems():

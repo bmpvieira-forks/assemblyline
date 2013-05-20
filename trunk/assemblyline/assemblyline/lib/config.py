@@ -24,13 +24,6 @@ import os
 MIN_TRANSCRIPT_LENGTH = 250
 MIN_EXON_LENGTH = 15
 
-# prior observations of rna bases in genomic regions
-PRIOR_MRNA_PROB = 0.811
-PRIOR_INTRON_PROB = 0.1148
-PRIOR_INTERGENIC_PROB = (PRIOR_MRNA_PROB - PRIOR_INTRON_PROB)
-MODEL_ANN_COV_RATIO = 0.90
-MODEL_ANN_INTRON_RATIO = 0.90
-
 # percentiles for transcript score statistics
 TRANSCRIPT_STATS_FIELDS = ['passed', 'failed', 'too_short',  
                            'too_short_exon'] 
@@ -54,7 +47,7 @@ TRANSCRIPTS_DROPPED_GTF_FILE = "transcripts.dropped.gtf"
 TRANSCRIPTS_GTF_FILE = "transcripts.gtf"
 TRANSCRIPT_STATS_FILE = "aggregate_library_stats.txt"
 ANNOTATED_TRANSCRIPTS_GTF_FILE = 'transcripts.annotated.gtf'
-CATEGORY_COUNTS_FILE = "category_counts.txt"
+CATEGORY_STATS_FILE = "category_stats.txt"
 CLASSIFY_DIR = 'classify'
 REF_GTF_FILE = 'ref.gtf'
 CLASSIFY_REPORT_FILE = "classification_report.txt"
@@ -72,7 +65,7 @@ class AssemblylineResults(object):
         self.transcript_stats_file = os.path.join(output_dir, TRANSCRIPT_STATS_FILE)
         self.annotated_transcripts_gtf_file = os.path.join(output_dir, ANNOTATED_TRANSCRIPTS_GTF_FILE)
         self.classify_dir = os.path.join(output_dir, CLASSIFY_DIR)
-        self.category_counts_file = os.path.join(output_dir, CATEGORY_COUNTS_FILE)
+        self.category_stats_file = os.path.join(output_dir, CATEGORY_STATS_FILE)
         self.ref_gtf_file = os.path.join(output_dir, REF_GTF_FILE)
         self.background_gtf_file = os.path.join(output_dir, BACKGROUND_GTF_FILE)
         self.expressed_gtf_file = os.path.join(output_dir, EXPRESSED_GTF_FILE)

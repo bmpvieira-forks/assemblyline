@@ -7,7 +7,6 @@ import subprocess
 import argparse
 import sys
 import os
-import collections
 
 from assemblyline.lib.base import check_executable
 

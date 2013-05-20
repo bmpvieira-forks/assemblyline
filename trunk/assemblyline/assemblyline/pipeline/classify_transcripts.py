@@ -31,7 +31,7 @@ import collections
 import assemblyline
 import assemblyline.lib.config as config
 from assemblyline.lib.transcript import parse_gtf
-from assemblyline.lib.base import CategoryCounts, Category, \
+from assemblyline.lib.base import CategoryStats, Category, \
     GTFAttr, check_executable, FileHandleCache
 from assemblyline.lib.gtf import GTFFeature, merge_sort_gtf_files
 
@@ -45,8 +45,7 @@ DInfo = collections.namedtuple('DecisionInfo', ['pred', 'log10lr', 'is_test'])
 def get_classify_header_fields():
     header = ["chrom", "start", "library_id", "t_id", "category", 
               "test", "ann_ref_id", "ann_cov_ratio", "ann_intron_ratio", 
-              "mean_score", "mean_recurrence", "mean_pctrank", "pctrank",
-              "length", "num_exons"]
+              "mean_recurrence", "score", "pctrank", "length", "num_exons"]
     return header
 
 def get_classify_fields(t):
@@ -60,9 +59,8 @@ def get_classify_fields(t):
               t.attrs[GTFAttr.ANN_REF_ID],
               t.attrs[GTFAttr.ANN_COV_RATIO],
               t.attrs[GTFAttr.ANN_INTRON_RATIO],
-              t.attrs[GTFAttr.MEAN_SCORE],
               t.attrs[GTFAttr.MEAN_RECURRENCE],
-              t.attrs[GTFAttr.MEAN_PCTRANK],
+              t.attrs[GTFAttr.SCORE],
               t.attrs[GTFAttr.PCTRANK],
               t.length,
               len(t.exons)]
@@ -84,7 +82,7 @@ def read_classify_info(filename):
         field_dict[fields[0]] = fields[1:]
     return field_dict
 
-def read_classify_decisions(filename, cutoff_type):
+def read_classify_decisions(filename):
     fileh = open(filename)
     header_fields = fileh.next().strip().split('\t')
     t_id_ind = header_fields.index('t_id')
@@ -93,12 +91,8 @@ def read_classify_decisions(filename, cutoff_type):
     num_exons_ind = header_fields.index('num_exons')
     log10lr_intronic_ind = header_fields.index('log10lr.intronic')
     log10lr_intergenic_ind = header_fields.index('log10lr.intergenic')
-    if cutoff_type == "test":
-        #intronic_pred_ind = header_fields.index("pred.test.intronic")
-        intergenic_pred_ind = header_fields.index("pred.test.intergenic")
-    else:
-        #intronic_pred_ind = header_fields.index("pred.train.intronic")
-        intergenic_pred_ind = header_fields.index("pred.train.intergenic")
+    #intronic_pred_ind = header_fields.index("pred.train.intronic")
+    intergenic_pred_ind = header_fields.index("pred.train.intergenic")
     decision_dict = {}
     for line in fileh:
         fields = line.strip().split('\t')
@@ -141,7 +135,7 @@ def read_classify_decisions(filename, cutoff_type):
     return decision_dict 
 
 def classify_library_transcripts(args):
-    library_id, output_dir, cutoff_type = args
+    library_id, output_dir = args
     prefix = os.path.join(output_dir, library_id)
     # input files
     input_gtf_file = prefix + ".gtf"
@@ -167,11 +161,9 @@ def classify_library_transcripts(args):
         return retcode, library_id
     # get library stats
     info_field_dict = read_classify_info(info_file)
-    has_tests = int(info_field_dict["tests"][0]) > 0
-    if not has_tests:
-        cutoff_type = "train"
+    #has_tests = int(info_field_dict["tests"][0]) > 0
     # get transcript predictions
-    decision_dict = read_classify_decisions(output_res_file, cutoff_type)
+    decision_dict = read_classify_decisions(output_res_file)
     # partition input into expressed vs background
     expr_fileh = open(expr_gtf_file, 'w')
     bkgd_fileh = open(bkgd_gtf_file, 'w')
@@ -187,14 +179,14 @@ def classify_library_transcripts(args):
     logging.debug("[FINISHED] library_id='%s'" % (library_id))
     return retcode, library_id
 
-def classify_transcripts(results, cutoff_type, num_processors):
+def classify_transcripts(results, num_processors):
     # read library category statistics
-    counts_list = list(CategoryCounts.from_file(results.category_counts_file))
+    stats_list = list(CategoryStats.from_file(results.category_stats_file))
     # get tasks
     tasks = []
-    for countsobj in counts_list:
-        library_id = countsobj.library_id
-        tasks.append((library_id, results.classify_dir, cutoff_type))
+    for statsobj in stats_list:
+        library_id = statsobj.library_id
+        tasks.append((library_id, results.classify_dir))
     # use multiprocessing to parallelize
     pool = multiprocessing.Pool(processes=num_processors)
     result_iter = pool.imap_unordered(classify_library_transcripts, tasks)
@@ -213,12 +205,12 @@ def classify_transcripts(results, cutoff_type, num_processors):
 
 def merge_transcripts(results):
     # read library category statistics
-    counts_list = list(CategoryCounts.from_file(results.category_counts_file))
+    stats_list = list(CategoryStats.from_file(results.category_stats_file))
     library_ids = []
     expressed_gtf_files = []
     background_gtf_files = []
-    for countsobj in counts_list:
-        library_id = countsobj.library_id
+    for statsobj in stats_list:
+        library_id = statsobj.library_id
         library_ids.append(library_id)
         prefix = os.path.join(results.classify_dir, library_id)
         expressed_gtf_files.append(prefix + ".expr.gtf")
@@ -271,12 +263,12 @@ def merge_transcripts(results):
                          tmp_dir=results.tmp_dir)
     return 0
 
-def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_counts_file):
+def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_stats_file):
     # split input gtf by library and mark test ids
     keyfunc = lambda myid: os.path.join(split_dir, "%s.gtf" % (myid))
     cache = FileHandleCache(keyfunc)
     ref_fileh = open(ref_gtf_file, 'w')
-    counts_dict = collections.defaultdict(lambda: CategoryCounts())
+    stats_dict = collections.defaultdict(lambda: CategoryStats())
     logging.info("Splitting transcripts by library")
     for f in GTFFeature.parse(open(gtf_file)):
         is_ref = bool(int(f.attrs[GTFAttr.REF]))
@@ -286,10 +278,12 @@ def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_counts_file):
         library_id = f.attrs[GTFAttr.LIBRARY_ID]
         # keep statistics
         if f.feature_type == 'transcript':
-            category = int(f.attrs[GTFAttr.CATEGORY])           
-            countsobj = counts_dict[library_id]
-            countsobj.library_id = library_id
-            countsobj.counts[category] += 1
+            category = int(f.attrs[GTFAttr.CATEGORY])
+            score = float(f.attrs[GTFAttr.SCORE])         
+            statsobj = stats_dict[library_id]
+            statsobj.library_id = library_id
+            statsobj.counts[category] += 1
+            statsobj.signal[category] += score
         # write features from each library to separate files
         fileh = cache.get_file_handle(library_id)
         print >>fileh, str(f)
@@ -299,11 +293,11 @@ def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_counts_file):
     logging.debug("File handle cache hits: %d" % (cache.hits))
     logging.debug("File handle cache misses: %d" % (cache.misses))
     # write library category statistics
-    logging.info("Writing category count statistics")
-    fh = open(category_counts_file, "w")
-    print >>fh, '\t'.join(CategoryCounts.header_fields())
-    for countsobj in counts_dict.itervalues():
-        fields = countsobj.to_fields()
+    logging.info("Writing category statistics")
+    fh = open(category_stats_file, "w")
+    print >>fh, '\t'.join(CategoryStats.header_fields())
+    for statsobj in stats_dict.itervalues():
+        fields = statsobj.to_fields()
         print >>fh, '\t'.join(map(str, fields))
     fh.close()
 
@@ -315,11 +309,6 @@ def main():
                         dest="verbose", default=False)
     parser.add_argument("-p", "--num-processors", type=int, 
                         dest="num_processors", default=1)
-    parser.add_argument("--cutoff-type", dest="cutoff_type",
-                        choices=["train", "test"], default="train",
-                        help="Whether to choose classification "
-                        "cutoff based on 'test' data or 'train' data "
-                        "[default=%(default)s]")
     parser.add_argument("run_dir")
     args = parser.parse_args()
     # check command line parameters
@@ -345,7 +334,6 @@ def main():
     logging.info("run directory:    %s" % (args.run_dir))
     logging.info("num processors:   %d" % (args.num_processors))
     logging.info("verbose logging:  %s" % (args.verbose))
-    logging.info("cutoff type:      %s" % (args.cutoff_type))
     logging.info("----------------------------------")   
     # setup results
     results = config.AssemblylineResults(args.run_dir)
@@ -355,10 +343,9 @@ def main():
     split_gtf_file(results.annotated_transcripts_gtf_file, 
                    results.classify_dir,
                    results.ref_gtf_file,
-                   results.category_counts_file)
+                   results.category_stats_file)
     # run classification
-    retcode = classify_transcripts(results, args.cutoff_type, 
-                                   num_processors)
+    retcode = classify_transcripts(results, num_processors)
     if retcode != 0:
         logging.error("ERROR")
         return retcode
