@@ -114,11 +114,16 @@ class Transcript(object):
         return sum((e.end - e.start) for e in self.exons)
 
     def iterintrons(self):
+        #e1 = self.exons[0]
+        #for e2 in self.exons[1:]:
+        #    yield (e1.end,e2.start)
+        #    e1 = e2
         e1 = self.exons[0]
-        for e2 in self.exons[1:]:
-            yield (e1.end,e2.start)
+        for j in xrange(1, len(self.exons)):
+            e2 = self.exons[j]
+            yield e1.end, e2.start
             e1 = e2
-        
+    
     def introns(self):
         return list(self.iterintrons())
 
