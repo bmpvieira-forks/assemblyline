@@ -33,7 +33,7 @@ import assemblyline
 from assemblyline.lib.base import GTFAttr
 from assemblyline.lib.gtf import GTFFeature, sort_gtf
 from assemblyline.lib.transcript import parse_gtf, NO_STRAND, \
-    POS_STRAND, NEG_STRAND
+    POS_STRAND, NEG_STRAND, Exon
 from assemblyline.lib.assemble.transcript_graph import \
     find_exon_boundaries, split_exons, get_transcript_node_map
 
@@ -57,7 +57,7 @@ def create_undirected_transcript_graph(transcripts, add_node_func, **kwargs):
     for t in transcripts:
         # split exons that cross boundaries and to get the
         # nodes in the transcript path
-        nodes = split_exons(t, boundaries)
+        nodes = list(Exon(start,end) for start,end in split_exons(t, boundaries))
         # add nodes/edges to graph
         u = nodes[0]
         add_node_func(G, u, t, **kwargs)

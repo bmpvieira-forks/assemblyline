@@ -108,6 +108,7 @@ class Transcript(object):
                 (self.__class__.__name__, self.chrom, self.start, self.end, 
                  strand_int_to_str(self.strand), str(self.score), self.exons, 
                  self.attrs))
+        
     @property
     def length(self):
         return sum((e.end - e.start) for e in self.exons)

@@ -50,8 +50,8 @@ def compute_coverage_overlap(nodes1, nodes2):
     b = set(nodes2)
     shared_nodes = a.intersection(b)
     union_nodes = a.union(b)
-    shared_length = sum((n.end - n.start) for n in shared_nodes)    
-    total_length = sum((n.end - n.start) for n in union_nodes)
+    shared_length = sum((n[1] - n[0]) for n in shared_nodes)    
+    total_length = sum((n[1] - n[0]) for n in union_nodes)
     return shared_length, total_length
 
 def find_best_coverage_overlap(nodes, reftuples, ignore_test=False):
@@ -189,7 +189,7 @@ def compute_recurrence_and_score(nodes, node_data):
     total_pctrank = 0.0
     for n in nodes:
         nd = node_data[n]
-        length = float(n.end - n.start)
+        length = float(n[1] - n[0])
         total_score += nd['score'] * length
         total_pctrank += nd['pct'] * length
         total_recur += len(nd['ids']) * length       
@@ -205,7 +205,7 @@ def resolve_strand(nodes, node_score_dict, ref_node_dict):
     total_scores = [0.0, 0.0]
     ref_bp = [0, 0]
     for n in nodes:
-        length = (n.end - n.start)
+        length = (n[1] - n[0])
         if n in node_score_dict:
             scores = node_score_dict[n]
             total_scores[POS_STRAND] += (scores[POS_STRAND]*length)
@@ -239,49 +239,41 @@ def annotate_locus(transcripts,
     # find the intron domains of the transcripts
     boundaries = find_exon_boundaries(transcripts)
     # add transcript to intron and graph data structures
-    inp_transcript_nodes = []
-    ref_transcript_dict = {}
+    inp_transcripts = []
     for t in transcripts:
-        # get transcript attributes
-        t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
-        is_ref = bool(int(t.attrs[GTFAttr.REF]))
-        # split exons that cross boundaries and get the
-        # nodes in the transcript path
-        nodes = split_exons(t, boundaries)
         # separate ref and nonref transcripts
+        is_ref = bool(int(t.attrs[GTFAttr.REF]))
         if is_ref:
-            # add to nodes
-            for n in nodes:
-                ref_node_dict[n][t.strand].append(t_id)
+            # split exons that cross boundaries and get the
+            # nodes in the transcript path
+            for n in split_exons(t, boundaries):
+                ref_node_dict[n][t.strand].append(t)
             # add to introns
             for start,end in t.iterintrons():
-                ref_intron_dict[(t.strand, start, end)].append(t_id)
-                all_introns.add((start,end,t.strand))
-            # keep dict of reference transcripts
-            ref_transcript_dict[t_id] = (t,nodes)
+                ref_intron_dict[(t.strand, start, end)].append(t)
+                all_introns.add((t.strand,start,end))
         else:
-            score = float(t.attrs[GTFAttr.SCORE])
             if t.strand != NO_STRAND:
-                for n in nodes:
+                score = float(t.attrs[GTFAttr.SCORE])
+                for n in split_exons(t, boundaries):
                     node_score_dict[n][t.strand] += score
-            inp_transcript_nodes.append((t,nodes))
+            inp_transcripts.append(t)
             # add to introns
             for start,end in t.iterintrons():
-                all_introns.add((start,end,t.strand))
-    # convert to regular dicts
-    ref_intron_dict = dict(ref_intron_dict)
-    ref_node_dict = dict(ref_node_dict)
-    node_score_dict = dict(node_score_dict)
+                all_introns.add((t.strand,start,end))
     # index introns for fast intersection
     intron_tree = IntervalTree()
-    for start,end,strand in all_introns:
-        intron_tree.insert_interval(Interval(start,end,strand))
+    for strand,start,end in all_introns:
+        intron_tree.insert_interval(Interval(start,end,strand=strand))
     del all_introns
     # categorize transcripts
     strand_transcript_lists = [[], [], []]
-    for t,nodes in inp_transcript_nodes:
-        strand = t.strand
+    for t in inp_transcripts:
+        # get transcript nodes and introns
+        nodes = list(split_exons(t, boundaries))
+        introns = set(t.iterintrons())
         # try to resolve strand
+        strand = t.strand
         if strand == NO_STRAND:
             strand = resolve_strand(nodes, node_score_dict, ref_node_dict)
         # define opposite strand
@@ -290,26 +282,32 @@ def annotate_locus(transcripts,
         else:
             opp_strand = (strand + 1) % 2
         # get all reference transcripts that share introns
-        introns = set(t.iterintrons())
-        intron_ref_ids = set()
+        intron_ref_dict = {}
         for start,end in introns:
             if (strand, start, end) in ref_intron_dict:
-                intron_ref_ids.update(ref_intron_dict[(strand, start, end)])
+                refs = ref_intron_dict[(strand, start, end)]
+                intron_ref_dict.update((ref.attrs[GTFAttr.TRANSCRIPT_ID],ref) 
+                                       for ref in refs)
+        intron_refs = []
+        for ref in intron_ref_dict.itervalues():
+            intron_refs.append((ref,list(split_exons(ref, boundaries))))
         # get all reference transcripts that share coverage
-        same_strand_ref_ids = set()
-        opp_strand_ref_ids = set()
+        same_strand_ref_dict = {}
+        opp_strand_ref_dict = {}
         for n in nodes:
             if n in ref_node_dict:
-                strand_ref_ids = ref_node_dict[n]
-                same_strand_ref_ids.update(strand_ref_ids[strand])
-                opp_strand_ref_ids.update(strand_ref_ids[opp_strand])
+                strand_refs = ref_node_dict[n]
+                same_strand_ref_dict.update((ref.attrs[GTFAttr.TRANSCRIPT_ID],ref) 
+                                            for ref in strand_refs[strand])
+                opp_strand_ref_dict.update((ref.attrs[GTFAttr.TRANSCRIPT_ID],ref) 
+                                           for ref in strand_refs[opp_strand])
+        same_strand_refs = []
+        for ref in same_strand_ref_dict.itervalues():
+            same_strand_refs.append((ref,list(split_exons(ref, boundaries))))
+        opp_strand_refs = []
+        for ref in opp_strand_ref_dict.itervalues():            
+            opp_strand_refs.append((ref,list(split_exons(ref, boundaries))))
         # categorize
-        intron_refs = [ref_transcript_dict[x]
-                       for x in intron_ref_ids]
-        same_strand_refs = [ref_transcript_dict[x] 
-                            for x in same_strand_ref_ids]
-        opp_strand_refs = [ref_transcript_dict[x] 
-                           for x in opp_strand_ref_ids]
         cinf = categorize_transcript(t, nodes, introns, 
                                      intron_refs,
                                      same_strand_refs,
@@ -335,7 +333,7 @@ def annotate_locus(transcripts,
         t.attrs[GTFAttr.ANN_INTRON_RATIO] = cinf.ann_intron_ratio
         # group transcripts by strand
         strand_transcript_lists[strand].append(t)
-    # explictly delete data structures
+    # explictly delete large data structures
     del ref_intron_dict
     del ref_node_dict
     del node_score_dict
@@ -349,22 +347,20 @@ def annotate_locus(transcripts,
                                  'score': 0.0, 
                                  'pct': 0.0}
         node_data = collections.defaultdict(new_data_func)
-        transcript_nodes = []
         for t in strand_transcripts:
             sample_id = t.attrs[gtf_sample_attr]
             score = float(t.attrs[GTFAttr.SCORE])
             pctrank = float(t.attrs[GTFAttr.PCTRANK])
             # split exons that cross boundaries and to get the
             # nodes in the transcript path
-            nodes = split_exons(t, boundaries)
-            for n in nodes:
+            for n in split_exons(t, boundaries):
                 nd = node_data[n]
                 nd['ids'].add(sample_id)
                 nd['score'] += score
                 nd['pct'] += pctrank
-            transcript_nodes.append((t, nodes))
         # calculate recurrence and score statistics
-        for t,nodes in transcript_nodes:
+        for t in strand_transcripts:
+            nodes = list(split_exons(t, boundaries))
             mean_score, mean_pctrank, mean_recur = \
                 compute_recurrence_and_score(nodes, node_data)
             t.attrs[GTFAttr.MEAN_SCORE] = mean_score
@@ -376,14 +372,19 @@ def annotate_gtf_worker(input_queue, gtf_file, gtf_sample_attr):
     while True:
         lines = input_queue.get()
         if len(lines) == 0:
-            break
+            break             
+        print 'READ %d lines' % (len(lines))
         transcripts = transcripts_from_gtf_lines(lines)
+        print 'READ %d transcripts' % (len(transcripts))
         annotate_locus(transcripts, gtf_sample_attr) 
+        print 'DONE'
         for t in transcripts:
-            features = t.to_gtf_features()
-            for f in features:
-                print >>fileh, str(f) 
+            for f in t.to_gtf_features():
+                print >>fileh, str(f)
         input_queue.task_done()
+        # explicitly delete large objects
+        del lines
+        del transcripts
     fileh.close()
     input_queue.task_done()
 
