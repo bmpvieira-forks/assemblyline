@@ -54,31 +54,51 @@ def find_exon_boundaries(transcripts):
     # sort the intron boundary positions and add them to interval trees
     return sorted(exon_boundaries)
 
+#def split_exon(exon, boundaries):
+#    """
+#    partition the exon given list of node boundaries
+#    
+#    generator yields (start,end) intervals for exon
+#    """
+#    # find the indexes into the intron boundaries list that
+#    # border the exon.  all the indexes in between these two
+#    # are overlapping the exon and we must use them to break
+#    # the exon into pieces 
+#    start_ind = bisect.bisect_right(boundaries, exon.start)
+#    end_ind = bisect.bisect_left(boundaries, exon.end)
+#    exon_splits = [exon.start] + boundaries[start_ind:end_ind] + [exon.end]
+#    for j in xrange(1, len(exon_splits)):
+#        start, end = exon_splits[j-1], exon_splits[j]
+#        yield start, end
+
 def split_exon(exon, boundaries):
     """
     partition the exon given list of node boundaries
     
     generator yields (start,end) intervals for exon
     """
+    if exon.start == exon.end:
+        return
     # find the indexes into the intron boundaries list that
     # border the exon.  all the indexes in between these two
     # are overlapping the exon and we must use them to break
     # the exon into pieces 
     start_ind = bisect.bisect_right(boundaries, exon.start)
     end_ind = bisect.bisect_left(boundaries, exon.end)
-    exon_splits = [exon.start] + boundaries[start_ind:end_ind] + [exon.end]
-    for j in xrange(1, len(exon_splits)):
-        start, end = exon_splits[j-1], exon_splits[j]
-        yield start, end
+    if start_ind == end_ind:
+        yield exon.start, exon.end
+    else:
+        yield exon.start, boundaries[start_ind]
+        for j in xrange(start_ind, end_ind-1):
+            yield boundaries[j], boundaries[j+1]
+        yield boundaries[end_ind-1], exon.end
 
 def split_exons(t, boundaries):
     # split exons that cross boundaries and to get the
     # nodes in the transcript path
-    nodes = []
     for exon in t.exons:
         for start,end in split_exon(exon, boundaries):
-            nodes.append(Exon(start, end))
-    return nodes
+            yield start, end
 
 def resolve_strand(nodes, node_data):
     # find strand with highest score or strand
@@ -128,7 +148,7 @@ def partition_transcripts_by_strand(transcripts):
     for t in transcripts:
         # split exons that cross boundaries and get the
         # nodes that made up the transcript
-        nodes = split_exons(t, boundaries)        
+        nodes = list(Exon(start,end) for start,end in split_exons(t, boundaries))        
         is_ref = bool(int(t.attrs.get(GTFAttr.REF, "0")))
         if is_ref:
             # label nodes by ref strand
@@ -224,7 +244,7 @@ def create_directed_graph(strand, transcripts):
         t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
         # split exons that cross boundaries and get the
         # nodes that made up the transcript
-        nodes = split_exons(t, boundaries)
+        nodes = list(Exon(start,end) for start,end in split_exons(t, boundaries))        
         if strand == NEG_STRAND:
             nodes.reverse()
         # add nodes/edges to graph
