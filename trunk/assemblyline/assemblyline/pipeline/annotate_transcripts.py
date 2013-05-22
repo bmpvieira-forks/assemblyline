@@ -338,6 +338,7 @@ def annotate_locus(transcripts,
     del ref_node_dict
     del node_score_dict
     del intron_tree
+    del inp_transcripts
     # annotate score and recurrence for transcripts
     for strand_transcripts in strand_transcript_lists:
         # find the intron domains of the transcripts
@@ -373,11 +374,8 @@ def annotate_gtf_worker(input_queue, gtf_file, gtf_sample_attr):
         lines = input_queue.get()
         if len(lines) == 0:
             break             
-        print 'READ %d lines' % (len(lines))
         transcripts = transcripts_from_gtf_lines(lines)
-        print 'READ %d transcripts' % (len(transcripts))
         annotate_locus(transcripts, gtf_sample_attr) 
-        print 'DONE'
         for t in transcripts:
             for f in t.to_gtf_features():
                 print >>fileh, str(f)
