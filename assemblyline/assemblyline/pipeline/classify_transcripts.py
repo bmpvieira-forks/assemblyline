@@ -37,8 +37,7 @@ from assemblyline.lib.gtf import GTFFeature, merge_sort_gtf_files
 
 # R script to call for classifying transcripts
 _module_dir = assemblyline.__path__[0]
-CLASSIFY_KDE2D_R_SCRIPT = os.path.join(_module_dir, "lib", 
-                                       "classify_transcripts_kde2d.R")
+CLASSIFY_R_SCRIPT = os.path.join(_module_dir, "lib", "classify_transcripts.R")
 DInfo = collections.namedtuple('DecisionInfo', ['pred', 'log10lr', 'is_test'])
 
 
@@ -152,7 +151,7 @@ def classify_library_transcripts(args):
     # run R script to do classification
     logfh = open(logfile, "w")
     retcode = subprocess.call(["Rscript", "--vanilla",
-                               CLASSIFY_KDE2D_R_SCRIPT, 
+                               CLASSIFY_R_SCRIPT, 
                                prefix], 
                               stdout=logfh, stderr=logfh)
     logfh.close()
@@ -315,7 +314,7 @@ def main():
     if not os.path.exists(args.run_dir):
         parser.error("Run directory %s not found" % (args.run_dir))
     # check command line parameters
-    if not os.path.exists(CLASSIFY_KDE2D_R_SCRIPT):
+    if not os.path.exists(CLASSIFY_R_SCRIPT):
         parser.error("Classification R script not found")
     if not check_executable("Rscript"):
         parser.error("Rscript binary not found")        
