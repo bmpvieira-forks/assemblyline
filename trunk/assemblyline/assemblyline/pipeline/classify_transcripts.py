@@ -32,7 +32,7 @@ import assemblyline
 import assemblyline.lib.config as config
 from assemblyline.lib.transcript import parse_gtf
 from assemblyline.lib.base import CategoryStats, Category, \
-    GTFAttr, check_executable, FileHandleCache
+    GTFAttr, check_executable, FileHandleCache, BufferedFileSplitter
 from assemblyline.lib.gtf import GTFFeature, merge_sort_gtf_files
 
 # R script to call for classifying transcripts
@@ -262,7 +262,8 @@ def merge_transcripts(results):
                          tmp_dir=results.tmp_dir)
     return 0
 
-def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_stats_file):
+def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_stats_file,
+                   bufsize=(1 << 30)):
     # split input gtf by library and mark test ids
     keyfunc = lambda myid: os.path.join(split_dir, "%s.gtf" % (myid))
     cache = FileHandleCache(keyfunc)
@@ -299,6 +300,44 @@ def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_stats_file):
         fields = statsobj.to_fields()
         print >>fh, '\t'.join(map(str, fields))
     fh.close()
+    
+def split_gtf_file2(gtf_file, split_dir, ref_gtf_file, category_stats_file,
+                    bufsize=(1 << 30)):
+    # split input gtf by library and mark test ids
+    keyfunc = lambda myid: os.path.join(split_dir, "%s.gtf" % (myid))
+    bufobj = BufferedFileSplitter(keyfunc, bufsize)
+    ref_fileh = open(ref_gtf_file, 'w')
+    stats_dict = collections.defaultdict(lambda: CategoryStats())
+    logging.info("Splitting transcripts by library")
+    for line in open(gtf_file):
+        f = GTFFeature.from_string(line)
+        is_ref = bool(int(f.attrs[GTFAttr.REF]))
+        if is_ref:
+            print >>ref_fileh, str(f)
+            continue
+        library_id = f.attrs[GTFAttr.LIBRARY_ID]
+        # keep statistics
+        if f.feature_type == 'transcript':
+            category = int(f.attrs[GTFAttr.CATEGORY])
+            score = float(f.attrs[GTFAttr.SCORE])         
+            statsobj = stats_dict[library_id]
+            statsobj.library_id = library_id
+            statsobj.counts[category] += 1
+            statsobj.signal[category] += score
+        # write features from each library to separate files
+        bufobj.write(library_id, line)
+    # close open file handles
+    ref_fileh.close()
+    bufobj.close()
+    logging.debug("Buffer flushes: %d" % (bufobj.flushes))
+    # write library category statistics
+    logging.info("Writing category statistics")
+    fh = open(category_stats_file, "w")
+    print >>fh, '\t'.join(CategoryStats.header_fields())
+    for statsobj in stats_dict.itervalues():
+        fields = statsobj.to_fields()
+        print >>fh, '\t'.join(map(str, fields))
+    fh.close()
 
 def main():
     multiprocessing.freeze_support()
@@ -306,6 +345,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbose", action="store_true", 
                         dest="verbose", default=False)
+    parser.add_argument("--bufsize", dest="bufsize", type=int,
+                        default=(1 << 30),
+                        help="Size of buffer when splitting GTF file")
     parser.add_argument("-p", "--num-processors", type=int, 
                         dest="num_processors", default=1)
     parser.add_argument("run_dir")
@@ -339,10 +381,12 @@ def main():
     if not os.path.exists(results.classify_dir):
         os.makedirs(results.classify_dir)
     # split gtf file
-    split_gtf_file(results.annotated_transcripts_gtf_file, 
-                   results.classify_dir,
-                   results.ref_gtf_file,
-                   results.category_stats_file)
+    split_gtf_file2(results.annotated_transcripts_gtf_file, 
+                    results.classify_dir,
+                    results.ref_gtf_file,
+                    results.category_stats_file,
+                    args.bufsize)
+    return 0
     # run classification
     retcode = classify_transcripts(results, num_processors)
     if retcode != 0:

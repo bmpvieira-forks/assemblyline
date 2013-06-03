@@ -198,6 +198,51 @@ class FileHandleCache(object):
         for fileh in self.fileh_dict.itervalues():
             fileh.close()
 
+class BufferedFileSplitter(object):
+    def __init__(self, keyfunc, maxsize=1000000):
+        self.keyfunc = keyfunc
+        self.maxsize = maxsize
+        self.cursize = 0
+        self.flushes = 0
+        self.file_dict = {}
+        self.buf_dict = {}
+
+    def _flush(self):
+        for k in self.buf_dict:
+            # get file
+            if k not in self.file_dict:
+                # seeing for first time so create
+                filename = self.keyfunc(k)
+                self.file_dict[k] = filename
+                fileh = open(filename, 'w')
+            else:
+                # already opened so append
+                filename = self.file_dict[k]
+                fileh = open(filename, 'a')
+            for line in self.buf_dict[k]:
+                fileh.write(line)
+            fileh.close()
+            del self.buf_dict[k]
+            self.buf_dict[k] = []
+        self.flushes += 1
+        self.cursize = 0
+
+    def write(self, k, line):
+        # check size of buffer
+        if (self.cursize + len(line)) > self.maxsize:
+            # flush all buffers
+            self._flush()
+        # get buffer
+        if k not in self.buf_dict:
+            self.buf_dict[k] = [line] 
+        else:
+            self.buf_dict[k].append(line)
+        self.cursize += len(line)
+
+    def close(self):
+        if self.cursize > 0:
+            self._flush()
+
 def float_check_nan(x):
     x = float(x)
     if math.isnan(x):
