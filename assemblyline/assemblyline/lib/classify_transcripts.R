@@ -316,7 +316,7 @@ args <- commandArgs(trailingOnly=TRUE)
 prefix <- args[1]
 input_file <- paste(prefix, ".inp.txt", sep="")
 min_obs <- 50
-max_frac_test_obs <- 0.05
+#max_frac_test_obs <- 0.05
 kde2d.n <- 50
 kde2d.h <- c(5,5)
 prior_mrna <- 0.80
