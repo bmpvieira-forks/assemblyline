@@ -262,47 +262,47 @@ def merge_transcripts(results):
                          tmp_dir=results.tmp_dir)
     return 0
 
+#def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_stats_file,
+#                   bufsize=(1 << 30)):
+#    # split input gtf by library and mark test ids
+#    keyfunc = lambda myid: os.path.join(split_dir, "%s.gtf" % (myid))
+#    cache = FileHandleCache(keyfunc)
+#    ref_fileh = open(ref_gtf_file, 'w')
+#    stats_dict = collections.defaultdict(lambda: CategoryStats())
+#    logging.info("Splitting transcripts by library")
+#    for f in GTFFeature.parse(open(gtf_file)):
+#        is_ref = bool(int(f.attrs[GTFAttr.REF]))
+#        if is_ref:
+#            print >>ref_fileh, str(f)
+#            continue
+#        library_id = f.attrs[GTFAttr.LIBRARY_ID]
+#        # keep statistics
+#        if f.feature_type == 'transcript':
+#            category = int(f.attrs[GTFAttr.CATEGORY])
+#            score = float(f.attrs[GTFAttr.SCORE])         
+#            statsobj = stats_dict[library_id]
+#            statsobj.library_id = library_id
+#            statsobj.counts[category] += 1
+#            statsobj.signal[category] += score
+#        # write features from each library to separate files
+#        fileh = cache.get_file_handle(library_id)
+#        print >>fileh, str(f)
+#    # close open file handles
+#    ref_fileh.close()
+#    cache.close()
+#    logging.debug("File handle cache hits: %d" % (cache.hits))
+#    logging.debug("File handle cache misses: %d" % (cache.misses))
+#    # write library category statistics
+#    logging.info("Writing category statistics")
+#    fh = open(category_stats_file, "w")
+#    print >>fh, '\t'.join(CategoryStats.header_fields())
+#    for statsobj in stats_dict.itervalues():
+#        fields = statsobj.to_fields()
+#        print >>fh, '\t'.join(map(str, fields))
+#    fh.close()
+    
 def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_stats_file,
                    bufsize=(1 << 30)):
-    # split input gtf by library and mark test ids
-    keyfunc = lambda myid: os.path.join(split_dir, "%s.gtf" % (myid))
-    cache = FileHandleCache(keyfunc)
-    ref_fileh = open(ref_gtf_file, 'w')
-    stats_dict = collections.defaultdict(lambda: CategoryStats())
-    logging.info("Splitting transcripts by library")
-    for f in GTFFeature.parse(open(gtf_file)):
-        is_ref = bool(int(f.attrs[GTFAttr.REF]))
-        if is_ref:
-            print >>ref_fileh, str(f)
-            continue
-        library_id = f.attrs[GTFAttr.LIBRARY_ID]
-        # keep statistics
-        if f.feature_type == 'transcript':
-            category = int(f.attrs[GTFAttr.CATEGORY])
-            score = float(f.attrs[GTFAttr.SCORE])         
-            statsobj = stats_dict[library_id]
-            statsobj.library_id = library_id
-            statsobj.counts[category] += 1
-            statsobj.signal[category] += score
-        # write features from each library to separate files
-        fileh = cache.get_file_handle(library_id)
-        print >>fileh, str(f)
-    # close open file handles
-    ref_fileh.close()
-    cache.close()
-    logging.debug("File handle cache hits: %d" % (cache.hits))
-    logging.debug("File handle cache misses: %d" % (cache.misses))
-    # write library category statistics
-    logging.info("Writing category statistics")
-    fh = open(category_stats_file, "w")
-    print >>fh, '\t'.join(CategoryStats.header_fields())
-    for statsobj in stats_dict.itervalues():
-        fields = statsobj.to_fields()
-        print >>fh, '\t'.join(map(str, fields))
-    fh.close()
-    
-def split_gtf_file2(gtf_file, split_dir, ref_gtf_file, category_stats_file,
-                    bufsize=(1 << 30)):
     # split input gtf by library and mark test ids
     keyfunc = lambda myid: os.path.join(split_dir, "%s.gtf" % (myid))
     bufobj = BufferedFileSplitter(keyfunc, bufsize)
@@ -381,12 +381,11 @@ def main():
     if not os.path.exists(results.classify_dir):
         os.makedirs(results.classify_dir)
     # split gtf file
-    split_gtf_file2(results.annotated_transcripts_gtf_file, 
-                    results.classify_dir,
-                    results.ref_gtf_file,
-                    results.category_stats_file,
-                    args.bufsize)
-    return 0
+    split_gtf_file(results.annotated_transcripts_gtf_file, 
+                   results.classify_dir,
+                   results.ref_gtf_file,
+                   results.category_stats_file,
+                   args.bufsize)
     # run classification
     retcode = classify_transcripts(results, num_processors)
     if retcode != 0:
