@@ -52,12 +52,12 @@ kde2d <- function (x, y, h, n = 25, lims = c(range(x), range(y))) {
     n <- rep(n, length.out = 2L)
     gx <- seq.int(lims[1L], lims[2L], length.out = n[1L])
     gy <- seq.int(lims[3L], lims[4L], length.out = n[2L])
-    h <- if (missing(h)) 
+	h <- if (missing(h)) 
         c(bandwidth.nrd(x), bandwidth.nrd(y))
     else rep(h, length.out = 2L)
     if (any(h <= 0)) 
         stop("bandwidths must be strictly positive")
-    h <- h/4
+	h <- h/4
     ax <- outer(gx, x, "-")/h[1L]
     ay <- outer(gy, y, "-")/h[2L]
     z <- tcrossprod(matrix(dnorm(ax), , nx), matrix(dnorm(ay), 
@@ -112,7 +112,7 @@ kde2dplot <- function(d,                # a 2d density computed by kde2D
 	box()
 }
 
-classify.kde2d <- function(ma, cl, clweights=c(1,1), kde2d.h=c(4,4), kde2d.n=100) {
+classify.kde2d <- function(ma, cl, clweights=c(1,1), kde2d.n=100) {
 	# find data ranges
 	lims = c(range(ma[,1]), range(ma[,2]))
 	# bivariate kernel density estimators
@@ -120,16 +120,16 @@ classify.kde2d <- function(ma, cl, clweights=c(1,1), kde2d.h=c(4,4), kde2d.n=100
 	if ( has_cl0 ) {
 		x0 <- ma[cl==0,1]
 		y0 <- ma[cl==0,2]
-		d0 <- kde2d(x0,y0,n=kde2d.n,h=kde2d.h,lims=lims)
+		d0 <- kde2d(x0,y0,n=kde2d.n,lims=lims)
 	} else {
 		d0 <- NULL
 	}
 	x1 <- ma[cl==1,1]
 	y1 <- ma[cl==1,2]
-	d1 <- kde2d(x1,y1,n=kde2d.n,h=kde2d.h,lims=lims)
+	d1 <- kde2d(x1,y1,n=kde2d.n,lims=lims)
 	x2 <- ma[cl==2,1]
 	y2 <- ma[cl==2,2]
-	d2 <- kde2d(x2,y2,n=kde2d.n,h=kde2d.h,lims=lims)
+	d2 <- kde2d(x2,y2,n=kde2d.n,lims=lims)
 	# perform bilinear interpolation onto both surfaces
 	z1 <- interp.surface(d1,ma)
 	z2 <- interp.surface(d2,ma)
@@ -213,21 +213,21 @@ classifyAndWriteResults <- function(inp,
 	cl, 
 	clweights, 
 	prefix, 
-	kde2d.h, 
 	kde2d.n) 
 {
 	# classification
-	fit <- classify.kde2d(inp[,variables], cl, clweights=clweights, kde2d.h=kde2d.h, kde2d.n=kde2d.n)
+	fit <- classify.kde2d(inp[,variables], cl, clweights=clweights, kde2d.n=kde2d.n)
 	log10lr <- log10(fit$lrw)	
 	res <- data.frame(cbind(cl, log10lr))
 
 	# performance of classification
 	has_tests <- (sum(cl == 0) > 0)
 	perfFile <- paste(prefix, ".perf.txt", sep="")
-	cat("type", "auc", "cutoff", 
+	cat("train.auc", "test.auc", "train.cutoff", 
 		"train.tp", "train.fp", "train.fn", "train.tn", "train.sens", "train.spec", "train.balacc",
 		"test.tp", "test.fp", "test.fn", "test.tn", "test.sens", "test.spec", "test.balacc", "\n",
 		file=perfFile, sep="\t")
+
 	# training data
 	res.train <- res[(cl == 1) | (cl == 2),]
 	pred.obj <- prediction(res.train$log10lr, res.train$cl == 2)
@@ -244,29 +244,18 @@ classifyAndWriteResults <- function(inp,
 		perf.test.roc <- performance(pred.obj, "tpr", "fpr")
 		auc.test <- performance(pred.obj, measure = "auc")@y.values[[1]]
 		perf.test.table <- getPerformanceTable(res.test$log10lr, res.test$cl == 0)
-		cutoff.test <- perf.test.table[which.max(perf.test.table[,"balacc"]),"cutoff"]
-		cutoff.test.perf <- performanceAtCutoff(cutoff.test, res.test$log10lr, res.test$cl == 0)
 		cutoff.train.ontest <- performanceAtCutoff(cutoff.train, res.test$log10lr, res.test$cl == 0)
-		cutoff.test.ontrain <- performanceAtCutoff(cutoff.test, res.train$log10lr, res.train$cl == 2)
 	} else {
 		auc.test <- NA
-		cutoff.test.perf <- rep(NA, 7)
 		cutoff.train.ontest <- rep(NA, 7)
-		cutoff.test.ontrain <- rep(NA, 7)
 	}
 
 	# performance
-	cat("train", auc.train, cutoff.train, cutoff.train.perf, cutoff.train.ontest, "\n", file=perfFile, sep="\t", append=TRUE)
-	cat("test", auc.test, cutoff.test, cutoff.test.ontrain, cutoff.test.perf, "\n", file=perfFile, sep="\t", append=TRUE)
+	cat(auc.train, auc.test, cutoff.train, cutoff.train.perf, cutoff.train.ontest, "\n", file=perfFile, sep="\t", append=TRUE)
 	
 	# result table
 	pred.train <- (res[,"log10lr"] > cutoff.train)
-	if ( has_tests ) {
-		pred.test <- (res[,"log10lr"] > cutoff.test)
-	} else {
-		pred.test <- rep(NA, nrow(res))
-	}
-	res <- cbind(res, pred.train, pred.test)
+	res <- cbind(res, pred.train)
 
 	# plots
 	pdfFile <- paste(prefix, ".plots.pdf", sep="")
@@ -299,13 +288,12 @@ classifyAndWriteResults <- function(inp,
 	}
 
 	# density histogram
-	p <- ggplot(res, aes(x=log10lr, fill=factor(cl)))
-	p <- p + geom_density(alpha=0.2)
-	p <- p + geom_vline(xintercept = cutoff.train, colour="red", linetype="longdash")
-	if ( has_tests ) {
-		p <- p + geom_vline(xintercept = cutoff.test, colour="blue", linetype="longdash")
+	if (has_ggplot2) {
+		p <- ggplot(res, aes(x=log10lr, fill=factor(cl)))
+		p <- p + geom_density(alpha=0.2)
+		p <- p + geom_vline(xintercept = cutoff.train, colour="red", linetype="longdash")
+		plot(p)
 	}
-	plot(p)
 	dev.off()
 
 	return(res)
@@ -316,12 +304,10 @@ args <- commandArgs(trailingOnly=TRUE)
 prefix <- args[1]
 input_file <- paste(prefix, ".inp.txt", sep="")
 min_obs <- 50
-#max_frac_test_obs <- 0.05
 kde2d.n <- 50
-kde2d.h <- c(5,5)
-prior_mrna <- 0.80
-prior_intronic <- 0.1
-prior_intergenic <- 1 - (prior_mrna + prior_intronic)
+prior_mrna <- 0.95
+prior_intergenic <- 0.02
+prior_intronic <- 1 - (prior_mrna + prior_intergenic)
 variables <- c("mean_recurrence", "pctrank")
 
 # read input data
@@ -330,18 +316,6 @@ tbl <- read.table(input_file, header=TRUE, sep="\t")
 # setup test cases
 num_mrna <- sum((tbl$category == SAME_STRAND) | (tbl$test == 1))
 num_tests <- sum(tbl$test == 1)
-
-# limit the size of the test data to a fraction of the total data
-#frac_test <- sum(tbl$test == 1) / num_mrna
-#pct_test_to_use <- min(max_frac_test_obs, frac_test) / frac_test
-#num_tests <- round(pct_test_to_use * sum(tbl$test == 1))
-#whichtests <- sample(which(tbl$test == 1), num_tests)
-# rewrite table with test case information
-#whichtests.categories <- tbl[whichtests, "category"]
-#tbl[tbl$test == 1, "category"] <- 0
-#tbl$test <- 0
-#tbl[whichtests, "test"] <- 1
-#tbl[whichtests, "category"] <- whichtests.categories
 
 # divide known transcripts into training/test sets
 train <- (tbl$category == 0) & (tbl$test == 0)
@@ -362,9 +336,6 @@ total_score <- sum(tbl$score)
 frac_mrna <- total_score_mrna / total_score 
 frac_intronic <- total_score_intronic / total_score
 frac_intergenic <- total_score_intergenic / total_score
-#frac_mrna <- num_mrna / nrow(tbl)
-#frac_intronic <- sum(intronic) / nrow(tbl)
-#frac_intergenic <- sum(intergenic) / nrow(tbl)
 
 # compute weights based on priors
 known_vs_intronic_ratio <- (frac_mrna / prior_mrna) / (frac_intronic / prior_intronic)
@@ -388,7 +359,6 @@ cat("do_intergenic", do_intergenic, "\n", sep="\t", file=statsFile, append=TRUE)
 # classify intronic-like transcripts
 log10lr.intronic <- rep(NA, nrow(tbl))
 pred.train.intronic <- rep(NA, nrow(tbl))
-pred.test.intronic <- rep(NA, nrow(tbl))
 classes <- rep(NA, nrow(tbl))
 if ( do_intronic ) {
 	intronicrows <- (train | testintronic | intronic)
@@ -397,16 +367,14 @@ if ( do_intronic ) {
 	clweights <- c(1, known_vs_intronic_ratio)
 	intronicprefix <- paste(prefix, ".intronic", sep="")
 	res <- classifyAndWriteResults(inp, variables, cl, clweights, intronicprefix, 
-                                   kde2d.h=kde2d.h, kde2d.n=kde2d.n)
+                                   kde2d.n=kde2d.n)
 	log10lr.intronic[intronicrows] <- res[,"log10lr"]
 	pred.train.intronic[intronicrows] <- res[,"pred.train"]
-	pred.test.intronic[intronicrows] <- res[,"pred.test"]
 }
 
 # classify intergenic-like transcripts
 log10lr.intergenic <- rep(NA, nrow(tbl))
 pred.train.intergenic <- rep(NA, nrow(tbl))
-pred.test.intergenic <- rep(NA, nrow(tbl))
 if ( do_intergenic ) {
 	intergenicrows <- (train | testintergenic | intergenic)
 	inp <- tbl[intergenicrows,]
@@ -414,14 +382,12 @@ if ( do_intergenic ) {
 	clweights <- c(1, known_vs_intergenic_ratio)
 	intergenicprefix <- paste(prefix, ".intergenic", sep="")
 	res <- classifyAndWriteResults(inp, variables, cl, clweights, intergenicprefix, 
-                                   kde2d.h=kde2d.h, kde2d.n=kde2d.n)
+                                   kde2d.n=kde2d.n)
 	log10lr.intergenic[intergenicrows] <- res[,"log10lr"]
 	pred.train.intergenic[intergenicrows] <- res[,"pred.train"]
-	pred.test.intergenic[intergenicrows] <- res[,"pred.test"]
 }
 
 # write results
-tbl <- cbind(tbl, log10lr.intronic, pred.train.intronic, pred.test.intronic,
-		     log10lr.intergenic, pred.train.intergenic, pred.test.intergenic)
+tbl <- cbind(tbl, log10lr.intronic, pred.train.intronic, log10lr.intergenic, pred.train.intergenic)
 resultsFile <- paste(prefix, ".out.txt", sep="")
 write.table(tbl, file=resultsFile, sep="\t", quote=FALSE, row.names=FALSE, col.names=TRUE)
