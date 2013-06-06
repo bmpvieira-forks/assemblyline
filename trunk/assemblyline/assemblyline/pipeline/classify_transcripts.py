@@ -159,7 +159,7 @@ def classify_library_transcripts(args):
         logging.error("[FAILED]   library_id='%s'" % (library_id))
         return retcode, library_id
     # get library stats
-    info_field_dict = read_classify_info(info_file)
+    #info_field_dict = read_classify_info(info_file)
     #has_tests = int(info_field_dict["tests"][0]) > 0
     # get transcript predictions
     decision_dict = read_classify_decisions(output_res_file)
@@ -221,11 +221,10 @@ def merge_transcripts(results):
     # make a classification report
     logging.info("Writing classification report")
     fileh = open(results.classify_report_file, 'w')
-    header_fields = ["library_id", "library_name", "category", "type", 
-                     "auc", "cutoff",
-                     "train.tp", "train.fp", "train.fn", "train.tn",
-                     "train.sens", "train.spec", "train.balacc",
-                     "test.tp", "test.fp", "test.fn", "test.tn",
+    header_fields = ["library_id", "library_name", "category", 
+                     "train.auc", "test.auc", "train.cutoff", "train.tp",
+                     "train.fp", "train.fn", "train.tn", "train.sens", "train.spec", 
+                     "train.balacc", "test.tp", "test.fp", "test.fn", "test.tn", 
                      "test.sens", "test.spec", "test.balacc"]
     print >>fileh, '\t'.join(header_fields)
     for library_id in library_ids:
@@ -318,7 +317,11 @@ def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_stats_file,
         library_id = f.attrs[GTFAttr.LIBRARY_ID]
         # keep statistics
         if f.feature_type == 'transcript':
-            category = int(f.attrs[GTFAttr.CATEGORY])
+            is_test = bool(int(f.attrs[GTFAttr.TEST]))
+            if is_test:
+                category = Category.SAME_STRAND
+            else:
+                category = int(f.attrs[GTFAttr.CATEGORY])
             score = float(f.attrs[GTFAttr.SCORE])         
             statsobj = stats_dict[library_id]
             statsobj.library_id = library_id
@@ -374,6 +377,7 @@ def main():
     logging.info("Parameters:")
     logging.info("run directory:    %s" % (args.run_dir))
     logging.info("num processors:   %d" % (args.num_processors))
+    logging.info("buffer size:      %d" % (args.bufsize))
     logging.info("verbose logging:  %s" % (args.verbose))
     logging.info("----------------------------------")   
     # setup results
