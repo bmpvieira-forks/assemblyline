@@ -299,7 +299,7 @@ def merge_transcripts(results):
 #        fields = statsobj.to_fields()
 #        print >>fh, '\t'.join(map(str, fields))
 #    fh.close()
-    
+
 def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_stats_file,
                    bufsize=(1 << 30)):
     # split input gtf by library and mark test ids
