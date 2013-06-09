@@ -128,8 +128,8 @@ def resolve_strand(nodes, node_data):
             return NEG_STRAND
     return NO_STRAND
 
-def add_transcript(t, nodes, strand_transcript_maps, node_data):
-    for n in nodes:
+def add_transcript(t, boundaries, strand_transcript_maps, node_data):
+    for n in split_exons(t,boundaries):
         nd = node_data[n]
         nd['scores'][t.strand] += t.score
     t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
@@ -146,34 +146,32 @@ def partition_transcripts_by_strand(transcripts):
     stranded_ref_transcripts = [[], []]
     unresolved_transcripts = []
     for t in transcripts:
-        # split exons that cross boundaries and get the
-        # nodes that made up the transcript
-        nodes = list(Exon(start,end) for start,end in split_exons(t, boundaries))        
         is_ref = bool(int(t.attrs.get(GTFAttr.REF, "0")))
         if is_ref:
             # label nodes by ref strand
-            for n in nodes:
+            for n in split_exons(t,boundaries):
                 nd = node_data[n]
                 nd['ref_strands'][t.strand] = True
             stranded_ref_transcripts[t.strand].append(t)
         elif t.strand != NO_STRAND:
-            add_transcript(t, nodes, stranded_transcript_maps, node_data)
+            add_transcript(t, boundaries, stranded_transcript_maps, node_data)
         else:
-            unresolved_transcripts.append((t,nodes))
+            unresolved_transcripts.append(t)
     # resolve unstranded transcripts
     logging.debug("\t\t%d unstranded transcripts" % 
                   (len(unresolved_transcripts)))
     if len(unresolved_transcripts) > 0:
         resolved = []
         still_unresolved_transcripts = []
-        for t,nodes in unresolved_transcripts:
+        for t in unresolved_transcripts:
+            nodes = list(Exon(start,end) for start,end in split_exons(t, boundaries))        
             t.strand = resolve_strand(nodes, node_data)
             if t.strand != NO_STRAND:
-                resolved.append((t,nodes))
+                resolved.append(t)
             else:
-                still_unresolved_transcripts.append((t,nodes))
-        for t,nodes in resolved:
-            add_transcript(t, nodes, stranded_transcript_maps, node_data)
+                still_unresolved_transcripts.append(t)
+        for t in resolved:
+            add_transcript(t, boundaries, stranded_transcript_maps, node_data)
         unresolved_transcripts = still_unresolved_transcripts
     if len(unresolved_transcripts) > 0:
         logging.debug("\t\t%d unresolved transcripts" % 
@@ -183,7 +181,8 @@ def partition_transcripts_by_strand(transcripts):
         # long as some of the nodes have a strand assigned
         # cluster unresolved nodes
         unresolved_nodes = set()
-        for t,nodes in unresolved_transcripts:
+        for t in unresolved_transcripts:
+            nodes = list(Exon(start,end) for start,end in split_exons(t, boundaries))        
             unresolved_nodes.update(nodes)
         unresolved_nodes = sorted(unresolved_nodes, key=operator.attrgetter('start'))
         cluster_tree = ClusterTree(0,1)
@@ -196,10 +195,11 @@ def partition_transcripts_by_strand(transcripts):
             strand = resolve_strand(nodes, node_data)
             for n in nodes:
                 node_strand_map[n] = strand
-        # for each transcript assign strand to the cluster with
+        # for each transcript assign strand to the cluster with 
         # the best overlap
         unresolved_count = 0
-        for t,nodes in unresolved_transcripts:
+        for t in unresolved_transcripts:
+            nodes = list(Exon(start,end) for start,end in split_exons(t, boundaries))        
             strand_bp = [0,0]
             for n in nodes:
                 strand = node_strand_map[n]
@@ -213,7 +213,7 @@ def partition_transcripts_by_strand(transcripts):
                     t.strand = NEG_STRAND
             else:
                 unresolved_count += 1
-            add_transcript(t, nodes, stranded_transcript_maps, node_data)
+            add_transcript(t, boundaries, stranded_transcript_maps, node_data)
         logging.debug("\t\tCould not resolve %d transcripts" % 
                       (unresolved_count))
         del cluster_tree    
