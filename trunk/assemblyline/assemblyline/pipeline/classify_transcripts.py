@@ -32,7 +32,7 @@ import assemblyline
 import assemblyline.lib.config as config
 from assemblyline.lib.transcript import parse_gtf
 from assemblyline.lib.base import CategoryStats, Category, \
-    GTFAttr, check_executable, FileHandleCache, BufferedFileSplitter
+    GTFAttr, check_executable, BufferedFileSplitter
 from assemblyline.lib.gtf import GTFFeature, merge_sort_gtf_files
 
 # R script to call for classifying transcripts
@@ -141,7 +141,7 @@ def classify_library_transcripts(args):
     logfile = prefix + ".log"
     tablefile = prefix + '.inp.txt'
     # output files
-    info_file = prefix + ".info.txt"
+    #info_file = prefix + ".info.txt"
     output_res_file = prefix + ".out.txt"
     expr_gtf_file = prefix + ".expr.gtf"
     bkgd_gtf_file = prefix + ".bkgd.gtf"
@@ -260,45 +260,6 @@ def merge_transcripts(results):
                          results.background_gtf_file, 
                          tmp_dir=results.tmp_dir)
     return 0
-
-#def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_stats_file,
-#                   bufsize=(1 << 30)):
-#    # split input gtf by library and mark test ids
-#    keyfunc = lambda myid: os.path.join(split_dir, "%s.gtf" % (myid))
-#    cache = FileHandleCache(keyfunc)
-#    ref_fileh = open(ref_gtf_file, 'w')
-#    stats_dict = collections.defaultdict(lambda: CategoryStats())
-#    logging.info("Splitting transcripts by library")
-#    for f in GTFFeature.parse(open(gtf_file)):
-#        is_ref = bool(int(f.attrs[GTFAttr.REF]))
-#        if is_ref:
-#            print >>ref_fileh, str(f)
-#            continue
-#        library_id = f.attrs[GTFAttr.LIBRARY_ID]
-#        # keep statistics
-#        if f.feature_type == 'transcript':
-#            category = int(f.attrs[GTFAttr.CATEGORY])
-#            score = float(f.attrs[GTFAttr.SCORE])         
-#            statsobj = stats_dict[library_id]
-#            statsobj.library_id = library_id
-#            statsobj.counts[category] += 1
-#            statsobj.signal[category] += score
-#        # write features from each library to separate files
-#        fileh = cache.get_file_handle(library_id)
-#        print >>fileh, str(f)
-#    # close open file handles
-#    ref_fileh.close()
-#    cache.close()
-#    logging.debug("File handle cache hits: %d" % (cache.hits))
-#    logging.debug("File handle cache misses: %d" % (cache.misses))
-#    # write library category statistics
-#    logging.info("Writing category statistics")
-#    fh = open(category_stats_file, "w")
-#    print >>fh, '\t'.join(CategoryStats.header_fields())
-#    for statsobj in stats_dict.itervalues():
-#        fields = statsobj.to_fields()
-#        print >>fh, '\t'.join(map(str, fields))
-#    fh.close()
 
 def split_gtf_file(gtf_file, split_dir, ref_gtf_file, category_stats_file,
                    bufsize=(1 << 30)):
