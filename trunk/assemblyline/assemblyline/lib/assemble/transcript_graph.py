@@ -100,13 +100,13 @@ def split_exons(t, boundaries):
         for start,end in split_exon(exon, boundaries):
             yield start, end
 
-def resolve_strand(nodes, node_data):
+def resolve_strand(nodes_iter, node_data):
     # find strand with highest score or strand
     # best supported by reference transcripts
     total_scores = [0.0, 0.0]
     ref_bp = [0, 0]
-    for n in nodes:
-        length = (n.end - n.start)
+    for n in nodes_iter:
+        length = n[1] - n[0]
         nd = node_data[n]
         scores = nd['scores']
         total_scores[POS_STRAND] += (scores[POS_STRAND] * length)
@@ -128,10 +128,9 @@ def resolve_strand(nodes, node_data):
             return NEG_STRAND
     return NO_STRAND
 
-def add_transcript(t, boundaries, strand_transcript_maps, node_data):
-    for n in split_exons(t,boundaries):
-        nd = node_data[n]
-        nd['scores'][t.strand] += t.score
+def add_transcript(t, nodes_iter, strand_transcript_maps, node_data):
+    for n in nodes_iter:
+        node_data[n]['scores'][t.strand] += t.score
     t_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
     strand_transcript_maps[t.strand][t_id] = t
 
@@ -150,28 +149,32 @@ def partition_transcripts_by_strand(transcripts):
         if is_ref:
             # label nodes by ref strand
             for n in split_exons(t,boundaries):
-                nd = node_data[n]
-                nd['ref_strands'][t.strand] = True
+                node_data[n]['ref_strands'][t.strand] = True
             stranded_ref_transcripts[t.strand].append(t)
         elif t.strand != NO_STRAND:
-            add_transcript(t, boundaries, stranded_transcript_maps, node_data)
+            add_transcript(t, split_exons(t, boundaries), 
+                           stranded_transcript_maps, node_data)
         else:
             unresolved_transcripts.append(t)
     # resolve unstranded transcripts
     logging.debug("\t\t%d unstranded transcripts" % 
                   (len(unresolved_transcripts)))
+    # keep track of remaining unresolved nodes
+    unresolved_nodes = set()
     if len(unresolved_transcripts) > 0:
         resolved = []
         still_unresolved_transcripts = []
         for t in unresolved_transcripts:
-            nodes = list(Exon(start,end) for start,end in split_exons(t, boundaries))        
+            nodes = list(split_exons(t,boundaries))            
             t.strand = resolve_strand(nodes, node_data)
             if t.strand != NO_STRAND:
                 resolved.append(t)
             else:
+                unresolved_nodes.update(nodes)
                 still_unresolved_transcripts.append(t)
         for t in resolved:
-            add_transcript(t, boundaries, stranded_transcript_maps, node_data)
+            add_transcript(t, split_exons(t, boundaries), 
+                           stranded_transcript_maps, node_data)
         unresolved_transcripts = still_unresolved_transcripts
     if len(unresolved_transcripts) > 0:
         logging.debug("\t\t%d unresolved transcripts" % 
@@ -180,14 +183,10 @@ def partition_transcripts_by_strand(transcripts):
         # extrapolate and assign strand to clusters of nodes at once, as
         # long as some of the nodes have a strand assigned
         # cluster unresolved nodes
-        unresolved_nodes = set()
-        for t in unresolved_transcripts:
-            nodes = list(Exon(start,end) for start,end in split_exons(t, boundaries))        
-            unresolved_nodes.update(nodes)
-        unresolved_nodes = sorted(unresolved_nodes, key=operator.attrgetter('start'))
+        unresolved_nodes = sorted(unresolved_nodes)
         cluster_tree = ClusterTree(0,1)
         for i,n in enumerate(unresolved_nodes):
-            cluster_tree.insert(n.start, n.end, i)
+            cluster_tree.insert(n[0], n[1], i)
         # try to assign strand to clusters of nodes
         node_strand_map = {}
         for start, end, indexes in cluster_tree.getregions():
@@ -199,12 +198,12 @@ def partition_transcripts_by_strand(transcripts):
         # the best overlap
         unresolved_count = 0
         for t in unresolved_transcripts:
-            nodes = list(Exon(start,end) for start,end in split_exons(t, boundaries))        
             strand_bp = [0,0]
+            nodes = list(split_exons(t, boundaries))        
             for n in nodes:
                 strand = node_strand_map[n]
                 if strand != NO_STRAND:
-                    strand_bp[strand] += (n.end - n.start)
+                    strand_bp[strand] += (n[1] - n[0])
             total_strand_bp = sum(strand_bp)
             if total_strand_bp > 0:
                 if strand_bp[POS_STRAND] >= strand_bp[NEG_STRAND]:
@@ -213,7 +212,7 @@ def partition_transcripts_by_strand(transcripts):
                     t.strand = NEG_STRAND
             else:
                 unresolved_count += 1
-            add_transcript(t, boundaries, stranded_transcript_maps, node_data)
+            add_transcript(t, nodes, stranded_transcript_maps, node_data)
         logging.debug("\t\tCould not resolve %d transcripts" % 
                       (unresolved_count))
         del cluster_tree    
