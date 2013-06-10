@@ -513,7 +513,7 @@ def run_parallel(config):
     # create temp directory
     tmp_dir = os.path.join(config.output_dir, "tmp")
     if not os.path.exists(tmp_dir):
-        logging.info("Creating tmp directory '%s'" % (tmp_dir))
+        logging.debug("Creating tmp directory '%s'" % (tmp_dir))
         os.makedirs(tmp_dir)
     # create queue
     input_queue = JoinableQueue(maxsize=config.num_processors*3)
