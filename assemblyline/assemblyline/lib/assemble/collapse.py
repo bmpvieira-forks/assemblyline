@@ -23,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import operator
 import networkx as nx
 
-from base import Exon, NODE_SCORE, NODE_LENGTH, \
+from base import Exon, TRANSCRIPT_IDS, NODE_SCORE, NODE_LENGTH, \
     CHAIN_NODES, CHAIN_EDGES, CHAIN_DATA
 
 def can_collapse(G,u,v):
@@ -122,7 +122,7 @@ def add_chains(G, chains, node_chain_map):
             H.node[u_chain_node][CHAIN_EDGES].append((u,v,d))
     return H
 
-def recalc_strand_specific_graph_attributes(G):
+def recalc_strand_specific_graph_attributes(G, transcript_map):
     """
     computes score, length, and transcript ids after graph
     is divided into strand-specific subgraphs and collapsed
@@ -130,18 +130,22 @@ def recalc_strand_specific_graph_attributes(G):
     for n,d in G.nodes_iter(data=True):
         chain_nodes = d[CHAIN_NODES]
         chain_data = d[CHAIN_DATA]
+        transcript_ids = set()
         total_length = 0
-        max_score = 0.0
         for cn in chain_nodes:
             total_length += (cn.end - cn.start)
-            score = chain_data[cn][NODE_SCORE]
-            if score > max_score:
-                max_score = score
+            cattrs = chain_data[cn]
+            transcript_ids.update(cattrs[TRANSCRIPT_IDS])            
+        # new score is sum of scores of all transcripts
+        # in the collapsed chain of nodes         
+        total_score = sum(transcript_map[t_id].score         
+                          for t_id in transcript_ids)
         # set attributes
+        d[TRANSCRIPT_IDS] = transcript_ids
         d[NODE_LENGTH] = total_length       
-        d[NODE_SCORE] = max_score
+        d[NODE_SCORE] = total_score
 
-def collapse_strand_specific_graph(G, introns=True):
+def collapse_strand_specific_graph(G, transcript_map, introns=True):
     """
     find groups of nodes that have a single path through them
     and merges them into chains
@@ -153,7 +157,8 @@ def collapse_strand_specific_graph(G, introns=True):
     have 'chain_data' and 'chain_edges' attributes with node 
     attribute data and edge data of child nodes  
     """
+    # TODO: may not need transcript map here
     node_chain_map, chains = get_chains(G, introns)
     H = add_chains(G, chains, node_chain_map)
-    recalc_strand_specific_graph_attributes(H)
-    return H, node_chain_map
+    recalc_strand_specific_graph_attributes(H, transcript_map)
+    return H
