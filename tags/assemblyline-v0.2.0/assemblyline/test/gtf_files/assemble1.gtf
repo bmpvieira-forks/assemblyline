@@ -1,0 +1,23 @@
+chr1	test	transcript	1	900	1000	+	.	gene_id "ABCDE"; transcript_id "ABCDE"; score "1.0"
+chr1	test	exon	1	100	1000	+	.	gene_id "ABCDE"; transcript_id "ABCDE"; exon_number "1"; score "1.0"
+chr1	test	exon	201	300	1000	+	.	gene_id "ABCDE"; transcript_id "ABCDE"; exon_number "2"; score "1.0"
+chr1	test	exon	401	500	1000	+	.	gene_id "ABCDE"; transcript_id "ABCDE"; exon_number "3"; score "1.0"
+chr1	test	exon	601	700	1000	+	.	gene_id "ABCDE"; transcript_id "ABCDE"; exon_number "4"; score "1.0"
+chr1	test	exon	801	900	1000	+	.	gene_id "ABCDE"; transcript_id "ABCDE"; exon_number "5"; score "1.0"
+
+chr1	test	transcript	1	900	1000	+	.	gene_id "ACE"; transcript_id "ACE"; score "1.0"
+chr1	test	exon	1	100	1000	+	.	gene_id "ACE"; transcript_id "ACE"; exon_number "1"; score "1.0"
+chr1	test	exon	401	500	1000	+	.	gene_id "ACE"; transcript_id "ACE"; exon_number "2"; score "1.0"
+chr1	test	exon	801	900	1000	+	.	gene_id "ACE"; transcript_id "ACE"; exon_number "3"; score "1.0"
+
+chr1	test	transcript	1	900	1000	+	.	gene_id "ABCE"; transcript_id "ABCE"; score "1.0"
+chr1	test	exon	1	100	1000	+	.	gene_id "ABCE"; transcript_id "ABCE"; exon_number "1"; score "1.0"
+chr1	test	exon	201	300	1000	+	.	gene_id "ABCE"; transcript_id "ABCE"; exon_number "2"; score "1.0"
+chr1	test	exon	401	500	1000	+	.	gene_id "ABCE"; transcript_id "ABCE"; exon_number "3"; score "1.0"
+chr1	test	exon	801	900	1000	+	.	gene_id "ABCE"; transcript_id "ABCE"; exon_number "4"; score "1.0"
+
+chr1	test	transcript	1	900	1000	+	.	gene_id "ACDE"; transcript_id "ACDE"; score "1.0"
+chr1	test	exon	1	100	1000	+	.	gene_id "ACDE"; transcript_id "ACDE"; exon_number "1"; score "1.0"
+chr1	test	exon	401	500	1000	+	.	gene_id "ACDE"; transcript_id "ACDE"; exon_number "2"; score "1.0"
+chr1	test	exon	601	700	1000	+	.	gene_id "ACDE"; transcript_id "ACDE"; exon_number "3"; score "1.0"
+chr1	test	exon	801	900	1000	+	.	gene_id "ACDE"; transcript_id "ACDE"; exon_number "4"; score "1.0"
