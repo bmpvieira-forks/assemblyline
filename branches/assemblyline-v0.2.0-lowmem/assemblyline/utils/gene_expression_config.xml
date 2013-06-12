@@ -1,0 +1,19 @@
+<assemblyline>
+  <init_script>/mctp/wkgrps/bioinfo/sw/rhel6/init.sh</init_script>
+  <pbs use="yes">
+    <node_mem>128000</node_mem>
+    <node_processors>32</node_processors>
+    <script_line>#PBS -q batch</script_line>
+    <script_line>#PBS -m abe</script_line>
+    <script_line>#PBS -M mkiyer@med.umich.edu</script_line>
+    <script_line>#PBS -V</script_line>
+    <script_line>#PBS -l nodes=1:ppn=1,mem=4000mb,walltime=120:00:00</script_line>
+  </pbs>
+  <modules>
+    <module>epd</module>
+    <module>bioinfo</module>
+    <module>pysam/0.6</module>
+    <module>samtools/0.1.18</module>
+    <module>HTSeq</module>
+  </modules>
+</assemblyline>
