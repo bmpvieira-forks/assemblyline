@@ -423,7 +423,7 @@ def assemble_locus(transcripts,
                                      config.min_transcript_length,
                                      config.guided)
     # build transcript graphs
-    for G, strand, transcript_map in \
+    for G, strand, strand_transcripts in \
         create_transcript_graphs(transcripts):
         # output bedgraph
         if config.create_bedgraph:
@@ -431,7 +431,7 @@ def assemble_locus(transcripts,
                 print >>bedgraph_filehs[strand], '\t'.join(map(str,fields))
         # process transcript graphs
         for Gsub, strand, partial_paths in \
-            prune_transcript_graph(G, strand, transcript_map,
+            prune_transcript_graph(G, strand, strand_transcripts,
                                    config.min_trim_length, 
                                    config.trim_utr_fraction,
                                    config.trim_intron_fraction):

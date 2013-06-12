@@ -23,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import operator
 import networkx as nx
 
-from base import Exon, TRANSCRIPT_IDS, NODE_SCORE, NODE_LENGTH, \
+from base import Exon, NODE_SCORE, NODE_LENGTH, \
     CHAIN_NODES, CHAIN_EDGES, CHAIN_DATA
 
 def can_collapse(G,u,v):
@@ -81,7 +81,7 @@ def get_chains(G, introns=True):
         for n in merged_chain:
             node_chain_map[n] = merged_node
         chains[merged_node] = merged_chain
-    # sort chain nodes by genome position as store as list
+    # sort chain nodes by genome position and store as list
     for parent in chains:
         chains[parent] = sorted(chains[parent], key=operator.attrgetter('start'))
     return node_chain_map, chains
@@ -122,7 +122,7 @@ def add_chains(G, chains, node_chain_map):
             H.node[u_chain_node][CHAIN_EDGES].append((u,v,d))
     return H
 
-def recalc_strand_specific_graph_attributes(G, transcript_map):
+def recalc_strand_specific_graph_attributes(G):
     """
     computes score, length, and transcript ids after graph
     is divided into strand-specific subgraphs and collapsed
@@ -130,22 +130,18 @@ def recalc_strand_specific_graph_attributes(G, transcript_map):
     for n,d in G.nodes_iter(data=True):
         chain_nodes = d[CHAIN_NODES]
         chain_data = d[CHAIN_DATA]
-        transcript_ids = set()
         total_length = 0
+        max_score = 0.0
         for cn in chain_nodes:
             total_length += (cn.end - cn.start)
-            cattrs = chain_data[cn]
-            transcript_ids.update(cattrs[TRANSCRIPT_IDS])
+            score = chain_data[cn][NODE_SCORE]
+            if score > max_score:
+                max_score = score
         # set attributes
-        d[TRANSCRIPT_IDS] = transcript_ids
-        d[NODE_LENGTH] = total_length
-        # new score is sum of scores of all transcripts
-        # in the collapsed chain of nodes
-        total_score = sum(transcript_map[t_id].score 
-                          for t_id in transcript_ids)
-        d[NODE_SCORE] = total_score
+        d[NODE_LENGTH] = total_length       
+        d[NODE_SCORE] = max_score
 
-def collapse_strand_specific_graph(G, transcript_map, introns=True):
+def collapse_strand_specific_graph(G, introns=True):
     """
     find groups of nodes that have a single path through them
     and merges them into chains
@@ -159,5 +155,5 @@ def collapse_strand_specific_graph(G, transcript_map, introns=True):
     """
     node_chain_map, chains = get_chains(G, introns)
     H = add_chains(G, chains, node_chain_map)
-    recalc_strand_specific_graph_attributes(H, transcript_map)
-    return H
+    recalc_strand_specific_graph_attributes(H)
+    return H, node_chain_map
