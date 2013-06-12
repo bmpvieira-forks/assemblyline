@@ -25,7 +25,6 @@ import logging
 import collections
 import operator
 import bisect
-import numpy as np
 
 from assemblyline.lib.bx.cluster import ClusterTree
 from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
