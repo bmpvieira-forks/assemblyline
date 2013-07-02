@@ -464,6 +464,8 @@ def assembly_worker(input_queue,
         if len(lines) == 0:
             break
         transcripts = transcripts_from_gtf_lines(lines)
+        # conserve memory
+        del lines
         # assign scores to each transcript
         for t in transcripts:
             if config.scoring_mode == "unweighted":
@@ -530,6 +532,8 @@ def run_parallel(config):
     # parse gtf file                
     for lines in parse_loci(open(config.gtf_input_file)):
         input_queue.put(lines)
+        # conserve memory
+        del lines
     # stop workers
     for p in procs:
         input_queue.put([])
