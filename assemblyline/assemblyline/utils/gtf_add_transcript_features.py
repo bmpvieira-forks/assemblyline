@@ -24,10 +24,6 @@ def gtf_add_transcript_features(gtf_file, outfh):
     for t_id, features in transcript_dict.iteritems():
         # sort features (exons) by start position
         features.sort(key=operator.attrgetter('start'))
-        # annotate exons as reference features
-        for f in features:
-            f.attrs[GTFAttr.REF] = '1'
-            print >>outfh, str(f)
         # transcript feature
         f = GTFFeature()
         f.seqid = features[0].seqid
@@ -41,8 +37,12 @@ def gtf_add_transcript_features(gtf_file, outfh):
         f.attrs = features[0].attrs.copy()
         if "exon_number" in f.attrs:
             del f.attrs["exon_number"]
-        f.attrs[GTFAttr.REF] = '1'
+        #f.attrs[GTFAttr.REF] = '1'
         print >>outfh, str(f)
+        # annotate exons as reference features
+        for f in features:
+            #f.attrs[GTFAttr.REF] = '1'
+            print >>outfh, str(f)
 
 def main():
     # setup logging

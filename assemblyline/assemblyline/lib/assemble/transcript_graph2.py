@@ -31,7 +31,7 @@ from assemblyline.lib.transcript import Exon, POS_STRAND, NEG_STRAND, NO_STRAND
 from assemblyline.lib.base import GTFAttr, FLOAT_PRECISION
 from base import NODE_SCORE, NODE_LENGTH
 from trim import trim_graph
-from collapse2 import collapse_strand_specific_graph
+from collapse import collapse_strand_specific_graph
 
 def find_exon_boundaries(transcripts):
     '''
