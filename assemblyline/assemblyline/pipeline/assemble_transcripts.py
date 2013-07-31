@@ -39,7 +39,7 @@ from assemblyline.lib.transcript import transcripts_from_gtf_lines, \
 
 from assemblyline.lib.assemble.base import NODE_SCORE
 from assemblyline.lib.assemble.filter import filter_transcripts
-from assemblyline.lib.assemble.transcript_graph2 import create_transcript_graphs
+from assemblyline.lib.assemble.transcript_graph import create_transcript_graphs
 from assemblyline.lib.assemble.assembler import assemble_transcript_graph
 
 class LockValue(object):
