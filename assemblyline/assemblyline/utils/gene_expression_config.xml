@@ -15,5 +15,6 @@
     <module>pysam/0.6</module>
     <module>samtools/0.1.18</module>
     <module>HTSeq</module>
+    <module>cufflinks</module>
   </modules>
 </assemblyline>
