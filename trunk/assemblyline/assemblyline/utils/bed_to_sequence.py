@@ -124,7 +124,7 @@ def split_seq(seq, chars_per_line):
         pos = endpos
     return '\n'.join(newseq)
 
-def bed_to_seq(bed_file, reference_seq_file, sep):
+def bed_to_seq(bed_file, reference_seq_file, sep, output_fasta):
     ref_fa = pysam.Fastafile(reference_seq_file)
     for f in BEDFeature.parse(open(bed_file)):
         exon_seqs = []
@@ -152,8 +152,11 @@ def bed_to_seq(bed_file, reference_seq_file, sep):
         # reverse complement negative stranded sequences
         if f.strand == '-':
             seq = DNA_reverse_complement(seq)
-        # break seq onto multiple lines
-        yield '\t'.join([f.name, '%s:%d-%d[%s]' % (f.chrom, f.tx_start, f.tx_end, f.strand), seq])
+        if output_fasta:
+            yield ">%s %s:%d-%d[%s]" % (f.name, f.chrom, f.tx_start, f.tx_end, f.strand)
+            yield seq
+        else:
+            yield '\t'.join([f.name, '%s:%d-%d[%s]' % (f.chrom, f.tx_start, f.tx_end, f.strand), seq])
     ref_fa.close()
 
 def main():
@@ -161,6 +164,7 @@ def main():
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser(description="Extract transcript sequences from BED file")
     parser.add_argument("--sep", dest="sep", default='')
+    parser.add_argument("--fasta", dest="fasta", action="store_true", default=False)
     parser.add_argument("ref_fasta_file", help="reference genome FASTA file")    
     parser.add_argument("bed_file")
     args = parser.parse_args()
@@ -169,7 +173,7 @@ def main():
         parser.error("Reference fasta file '%s' not found" % (args.ref_fasta_file))
     if not os.path.isfile(args.bed_file):
         parser.error("BED file '%s' not found" % (args.bed_file))
-    for res in bed_to_seq(args.bed_file, args.ref_fasta_file, args.sep):
+    for res in bed_to_seq(args.bed_file, args.ref_fasta_file, args.sep, args.fasta):
         print res
 
 if __name__ == '__main__':
