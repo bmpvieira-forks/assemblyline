@@ -123,9 +123,9 @@ def read_reference_gtf(ref_gtf_file):
     # cluster loci
     logging.debug("Building interval index")
     locus_cluster_trees = collections.defaultdict(lambda: ClusterTree(0,1))
+    locus_trees = collections.defaultdict(lambda: IntervalTree())
     for i,g in enumerate(genes):
         locus_cluster_trees[g.chrom].insert(g.gene_start, g.gene_end, i)
-    locus_trees = collections.defaultdict(lambda: IntervalTree())
     for chrom, cluster_tree in locus_cluster_trees.iteritems(): 
         for locus_start,locus_end,indexes in cluster_tree.getregions():
             # cluster gene exons and add to interval tree
@@ -271,78 +271,6 @@ def categorize_gene_transcripts(transcripts, locus_trees):
         t.attrs["annotation_sources"] = annotation_sources
 
 
-def categorize_transcript(t, locus_trees):
-    # determine whether gene overlaps known loci
-    # intersect transcript with reference loci
-    t_strand = strand_int_to_str(t.strand)
-    locus_hits = locus_trees[t.chrom].find(t.start, t.end)
-    if len(locus_hits) == 0:
-        # this is a completely unannotated transcript
-        category = CATEGORY_INTERGENIC
-        nearest_genes, nearest_dist = get_nearest_genes(t.chrom, t.start, t.end, locus_trees)
-    else:
-        # this transcript overlaps at least one known locus, so
-        # categorize as sense/antisense, coding/noncoding, exon/intron
-        protein_genes = {}
-        ncrna_genes = {}
-        antisense_genes = {}
-        for locus_hit in locus_hits:
-            gene_tree = locus_hit.value
-            for exon in t.exons:
-                for gene_hit in gene_tree.find(exon.start, exon.end):
-                    g = gene_hit.value
-                    if cmp_strand(g.strand, t_strand):
-                        if g.is_coding:
-                            protein_genes[g.gene_id] = g
-                        else:
-                            ncrna_genes[g.gene_id] = g
-                    else:
-                        antisense_genes[g.gene_id] = g
-        protein_genes = protein_genes.values()
-        ncrna_genes = ncrna_genes.values()
-        antisense_genes = antisense_genes.values()
-        nearest_dist = 0
-        if len(protein_genes) > 0:
-            category = CATEGORY_PROTEIN
-            nearest_genes = protein_genes
-        elif len(ncrna_genes) > 0:
-            category = CATEGORY_NCRNA
-            nearest_genes = ncrna_genes
-        elif len(antisense_genes) > 0:
-            category = CATEGORY_ANTISENSE
-            nearest_genes = antisense_genes
-        else:
-            category = CATEGORY_INTRONIC
-            nearest_genes = []
-            for locus_hit in locus_hits:
-                gene_tree = locus_hit.value
-                gene_hits = gene_tree.find(locus_hit.start, locus_hit.end)
-                for gene_hit in gene_hits:
-                    nearest_genes.append(gene_hit.value)
-    # using 'nearest genes' list get gene names and annotation sources    
-    if len(nearest_genes) == 0:
-        gene_ids = "NA"
-        gene_names = "NA"
-        annotation_sources = "NA"
-        nearest_dist = -1
-    else:
-        gene_ids = set()
-        gene_names = set()
-        annotation_sources = set()
-        for g in nearest_genes:
-            gene_ids.add(g.gene_id)
-            gene_names.update(g.gene_names)
-            annotation_sources.update(g.annotation_sources)
-        gene_ids = ",".join(sorted(gene_ids))
-        gene_names = ",".join(sorted(gene_names))
-        annotation_sources = ",".join(sorted(annotation_sources))
-    # add attributes to original transcripts
-    t.attrs["category"] = category
-    t.attrs["nearest_gene_ids"] = gene_ids
-    t.attrs["nearest_gene_names"] = gene_names
-    t.attrs["nearest_dist"] = nearest_dist
-    t.attrs["annotation_sources"] = annotation_sources
-
 
 def main():
     logging.basicConfig(level=logging.DEBUG,
@@ -350,28 +278,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("ref_gtf_file")
     parser.add_argument("gtf_file")
-    args = parser.parse_args()
+    args = parser.parse_args()    
     logging.info("Reading reference GTF file")
     locus_trees = read_reference_gtf(args.ref_gtf_file)
     logging.info("Categorizing test GTF file")
     for locus_transcripts in parse_gtf(open(args.gtf_file)):
-        for t in locus_transcripts:        
-            categorize_transcript(t, locus_trees)
-            for f in t.to_gtf_features():
-                print str(f)
-
-#        # group transcripts by gene id
-#        gene_transcript_map = collections.defaultdict(lambda: [])
-#        for t in locus_transcripts:
-#            gene_transcript_map[t.attrs[GTFAttr.GENE_ID]].append(t)
-#        # categorize genes
-#        for gene_transcripts in gene_transcript_map.itervalues():
-#            categorize_gene_transcripts(gene_transcripts, locus_trees)
-#            # output transcript
-#            for t in gene_transcripts:
-#                for f in t.to_gtf_features():
-#                    print str(f)
-
+        # group transcripts by gene id
+        gene_transcript_map = collections.defaultdict(lambda: [])
+        for t in locus_transcripts:
+            gene_transcript_map[t.attrs[GTFAttr.GENE_ID]].append(t)
+        # categorize genes
+        for gene_transcripts in gene_transcript_map.itervalues():
+            categorize_gene_transcripts(gene_transcripts, locus_trees)
+            # output transcript
+            for t in gene_transcripts:
+                for f in t.to_gtf_features():
+                    print str(f)
 
 if __name__ == '__main__':
     main()
