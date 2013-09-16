@@ -29,7 +29,8 @@ def main():
     # get gene metadata
     logging.info("Reading metadata")
     metadata_fields, metadata_dict = \
-        get_gtf_metadata(args.gtf_file, omit_attrs=omit_list)
+        get_gtf_metadata(args.gtf_file, omit_attrs=omit_list,
+                         group_by=args.group_by)
     # write matrix file
     logging.info("Writing table")
     header_fields = list(metadata_fields)
