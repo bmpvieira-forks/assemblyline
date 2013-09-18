@@ -183,17 +183,19 @@ def main():
     logging.info("\tfound %d libraries" % (len(library_ids)))
     # create matrix
     logging.info("Creating expression matrix")
-    matrix_file = os.path.join(args.output_dir, 'isoform_fpkm.mmap')
-    mat = np.memmap(matrix_file, dtype='float32', mode='w+', 
-                    shape=(len(tracking_ids),len(library_ids)))
-    # fill matrix with data
+    mat = np.zeros((len(tracking_ids),len(library_ids)), dtype='float32')
     for j,library_id in enumerate(library_ids):
         logging.debug("\tlibrary %d/%d: '%s'" % (j+1,len(library_ids),library_id))
         isoform_fpkm_file = os.path.join(args.input_dir, library_id, 'isoforms.fpkm_tracking')
         fpkm = get_isoform_fpkm_data(isoform_fpkm_file)
         fpkm = np.array([fpkm.get(x,-2.0) for x in tracking_ids], dtype='float32')
         mat[:,j] = fpkm
-    return 0
+    # write to memmap
+    matrix_file = os.path.join(args.output_dir, 'isoform_fpkm.mmap')
+    fp = np.memmap(matrix_file, dtype='float32', mode='w+', 
+                   shape=(len(tracking_ids),len(library_ids)))
+    fp[:] = mat[:]
+    del fp
     # write to file
     fileh = open(os.path.join(args.output_dir, 'isoform_fpkm.txt'), 'w')
     header_fields = ['tracking_id']
