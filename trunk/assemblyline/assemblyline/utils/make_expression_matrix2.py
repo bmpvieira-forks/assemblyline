@@ -207,7 +207,8 @@ def main():
         fields = [tracking_id]
         fields.extend(map(fpkm2str, mat[i,:]))
         print >>fileh, '\t'.join(fields)
-    fileh.close()    
+    fileh.close()
+    logging.info("Done.")
     return 0
 
 
