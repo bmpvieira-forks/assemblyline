@@ -195,26 +195,29 @@ def main():
     logging.info("Reading library table file")
     library_ids, library_map_masses = get_library_metadata(args.library_table, args.input_dir, pheno_file)
     logging.info("\tfound %d libraries" % (len(library_ids)))
-    # create matrix memmap
-    matrix_file = os.path.join(output_dir, 'isoform_counts.transpose.mmap')
-    mat_t = np.memmap(matrix_file, dtype='float32', mode='w+', 
-                    shape=(len(library_ids),len(tracking_ids)))
-    for i,library_id in enumerate(library_ids):
-        logging.debug("\tlibrary %d/%d: '%s'" % (i+1,len(library_ids),library_id))
+    # create matrix
+    mat = np.zeros((len(tracking_ids),len(library_ids)), dtype='float32')
+    for j,library_id in enumerate(library_ids):
+        logging.debug("\tlibrary %d/%d: '%s'" % (j+1,len(library_ids),library_id))
         isoform_fpkm_file = os.path.join(args.input_dir, library_id, 'isoforms.fpkm_tracking')
         fpkm = get_isoform_fpkm_data(isoform_fpkm_file)
         fpkm = np.array([fpkm.get(x,np.nan) for x in tracking_ids], dtype='float32')
         # convert to raw counts
-        map_mass = library_map_masses[i]        
+        map_mass = library_map_masses[j]
         counts = fpkm_to_counts(fpkm, transcript_lengths, map_mass)        
-        mat_t[i,:] = counts
-    # transpose matrix
-    logging.info("Transposing matrix")
-    matrix_file = os.path.join(output_dir, 'isoform_counts.mmap')
-    mat = np.memmap(matrix_file, dtype='float32', mode='w+', 
-                    shape=(len(tracking_ids),len(library_ids)))
-    for i in xrange(len(tracking_ids)):
-        mat[i,:] = mat_t[:,i]
+        mat[:,j] = counts
+    # write matrix and transpose to file
+    logging.info('Writing memmap')
+    matrix_file = os.path.join(args.output_dir, 'isoform_counts.mmap')
+    fp = np.memmap(matrix_file, dtype='float32', mode='w+', 
+                   shape=(len(tracking_ids),len(library_ids)))
+    fp[:] = mat[:]
+    del fp
+    logging.info('Writing transpose memmap')
+    matrix_file = os.path.join(output_dir, 'isoform_counts.transpose.mmap')
+    fp = np.memmap(matrix_file, dtype='float32', mode='w+', 
+                   shape=(len(library_ids),len(tracking_ids)))
+    fp[:] = mat.T[:]
     # write to file
     logging.info("Writing to tab-delimited text file")
     fileh = open(os.path.join(output_dir, 'isoform_counts.txt'), 'w')
