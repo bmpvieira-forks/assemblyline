@@ -98,15 +98,27 @@ def main():
     for fields in lib_metadata:
         print >>fileh, '\t'.join(fields)
     fileh.close()
+    # write metadata file
+    output_metadata_file = args.output_prefix + '.metadata.tsv'
+    fileh = open(output_metadata_file, 'w')
+    print >>fileh, '\t'.join(list(g_header_fields))
+    for i in xrange(len(g_inds)):
+        fields = list(g_metadata[i])
+        print >>fileh, '\t'.join(fields)
+    fileh.close()
     # write expr file
     output_expr_file = args.output_prefix + ".expr.tsv"
     fileh = open(output_expr_file, 'w')
-    fields = list(g_header_fields)
+    fields = ['_id']
     fields.extend(lib_ids)
     print >>fileh, '\t'.join(fields)
     for i in xrange(len(g_inds)):
-        fields = list(g_metadata[i])
-        fields.extend(map(str, submat[i,:]))
+        fields = [g_ids[i]]
+        for v in submat[i,:]:
+            if v < 0:
+                fields.append('NA')
+            else:
+                fields.append(str(v)) 
         print >>fileh, '\t'.join(fields)
     fileh.close()
     return 0
