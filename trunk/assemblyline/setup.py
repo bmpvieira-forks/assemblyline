@@ -49,7 +49,8 @@ def main():
                     'assemblyline.lib.assemble',
                     'assemblyline.pipeline',
                     'assemblyline.test',
-                    'assemblyline.utils'],
+                    'assemblyline.utils',
+                    'assemblyline.utils.gene_expression'],
           package_data={'assemblyline.lib': ['classify_transcripts.R']},                             
           ext_modules=get_extension_modules(),
           cmdclass= {'build_ext': build_ext})
