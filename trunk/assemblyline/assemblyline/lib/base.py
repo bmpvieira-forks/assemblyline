@@ -62,7 +62,9 @@ class Category(object):
     INTERGENIC = 6
     NUM_CATEGORIES = 7
     CATEGORIES = range(0, NUM_CATEGORIES)
-
+    # only used when comparing against a "reference" assembly and
+    # a gene overlaps multiple genes in the SAME_STRAND category
+    READ_THROUGH = 8
     # groups of categories
     INTRONIC_LIKE = set([INTRONIC_SAME_STRAND, INTRONIC_AMBIGUOUS])
     INTERGENIC_LIKE = set([OPP_STRAND, INTRONIC_OPP_STRAND, INTERLEAVING, 
@@ -74,8 +76,8 @@ class Category(object):
                        INTRONIC_OPP_STRAND: 'intronic_opp_strand',
                        INTRONIC_AMBIGUOUS: 'intronic_ambiguous',
                        INTERLEAVING: 'interleaving',
-                       INTERGENIC: 'intergenic'}
-    
+                       INTERGENIC: 'intergenic',
+                       READ_THROUGH: 'read_through'}    
     @staticmethod
     def to_str(catint):
         return Category.INT_TO_STR_DICT[catint]
