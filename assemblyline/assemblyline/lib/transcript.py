@@ -148,15 +148,17 @@ class Transcript(object):
                        ','.join(map(str,block_starts)) + ','])
         return s
     
-    def to_gtf_features(self):
+    def to_gtf_features(self, source=None, score=1000.0):
+        if source is None:
+            source = 'assemblyline'
         # transcript feature
         f = GTFFeature()
         f.seqid = self.chrom
-        f.source = 'assemblyline'
+        f.source = source
         f.feature_type = 'transcript'
         f.start = self.start
         f.end = self.end
-        f.score = 1000.0
+        f.score = score
         f.strand = strand_int_to_str(self.strand)
         f.phase = '.'
         f.attrs = self.attrs
@@ -165,11 +167,11 @@ class Transcript(object):
         for i,e in enumerate(self.exons):
             f = GTFFeature()
             f.seqid = self.chrom
-            f.source = 'assemblyline'
+            f.source = source
             f.feature_type = 'exon'
             f.start = e.start
             f.end = e.end
-            f.score = 1000.0
+            f.score = score
             f.strand = strand_int_to_str(self.strand)
             f.phase = '.'
             f.attrs = self.attrs.copy()
