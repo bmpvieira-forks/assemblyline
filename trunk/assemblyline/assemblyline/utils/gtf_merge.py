@@ -128,13 +128,20 @@ class Feature(object):
     @staticmethod
     def from_gtf_features(features):
         self = Feature()
-        self.attrs['transcript_id'] = features[0].attrs['transcript_id']
-        self.attrs['gene_id'] = features[0].attrs['gene_id']
-        self.attrs['gene_name'] = features[0].attrs['gene_name']
-        self.attrs['transcript_type'] = features[0].attrs['transcript_type']
-        self.attrs['source'] = features[0].source
-        self.chrom = features[0].seqid
-        self.strand = features[0].strand
+        f = features[0]
+        self.attrs['transcript_id'] = f.attrs['transcript_id']
+        self.attrs['gene_id'] = f.attrs['gene_id']
+        if 'gene_name' in f.attrs:
+            self.attrs['gene_name'] = f.attrs['gene_name']
+        else:
+            self.attrs['gene_name'] = f.attrs['gene_id']
+        self.attrs['transcript_type'] = f.attrs['transcript_type']
+        if 'source' in f.attrs:
+            self.attrs['source'] = f.attrs['source']
+        else:
+            self.attrs['source'] = f.source
+        self.chrom = f.seqid
+        self.strand = f.strand
         self.start = min(f.start for f in features)
         self.end = max(f.end for f in features)
         self.exons = []
@@ -192,7 +199,7 @@ def cluster_gtf_features(gtf_files, source=None):
                 for i in indexes:
                     new_cluster.update(cluster_map[i])
                 # reassign transcript clusters to new cluster
-                for i in indexes:
+                for i in new_cluster:
                     cluster_map[i] = new_cluster
             del cluster_tree
             # now all transcripts are assigned to a gene cluster
