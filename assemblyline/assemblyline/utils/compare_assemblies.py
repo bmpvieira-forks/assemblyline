@@ -67,6 +67,37 @@ class MatchStats(object):
             fields.append(getattr(self, field))
         return '\t'.join(map(str,fields))
 
+    def add_gtf_attributes(self, feature):
+        attrs = ['ref_transcript_id', 'ref_gene_id', 'ref_orig_gene_id', 
+                 'ref_gene_name', 'ref_source', 'ref_transcript_type', 
+                 'ref_locus', 'ref_length', 'ref_num_introns',
+                 'shared_same_strand_bp', 'shared_opp_strand_bp',
+                 'shared_introns', 'shared_splicing',
+                 'distance', 'category']
+        for attr in attrs:
+            v = getattr(self, attr)
+            feature.attrs[attr] = v
+    
+    @staticmethod
+    def from_transcript(t, ref=None):
+        self = MatchStats()
+        self.transcript_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
+        self.gene_id = t.attrs[GTFAttr.GENE_ID]
+        self.locus = '%s:%d-%d[%s]' % (t.chrom, t.start, t.end, strand_int_to_str(t.strand))
+        self.length = t.length
+        self.num_introns = len(t.exons) - 1
+        if ref is not None:
+            self.ref_transcript_id = ref.attrs[GTFAttr.TRANSCRIPT_ID]
+            self.ref_gene_id = ref.attrs[GTFAttr.GENE_ID]
+            self.ref_orig_gene_id = ref.attrs['orig_gene_id']
+            self.ref_gene_name = ref.attrs['gene_name']
+            self.ref_source = ref.attrs['source']
+            self.ref_transcript_type = ref.attrs['transcript_type']
+            self.ref_locus = '%s:%d-%d[%s]' % (ref.chrom, ref.start, ref.end, strand_int_to_str(ref.strand))
+            self.ref_length = ref.length
+            self.ref_num_introns = len(ref.exons) - 1
+        return self
+
     @staticmethod
     def choose_best(lst):
         if len(lst) == 0:
@@ -219,21 +250,7 @@ def compare_locus(transcripts):
                     # interleaving means some nodes intronic and other intergenic
                     c = Category.INTERLEAVING
             # create a match object
-            ms = MatchStats()
-            ms.transcript_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
-            ms.gene_id = t.attrs[GTFAttr.GENE_ID]
-            ms.locus = '%s:%d-%d[%s]' % (t.chrom, t.start, t.end, strand_int_to_str(t.strand))
-            ms.length = t.length
-            ms.num_introns = len(t.exons) - 1
-            ms.ref_transcript_id = ref.attrs[GTFAttr.TRANSCRIPT_ID]
-            ms.ref_gene_id = ref.attrs[GTFAttr.GENE_ID]
-            ms.ref_orig_gene_id = ref.attrs['orig_gene_id']
-            ms.ref_gene_name = ref.attrs['gene_name']
-            ms.ref_source = ref.attrs['source']
-            ms.ref_transcript_type = ref.attrs['transcript_type']
-            ms.ref_locus = '%s:%d-%d[%s]' % (ref.chrom, ref.start, ref.end, strand_int_to_str(ref.strand))
-            ms.ref_length = ref.length
-            ms.ref_num_introns = len(ref.exons) - 1
+            ms = MatchStats.from_transcript(t, ref)
             ms.shared_same_strand_bp = same_strand_bp
             ms.shared_opp_strand_bp = opp_strand_bp
             ms.shared_introns = num_shared_introns
@@ -369,20 +386,11 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
     if not os.path.exists(output_dir):
         logging.info('Creating output dir: %s' % (output_dir))
         os.makedirs(output_dir)
-    overlapping_file = os.path.join(output_dir, 'cmp.overlapping.txt')
-    best_overlapping_file = os.path.join(output_dir, 'best.overlapping.txt')
-    intergenic_file = os.path.join(output_dir, 'cmp.intergenic.txt')
-    best_intergenic_file = os.path.join(output_dir, 'best.intergenic.txt')
-    compare_file = os.path.join(output_dir, 'cmp.txt')
-    best_compare_file = os.path.join(output_dir, 'best.cmp.txt')
-    intergenic_gtf_file = os.path.join(output_dir, 'intergenic.gtf')
+    # merge step
     merged_gtf_file = os.path.join(output_dir, "merged.gtf")
     merged_sorted_gtf_file = os.path.splitext(merged_gtf_file)[0] + ".srt.gtf"
     merge_done_file = os.path.join(output_dir, 'merged.done')
     sort_done_file = os.path.join(output_dir, 'sort.done')
-    compare_done_file = os.path.join(output_dir, 'compare.done')
-    intergenic_done_file = os.path.join(output_dir, 'intergenic.done')
-    cat_done_file = os.path.join(output_dir, 'done')
     if not os.path.exists(merge_done_file):
         # merge and sort ref/test gtf files
         logging.info("Merging reference and test GTF files")
@@ -405,11 +413,17 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
         shutil.rmtree(tmp_dir)
         open(sort_done_file, 'w').close()
     # compare assemblies
-    if not os.path.exists(compare_done_file):
+    overlapping_gtf_file = os.path.join(output_dir, 'overlapping.gtf')
+    intergenic_tmp_gtf_file = os.path.join(output_dir, 'intergenic.tmp.gtf')
+    overlapping_file = os.path.join(output_dir, 'overlapping.tsv')
+    overlapping_best_file = os.path.join(output_dir, 'overlapping.best.tsv')
+    overlapping_done_file = os.path.join(output_dir, 'overlapping.done')
+    if not os.path.exists(overlapping_done_file):
         logging.info("Comparing assemblies")
+        gtf_fileh = open(overlapping_gtf_file, 'w')
+        tmp_gtf_fileh = open(intergenic_tmp_gtf_file, 'w')
         overlapping_fileh = open(overlapping_file, 'w')
-        best_overlapping_fileh = open(best_overlapping_file, 'w')
-        intergenic_fileh = open(intergenic_gtf_file, 'w')
+        overlapping_best_fileh = open(overlapping_best_file, 'w')
         for locus_transcripts in parse_gtf(open(merged_sorted_gtf_file)):
             locus_chrom = locus_transcripts[0].chrom
             locus_start = locus_transcripts[0].start
@@ -418,90 +432,112 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
                           (locus_chrom, locus_start, locus_end, 
                            len(locus_transcripts)))
             for t, best_match, match_stats in compare_locus(locus_transcripts):
+                features = t.to_gtf_features(source='assembly')
                 if len(match_stats) == 0:
-                    for f in t.to_gtf_features(source='compare'):
-                        print >>intergenic_fileh, str(f)
+                    # write intergenic transcripts to analyze separately
+                    for f in features:
+                        print >>tmp_gtf_fileh, str(f)
                 else:
-                    print >>best_overlapping_fileh, str(best_match)
+                    assert best_match is not None
+                    # add gtf attributes and write
+                    for f in features:
+                        best_match.add_gtf_attributes(f)
+                        print >>gtf_fileh, str(f)
+                    # tab-delimited text output
+                    print >>overlapping_best_fileh, str(best_match)
                     for ms in match_stats:
                         print >>overlapping_fileh, str(ms)
-        intergenic_fileh.close()
-        best_overlapping_fileh.close()
+        gtf_fileh.close()
+        tmp_gtf_fileh.close()
         overlapping_fileh.close()
-        open(compare_done_file, 'w').close()
+        overlapping_best_fileh.close()
+        open(overlapping_done_file, 'w').close()
     # resolve intergenic transcripts
+    intergenic_gtf_file = os.path.join(output_dir, 'intergenic.gtf')
+    intergenic_file = os.path.join(output_dir, 'intergenic.tsv')
+    intergenic_best_file = os.path.join(output_dir, 'intergenic.best.tsv')
+    intergenic_done_file = os.path.join(output_dir, 'intergenic.done')
     if not os.path.exists(intergenic_done_file):
         logging.info("Building interval index")
         locus_trees = build_locus_trees(merged_sorted_gtf_file)
         logging.info('Finding nearest matches to intergenic transcripts')
+        gtf_fileh = open(intergenic_gtf_file, 'w')
         intergenic_fileh = open(intergenic_file, 'w')
-        best_intergenic_fileh = open(best_intergenic_file, 'w')
-        for locus_transcripts in parse_gtf(open(intergenic_gtf_file)):
+        intergenic_best_fileh = open(intergenic_best_file, 'w')
+        for locus_transcripts in parse_gtf(open(intergenic_tmp_gtf_file)):
             for t in locus_transcripts:
                 # find nearest transcripts
                 nearest_transcripts = find_nearest_transcripts(t.chrom, t.start, t.end, locus_trees)
+                match_stats = []
+                best_match = None
                 if len(nearest_transcripts) == 0:
-                    ms = MatchStats()
-                    ms.transcript_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
-                    ms.gene_id = t.attrs[GTFAttr.GENE_ID]
-                    ms.length = t.length
-                    ms.num_introns = len(t.exons) - 1
-                    ms.category = Category.to_str(Category.INTERGENIC)
-                    print >>intergenic_fileh, str(ms)
-                    print >>best_intergenic_fileh, str(ms)
+                    best_match = MatchStats.from_transcript(t)
+                    best_match.category = Category.to_str(Category.INTERGENIC)
+                    match_stats.append(best_match)
                 else:
-                    match_stats = []
-                    for locus_feature,dist in nearest_transcripts: 
+                    for feature,dist in nearest_transcripts: 
                         # create a match object
-                        ms = MatchStats()
-                        ms.transcript_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
-                        ms.gene_id = t.attrs[GTFAttr.GENE_ID]
-                        ms.locus = '%s:%d-%d[%s]' % (t.chrom, t.start, t.end, strand_int_to_str(t.strand))
-                        ms.length = t.length
-                        ms.num_introns = len(t.exons) - 1
-                        ms.ref_transcript_id = locus_feature.transcript_id
-                        ms.ref_gene_id = locus_feature.gene_id
-                        ms.ref_orig_gene_id = locus_feature.orig_gene_id
-                        ms.ref_gene_name = locus_feature.gene_name
-                        ms.ref_source = locus_feature.source
-                        ms.ref_transcript_type = locus_feature.transcript_type
-                        ms.ref_length = locus_feature.length
-                        ms.ref_locus = '%s:%d-%d[%s]' % (locus_feature.chrom, locus_feature.start, locus_feature.end, strand_int_to_str(locus_feature.strand))
-                        ms.ref_num_introns = locus_feature.num_introns
+                        ms = MatchStats.from_transcript(t)
+                        ms.ref_transcript_id = feature.transcript_id
+                        ms.ref_gene_id = feature.gene_id
+                        ms.ref_orig_gene_id = feature.orig_gene_id
+                        ms.ref_gene_name = feature.gene_name
+                        ms.ref_source = feature.source
+                        ms.ref_transcript_type = feature.transcript_type
+                        ms.ref_length = feature.length
+                        ms.ref_locus = '%s:%d-%d[%s]' % (feature.chrom, feature.start, feature.end, strand_int_to_str(feature.strand))
+                        ms.ref_num_introns = feature.num_introns
                         ms.shared_same_strand_bp = 0
                         ms.shared_opp_strand_bp = 0
                         ms.shared_introns = 0
                         ms.shared_splicing = False
                         ms.category = Category.to_str(Category.INTERGENIC)
                         ms.distance = dist
-                        print >>intergenic_fileh, str(ms)
                         match_stats.append(ms)
                     # choose the best match
                     best_match = MatchStats.choose_best(match_stats)
-                    print >>best_intergenic_fileh, str(best_match)
+                # add gtf attributes and write
+                for f in t.to_gtf_features(source='assembly'):
+                    best_match.add_gtf_attributes(f)
+                    print >>gtf_fileh, str(f)
+                # write tab-delimited data
+                print >>intergenic_best_fileh, str(best_match)
+                for ms in match_stats:
+                    print >>intergenic_fileh, str(ms)                    
+        gtf_fileh.close()
         intergenic_fileh.close()
-        best_intergenic_fileh.close()
+        intergenic_best_fileh.close()
         open(intergenic_done_file, 'w').close()
     # merge overlapping and intergenic results
     logging.info('Merging results')
-    if not os.path.exists(cat_done_file):
+    metadata_file = os.path.join(output_dir, 'metadata.txt')
+    metadata_best_file = os.path.join(output_dir, 'metadata.best.txt')
+    assembly_gtf_file = os.path.join(output_dir, 'assembly.cmp.gtf')
+    combine_done_file = os.path.join(output_dir, 'done')
+    if not os.path.exists(combine_done_file):
         filenames = [overlapping_file, intergenic_file]
-        with open(compare_file, 'w') as outfile:
+        with open(metadata_file, 'w') as outfile:
             print >>outfile, '\t'.join(MatchStats.header_fields())
             for fname in filenames:
                 with open(fname) as infile:
                     for line in infile:
                         outfile.write(line)
-        filenames = [best_overlapping_file, best_intergenic_file]
-        with open(best_compare_file, 'w') as outfile:
+        filenames = [overlapping_best_file, intergenic_best_file]
+        with open(metadata_best_file, 'w') as outfile:
             print >>outfile, '\t'.join(MatchStats.header_fields())
             for fname in filenames:
                 with open(fname) as infile:
                     for line in infile:
                         outfile.write(line)
-        open(cat_done_file, 'w').close()
+        filenames = [intergenic_gtf_file, overlapping_gtf_file]
+        with open(assembly_gtf_file, 'w') as outfile:
+            for fname in filenames:
+                with open(fname) as infile:
+                    for line in infile:
+                        outfile.write(line)
+        open(combine_done_file, 'w').close()
     # cleanup
-    logging.info("Done")    
+    logging.info("Done")
 
 def main():
     # parse command line

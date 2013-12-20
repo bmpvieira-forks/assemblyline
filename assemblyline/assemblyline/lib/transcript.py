@@ -148,7 +148,7 @@ class Transcript(object):
                        ','.join(map(str,block_starts)) + ','])
         return s
     
-    def to_gtf_features(self, source=None, score=1000.0):
+    def to_gtf_features(self, source=None, score=1000):
         if source is None:
             source = 'assemblyline'
         # transcript feature
