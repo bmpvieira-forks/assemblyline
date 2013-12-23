@@ -438,10 +438,6 @@ def main():
                         "recurrence [default=%(default)s]")
     parser.add_argument("run_dir")
     args = parser.parse_args()
-    # check command line parameters
-    if not os.path.exists(args.run_dir):
-        parser.error("Run directory %s not found" % (args.run_dir))
-    num_processors = max(1, args.num_processors)
     # set logging level
     if args.verbose:
         level = logging.DEBUG
@@ -449,6 +445,10 @@ def main():
         level = logging.INFO
     logging.basicConfig(level=level,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    # check command line parameters
+    if not os.path.exists(args.run_dir):
+        parser.error("Run directory %s not found" % (args.run_dir))
+    num_processors = max(1, args.num_processors)
     logging.info("AssemblyLine %s" % (assemblyline.__version__))
     logging.info("----------------------------------")   
     # show parameters
