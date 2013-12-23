@@ -51,7 +51,7 @@ class MatchStats(object):
     def header_fields():
         return ['transcript_id', 'gene_id', 'locus', 'length', 'num_introns',
                 'ref_transcript_id', 'ref_gene_id', 'ref_orig_gene_id', 'ref_gene_name', 
-                'ref_source', 'ref_transcript_type', 'ref_locus', 
+                'ref_source', 'ref_gene_type', 'ref_locus', 
                 'ref_length', 'ref_num_introns',
                 'shared_same_strand_bp', 'shared_opp_strand_bp',
                 'shared_introns', 'shared_splicing',
@@ -69,7 +69,7 @@ class MatchStats(object):
 
     def add_gtf_attributes(self, feature):
         attrs = ['ref_transcript_id', 'ref_gene_id', 'ref_orig_gene_id', 
-                 'ref_gene_name', 'ref_source', 'ref_transcript_type', 
+                 'ref_gene_name', 'ref_source', 'ref_gene_type', 
                  'ref_locus', 'ref_length', 'ref_num_introns',
                  'shared_same_strand_bp', 'shared_opp_strand_bp',
                  'shared_introns', 'shared_splicing',
@@ -89,10 +89,10 @@ class MatchStats(object):
         if ref is not None:
             self.ref_transcript_id = ref.attrs[GTFAttr.TRANSCRIPT_ID]
             self.ref_gene_id = ref.attrs[GTFAttr.GENE_ID]
-            self.ref_orig_gene_id = ref.attrs['orig_gene_id']
+            self.ref_orig_gene_id = ref.attrs.get('orig_gene_id', self.ref_gene_id)
             self.ref_gene_name = ref.attrs['gene_name']
             self.ref_source = ref.attrs['source']
-            self.ref_transcript_type = ref.attrs['transcript_type']
+            self.ref_gene_type = ref.attrs['gene_type']
             self.ref_locus = '%s:%d-%d[%s]' % (ref.chrom, ref.start, ref.end, strand_int_to_str(ref.strand))
             self.ref_length = ref.length
             self.ref_num_introns = len(ref.exons) - 1
@@ -116,7 +116,11 @@ class MatchStats(object):
                          same_strand_frac, opp_strand_frac, 
                          int(m.category == Category.INTRONIC_SAME_STRAND),
                          int(m.category == Category.INTRONIC_OPP_STRAND),                                 
-                         int(m.category == Category.INTERLEAVING),                                 
+                         int(m.category == Category.INTERLEAVING_SAME_STRAND),
+                         int(m.category == Category.INTERLEAVING_OPP_STRAND),
+                         int(m.category == Category.ENCOMPASSING_SAME_STRAND),
+                         int(m.category == Category.ENCOMPASSING_OPP_STRAND),                                                         
+                         int(m.category == Category.INTERGENIC),                                                         
                          -abs(m.distance), m))
             # check for read through transcripts enumerating the 
             # same strand gene ids
@@ -248,7 +252,10 @@ def compare_locus(transcripts):
                         c = Category.INTRONIC_OPP_STRAND
                 else:
                     # interleaving means some nodes intronic and other intergenic
-                    c = Category.INTERLEAVING
+                    if num_intronic_same_strand > 0:
+                        c = Category.INTERLEAVING_SAME_STRAND
+                    else:
+                        c = Category.INTERLEAVING_OPP_STRAND
             # create a match object
             ms = MatchStats.from_transcript(t, ref)
             ms.shared_same_strand_bp = same_strand_bp
@@ -273,7 +280,7 @@ class LocusFeature(object):
         self.orig_gene_id = None
         self.gene_name = None
         self.source = None
-        self.transcript_type = None
+        self.gene_type = None
         self.length = None
         self.num_introns = None
 
@@ -289,10 +296,10 @@ def build_locus_trees(gtf_file):
             f = LocusFeature()
             f.transcript_id = t.attrs[GTFAttr.TRANSCRIPT_ID]
             f.gene_id = t.attrs[GTFAttr.GENE_ID]
-            f.orig_gene_id = t.attrs['orig_gene_id']
+            f.orig_gene_id = t.attrs.get('orig_gene_id', f.gene_id)
             f.gene_name = t.attrs['gene_name']
             f.source = t.attrs['source']
-            f.transcript_type = t.attrs['transcript_type']
+            f.gene_type = t.attrs['gene_type']
             f.chrom = t.chrom
             f.start = t.start
             f.end = t.end
@@ -311,12 +318,21 @@ def build_locus_trees(gtf_file):
                 locus_trees[chrom].insert_interval(Interval(locus_start, locus_end, value=locus_features))
     return locus_trees
 
-def find_nearest_transcripts(chrom, start, end, locus_trees):
+def find_nearest_transcripts(chrom, start, end, strand, locus_trees):
+    # first check for overlap
+    nearest_features = []
+    hits = locus_trees[chrom].find(start, end)
+    for hit in hits:
+        for f in hit.value:
+            if cmp_strand(f.strand, strand):
+                c = Category.ENCOMPASSING_SAME_STRAND
+            else:
+                c = Category.ENCOMPASSING_OPP_STRAND
+            nearest_features.append((f, c, 0))
     # look left and right
     left_hits = locus_trees[chrom].before(start, num_intervals=1, max_dist=MAX_LOCUS_DIST)        
     right_hits = locus_trees[chrom].after(end, num_intervals=1, max_dist=MAX_LOCUS_DIST)
     # look for nearest hit
-    nearest_features = []
     for hits in (left_hits, right_hits):
         nearest_locus_hit = None
         nearest_dist = MAX_LOCUS_DIST
@@ -328,7 +344,7 @@ def find_nearest_transcripts(chrom, start, end, locus_trees):
         if nearest_locus_hit is not None:
             for f in nearest_locus_hit.value:
                 dist = min(abs(start - f.end), abs(f.start - end))
-                nearest_features.append((f,dist))
+                nearest_features.append((f, Category.INTERGENIC, dist))
     return nearest_features    
 
 def _parse_gtf_by_chrom(gtf_file):
@@ -467,7 +483,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
         for locus_transcripts in parse_gtf(open(intergenic_tmp_gtf_file)):
             for t in locus_transcripts:
                 # find nearest transcripts
-                nearest_transcripts = find_nearest_transcripts(t.chrom, t.start, t.end, locus_trees)
+                nearest_transcripts = find_nearest_transcripts(t.chrom, t.start, t.end, t.strand, locus_trees)
                 match_stats = []
                 best_match = None
                 if len(nearest_transcripts) == 0:
@@ -475,7 +491,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
                     best_match.category = Category.to_str(Category.INTERGENIC)
                     match_stats.append(best_match)
                 else:
-                    for feature,dist in nearest_transcripts: 
+                    for feature,category,dist in nearest_transcripts: 
                         # create a match object
                         ms = MatchStats.from_transcript(t)
                         ms.ref_transcript_id = feature.transcript_id
@@ -483,7 +499,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
                         ms.ref_orig_gene_id = feature.orig_gene_id
                         ms.ref_gene_name = feature.gene_name
                         ms.ref_source = feature.source
-                        ms.ref_transcript_type = feature.transcript_type
+                        ms.ref_gene_type = feature.gene_type
                         ms.ref_length = feature.length
                         ms.ref_locus = '%s:%d-%d[%s]' % (feature.chrom, feature.start, feature.end, strand_int_to_str(feature.strand))
                         ms.ref_num_introns = feature.num_introns
@@ -491,7 +507,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
                         ms.shared_opp_strand_bp = 0
                         ms.shared_introns = 0
                         ms.shared_splicing = False
-                        ms.category = Category.to_str(Category.INTERGENIC)
+                        ms.category = Category.to_str(category)
                         ms.distance = dist
                         match_stats.append(ms)
                     # choose the best match

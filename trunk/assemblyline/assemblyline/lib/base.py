@@ -64,7 +64,11 @@ class Category(object):
     CATEGORIES = range(0, NUM_CATEGORIES)
     # only used when comparing against a "reference" assembly and
     # a gene overlaps multiple genes in the SAME_STRAND category
-    READ_THROUGH = 8
+    INTERLEAVING_SAME_STRAND = 8
+    INTERLEAVING_OPP_STRAND = 9
+    ENCOMPASSING_SAME_STRAND = 10
+    ENCOMPASSING_OPP_STRAND = 11
+    READ_THROUGH = 12
     # groups of categories
     INTRONIC_LIKE = set([INTRONIC_SAME_STRAND, INTRONIC_AMBIGUOUS])
     INTERGENIC_LIKE = set([OPP_STRAND, INTRONIC_OPP_STRAND, INTERLEAVING, 
@@ -77,10 +81,21 @@ class Category(object):
                        INTRONIC_AMBIGUOUS: 'intronic_ambiguous',
                        INTERLEAVING: 'interleaving',
                        INTERGENIC: 'intergenic',
-                       READ_THROUGH: 'read_through'}    
+                       INTERLEAVING_SAME_STRAND: 'interleaving_same_strand',
+                       INTERLEAVING_OPP_STRAND: 'interleaving_opp_strand',
+                       ENCOMPASSING_SAME_STRAND: 'encompassing_same_strand',
+                       ENCOMPASSING_OPP_STRAND: 'encompassing_opp_strand',
+                       READ_THROUGH: 'read_through'}
+    
+    STR_TO_INT_DICT = dict((v,k) for k,v in INT_TO_STR_DICT.items())
+                       
     @staticmethod
     def to_str(catint):
         return Category.INT_TO_STR_DICT[catint]
+    @staticmethod
+    def to_int(catstr):
+        return Category.STR_TO_INT_DICT[catstr]
+        
 
 class CategoryStats(object):
     def __init__(self):

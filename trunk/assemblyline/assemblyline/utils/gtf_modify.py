@@ -16,11 +16,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--source', dest='source', default=None)
     parser.add_argument('--remove', dest='remove', action='append', default=[])
+    parser.add_argument('-f', dest='force', action='store_true')
     parser.add_argument('--add', dest='add', action='append', default=[])
     parser.add_argument('gtf_file')
     args = parser.parse_args()
     gtf_file = args.gtf_file
     source = args.source
+    force = args.force
     if not os.path.exists(gtf_file):
         parser.error("GTF file '%s' not found" % (gtf_file))
     add_attrs = []
@@ -35,7 +37,7 @@ def main():
         if source is not None:
             f.source = source
         for k,v in add_attrs:
-            if k in f.attrs:
+            if (k in f.attrs) and not force:
                 parser.error('attribute %s already in feature' % (k))
             f.attrs[k] = v
         for k in rm_attrs:
