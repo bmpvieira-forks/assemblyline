@@ -113,8 +113,8 @@ class BEDFeature(object):
 
 def find_bigwig_files(root_path, pattern):            
     # find bigwig files
-    glob_pattern = pattern.replace("${CHROM}", "*")
-    re_pattern = pattern.replace("${CHROM}", r'(.+)')
+    glob_pattern = pattern.replace("{{CHROM}}", "*")
+    re_pattern = pattern.replace("{{CHROM}}", r'(.+)')
     chrom_bigwig_dict = {}
     for filename in glob.glob(os.path.join(root_path, glob_pattern)):
         m = re.match(re_pattern, filename)
@@ -167,7 +167,7 @@ def extract_bigwig_data(feature, bigwig_file):
     return arr
 
 def conservation_parallel(bed_file, window_sizes, chrom_bigwig_dict, 
-                          bigwig_to_bedgraph_bin, num_processes):
+                          num_processes):
     def _producer(q):
         for line in open(bed_file):
             q.put(line.strip())
@@ -181,7 +181,7 @@ def conservation_parallel(bed_file, window_sizes, chrom_bigwig_dict,
             f = BEDFeature.from_string(line)
             # retrieve conservation data
             bigwig_file = chrom_bigwig_dict[f.chrom]
-            arr = extract_bigwig_data(f, bigwig_file, bigwig_to_bedgraph_bin)
+            arr = extract_bigwig_data(f, bigwig_file)
             # measure conservation at various sliding windows
             window_scores = []
             for window_size in window_sizes:
@@ -251,7 +251,7 @@ def main():
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", dest="num_processes", type=int, default=1)
-    parser.add_argument("--pattern", dest="pattern", default=r'${CHROM}.phastCons46way.bw')
+    parser.add_argument("--pattern", dest="pattern", default=r'{{CHROM}}.phastCons46way.bw')
     parser.add_argument('--window-sizes', dest='window_sizes', default='30,60,90,150,300,600,900,1500,3000')
     parser.add_argument('--bed', dest='bed_file', default=None)
     parser.add_argument("bigwig_file_dir")

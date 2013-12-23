@@ -82,14 +82,14 @@ class Feature(object):
         f.strand = fields[2]
         f.start = int(fields[3])
         f.end = int(fields[4])
-        # coding status --> transcript_type attribute
+        # coding status --> gene_type attribute
         cds_start = int(fields[5])
         cds_end = int(fields[6])
         coding = (cds_start != cds_end)
         if coding:
-            f.attrs['transcript_type'] = 'protein_coding'
+            f.attrs['gene_type'] = 'protein_coding'
         else:
-            f.attrs['transcript_type'] = 'non_coding'
+            f.attrs['gene_type'] = 'non_coding'
         # exons
         exon_starts = map(int, fields[8].split(',')[:-1])
         exon_ends = map(int, fields[9].split(',')[:-1])
@@ -135,7 +135,7 @@ class Feature(object):
             self.attrs['gene_name'] = f.attrs['gene_name']
         else:
             self.attrs['gene_name'] = f.attrs['gene_id']
-        self.attrs['transcript_type'] = f.attrs['transcript_type']
+        self.attrs['gene_type'] = f.attrs['gene_type']
         if 'source' in f.attrs:
             self.attrs['source'] = f.attrs['source']
         else:

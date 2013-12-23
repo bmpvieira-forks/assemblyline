@@ -7,7 +7,7 @@ import sys
 import argparse
 import logging
 
-from assemblyline.utils.gtf_merge2 import Feature
+from assemblyline.utils.gtf_merge import Feature
 
 def genepred_to_gtf(bed_file, source=None):
     # read all features
