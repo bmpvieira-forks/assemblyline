@@ -95,11 +95,8 @@ def main():
     # parse transcripts
     num_transcripts = 0
     # keep track of redundant gene/transcript counts
-    gene_count = collections.defaultdict(lambda: 1)
-    transcript_count = collections.defaultdict(lambda: 1)
-    t_id_map = {}
-    g_id_map = {}
-        
+    gene_name_count = collections.defaultdict(lambda: collections.Counter())
+    transcript_count = collections.Counter()
     for transcripts in parse_gtf(open(gtf_file)):
         for t in transcripts:
             catstr = t.attrs['category']
@@ -126,8 +123,8 @@ def main():
             # get gene category
             gene_category = GENCODE_CATEGORY_MAP[new_gene_type]
             new_gene_name = None
-            # build new gene name
             if rename:
+                # build new gene name                
                 ref_gene_name = t.attrs['ref_gene_name']
                 if ref_gene_name == 'None':
                     new_gene_name = str(t.attrs['source'])
@@ -135,34 +132,21 @@ def main():
                     new_gene_name = str(ref_gene_name)
                 else:
                     new_gene_name = '%s.%s' % (ref_gene_name, catstr)
+                # resolve upper/lower case issue with gene names from 
+                # different databases
+                new_gene_name = new_gene_name.upper()
+                # gene name string is key to a dictionary that
+                # counts the number of occurrences of each gene id
+                # with this name
                 gene_id = t.attrs['gene_id']
-                t_id = t.attrs['transcript_id']
-                
-    t_id_map = {}
-    g_id_map = {}
-    tss_id_map = {}
-    for feature in GTFFeature.parse(open(args.gtf_file)):
-        t_id = feature.attrs['transcript_id']
-        g_id = feature.attrs['gene_id']
-        tss_id = feature.attrs['tss_id']
-        if t_id not in t_id_map:
-            new_t_id = "T%06d" % (cur_t_id)
-            t_id_map[t_id] = new_t_id
-            cur_t_id += 1
-        else:
-            new_t_id = t_id_map[t_id]
-        if g_id not in g_id_map:
-            new_g_id = "G%06d" % (cur_g_id)
-            g_id_map[g_id] = new_g_id
-            cur_g_id += 1
-        else:                
-                
-                gene_num = gene_count[new_gene_name]
-                gene_count[new_gene_name] += 1
-                new_gene_name = '%s.%d' % (new_gene_name, gene_num)
-                transcript_num = transcript_count[new_gene_name]
-                transcript_count[new_gene_name] += 1
-                new_gene_name = '%s.%d' % (new_gene_name, transcript_num)
+                gene_name_count[new_gene_name].update((gene_id,))
+                gene_num = gene_name_count[new_gene_name][gene_id]
+                # the gene id is a key to a dictionary that counts
+                # isoforms of the same gene
+                transcript_count.update((gene_id,))
+                t_num = transcript_count[gene_id]
+                # append gene/transcript integers to gene name
+                new_gene_name = '%s.%d.%d' % (new_gene_name, gene_num, t_num)
             # write new attributes
             for f in t.to_gtf_features(source='assemblyline', score=1000):
                 f.attrs['gene_type'] = new_gene_type
