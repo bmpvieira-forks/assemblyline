@@ -14,7 +14,7 @@ import logging
 import argparse
 import collections
 
-from assemblyline.lib.gtf import GTFFeature
+# project imports
 from assemblyline.lib.base import Category
 from assemblyline.lib.transcript import parse_gtf
 
@@ -31,7 +31,7 @@ PROTEIN_CATEGORY_MAP = {Category.OPP_STRAND: 'antisense',
                         Category.INTERLEAVING_OPP_STRAND: 'antisense',
                         Category.INTERGENIC: 'lincRNA'}
 
-# Map GENCODE gene type to categories
+# Map GENCODE gene type to overarching categories
 GENCODE_CATEGORY_MAP = {'IG_C_gene': 'protein_coding',
                      'IG_D_gene': 'protein_coding',
                      'IG_J_gene': 'protein_coding',
@@ -95,8 +95,8 @@ def main():
     # parse transcripts
     num_transcripts = 0
     # keep track of redundant gene/transcript counts
-    gene_name_count = collections.defaultdict(lambda: collections.Counter())
-    transcript_count = collections.Counter()
+    gene_map = collections.defaultdict(lambda: {})
+    transcript_map = collections.defaultdict(lambda: {})
     for transcripts in parse_gtf(open(gtf_file)):
         for t in transcripts:
             catstr = t.attrs['category']
@@ -124,27 +124,34 @@ def main():
             gene_category = GENCODE_CATEGORY_MAP[new_gene_type]
             new_gene_name = None
             if rename:
+                # resolve upper/lower case issue with gene names from 
+                # different databases
+                ref_gene_name = t.attrs['ref_gene_name'].upper()
                 # build new gene name                
-                ref_gene_name = t.attrs['ref_gene_name']
-                if ref_gene_name == 'None':
+                if ref_gene_name == 'NONE':
                     new_gene_name = str(t.attrs['source'])
                 elif catint == Category.SAME_STRAND:
                     new_gene_name = str(ref_gene_name)
                 else:
                     new_gene_name = '%s.%s' % (ref_gene_name, catstr)
-                # resolve upper/lower case issue with gene names from 
-                # different databases
-                new_gene_name = new_gene_name.upper()
                 # gene name string is key to a dictionary that
-                # counts the number of occurrences of each gene id
-                # with this name
+                # associates each gene id with an integer number
                 gene_id = t.attrs['gene_id']
-                gene_name_count[new_gene_name].update((gene_id,))
-                gene_num = gene_name_count[new_gene_name][gene_id]
-                # the gene id is a key to a dictionary that counts
-                # isoforms of the same gene
-                transcript_count.update((gene_id,))
-                t_num = transcript_count[gene_id]
+                gene_dict = gene_map[new_gene_name]
+                if gene_id not in gene_dict:
+                    gene_num = len(gene_dict) + 1
+                    gene_dict[gene_id] = gene_num
+                else:
+                    gene_num = gene_dict[gene_id]
+                # gene id is also key to dict that associates each isoform
+                # of gene with integer number
+                t_id = t.attrs['transcript_id']
+                t_dict = transcript_map[gene_id]
+                if t_id not in t_dict:
+                    t_num = len(t_dict) + 1
+                    t_dict[t_id] = t_num
+                else:
+                    t_num = t_dict[t_id]
                 # append gene/transcript integers to gene name
                 new_gene_name = '%s.%d.%d' % (new_gene_name, gene_num, t_num)
             # write new attributes
