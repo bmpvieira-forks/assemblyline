@@ -33,13 +33,20 @@ from assemblyline.lib.bx.intersection import Interval, IntervalTree
 from assemblyline.lib.bx.cluster import ClusterTree
 from assemblyline.lib.base import Category, GTFAttr
 from assemblyline.lib.gtf import GTFFeature, sort_gtf
-from assemblyline.lib.transcript import cmp_strand, parse_gtf, strand_int_to_str, NO_STRAND, POS_STRAND, NEG_STRAND
+from assemblyline.lib.transcript import cmp_strand, parse_gtf, \
+    strand_int_to_str, NO_STRAND, POS_STRAND, NEG_STRAND
 from assemblyline.lib.assemble.transcript_graph import \
     find_exon_boundaries, split_exons
 
 # for nearest transcripts calculation
 MAX_LOCUS_DIST = 100000000
 
+class CompareData(object):
+    __slots__ = ('has_ref', 'has_test', 'category')
+    def __init__(self):
+        self.has_ref = False
+        self.has_test = False
+        self.category = None
 
 class GlobalStats(object):
     FIELDS = ('introns_both', 'introns_ref_only', 'introns_test_only',
@@ -49,13 +56,9 @@ class GlobalStats(object):
     def __init__(self):
         for field in GlobalStats.FIELDS:
             setattr(self, field, 0)
-        
-    def __add__(self, x):
-        z = GlobalStats()
-        for f in GlobalStats.FIELDS:
-            val = getattr(self, f) + getattr(x, f)
-            setattr(z, f, val)
-        return z
+        self.introns_by_category = collections.defaultdict(lambda: 0)
+        self.patterns_by_category = collections.defaultdict(lambda: 0)
+        self.cov_by_category = collections.defaultdict(lambda: 0)
 
     def report(self):
         # print stats report
@@ -80,6 +83,12 @@ class GlobalStats(object):
                  "cov_test_only=%d" % (self.cov_test_only),
                  "cov_precision=%f" % (self.cov_both / float(max(1,self.cov_both + self.cov_test_only))),
                  "cov_recall=%f" % (self.cov_both / float(max(1,self.cov_both + self.cov_ref_only)))]
+        for k in sorted(self.introns_by_category):
+            lines.append("introns %s=%d" % (k,self.introns_by_category[k]))
+        for k in sorted(self.patterns_by_category):
+            lines.append("patterns %s=%d" % (k,self.patterns_by_category[k]))
+        for k in sorted(self.cov_by_category):
+            lines.append("cov %s=%d" % (k,self.cov_by_category[k]))
         return '\n'.join(lines)
 
     @staticmethod
@@ -104,13 +113,7 @@ class GlobalStats(object):
             self.cov_test_only = int(f.next().split('=')[1])
         return self
 
-    @staticmethod
-    def compute(transcripts):
-        class CompareData(object):
-            __slots__ = ('has_ref', 'has_test')
-            def __init__(self):
-                self.has_ref = False
-                self.has_test = False
+    def compute(self, transcripts):
         intron_dict = collections.defaultdict(lambda: CompareData())
         node_dict = collections.defaultdict(lambda: CompareData())
         splicing_pattern_dict = collections.defaultdict(lambda: CompareData())
@@ -127,18 +130,30 @@ class GlobalStats(object):
             # nodes in the transcript path
             for n in split_exons(t, boundaries):
                 n = (t.strand, n[0], n[1])
-                node_dict[n].has_ref |= is_ref
-                node_dict[n].has_test |= (not is_ref)
+                if is_ref:
+                    node_dict[n].has_ref = True
+                else:
+                    d = node_dict[n]
+                    d.has_test = True
+                    d.category = t.attrs['category']
             splicing_pattern = []
             for start,end in t.iterintrons():
                 n = (t.strand, start, end)
-                intron_dict[n].has_ref |= is_ref
-                intron_dict[n].has_test |= (not is_ref)
+                if is_ref:
+                    intron_dict[n].has_ref = True
+                else:
+                    d = intron_dict[n]
+                    d.has_test = True
+                    d.category = t.attrs['category']
                 splicing_pattern.append(n)
             splicing_pattern = tuple(splicing_pattern)
             if len(splicing_pattern) > 0:
-                splicing_pattern_dict[splicing_pattern].has_ref |= is_ref
-                splicing_pattern_dict[splicing_pattern].has_test |= (not is_ref)
+                if is_ref:
+                    splicing_pattern_dict[splicing_pattern].has_ref = True
+                else:
+                    d = splicing_pattern_dict[splicing_pattern]
+                    d.has_test = True
+                    d.category = t.attrs['category']
         # handle unstranded transcripts
         for t in unstranded_transcripts:
             # separate ref and nonref transcripts
@@ -148,42 +163,53 @@ class GlobalStats(object):
                 for strand in (POS_STRAND, NEG_STRAND):
                     sn = (strand, n[0], n[1])
                     if sn in node_dict:
-                        node_dict[sn].has_ref |= is_ref
-                        node_dict[sn].has_test |= (not is_ref)
+                        if is_ref:
+                            node_dict[sn].has_ref = True
+                        else:
+                            d = node_dict[sn]
+                            d.has_test = True
+                            d.category = t.attrs['category']
                         found_node = True
                 if not found_node:
                     sn = (NO_STRAND, n[0], n[1])
-                    node_dict[sn].has_ref |= is_ref
-                    node_dict[sn].has_test |= (not is_ref)
+                    if is_ref:
+                        node_dict[sn].has_ref = True
+                    else:
+                        d = node_dict[sn]
+                        d.has_test = True
+                        d.category = t.attrs['category']
             introns = list(t.iterintrons())
             assert len(introns) == 0
         # compile statistics
-        self = GlobalStats()
         for d in intron_dict.itervalues():
             if d.has_ref and d.has_test:
                 self.introns_both += 1
+                self.introns_by_category[d.category] += 1
             elif d.has_ref:
                 self.introns_ref_only += 1
             elif d.has_test:
                 self.introns_test_only += 1
+                self.introns_by_category[d.category] += 1
         for d in splicing_pattern_dict.itervalues():
             if d.has_ref and d.has_test:
                 self.patterns_both += 1
+                self.patterns_by_category[d.category] += 1
             elif d.has_ref:
                 self.patterns_ref_only += 1
             elif d.has_test:
                 self.patterns_test_only += 1
+                self.patterns_by_category[d.category] += 1
         for n,d in node_dict.iteritems():
             strand, start, end = n
             length = end - start
             if d.has_ref and d.has_test:
                 self.cov_both += length
+                self.cov_by_category[d.category] += length
             elif d.has_ref:
                 self.cov_ref_only += length
             elif d.has_test:
                 self.cov_test_only += length
-        return self
-
+                self.cov_by_category[d.category] += length
 
 class Match(object):
     def __init__(self):
@@ -244,7 +270,7 @@ class MatchStats(object):
             elif 'transcript_name' in ref.attrs:
                 self.ref_gene_name = ref.attrs['transcript_name']
             else:
-                raise KeyError("'gene_name' or 'transcript_name' attribute missing from reference")
+                self.ref_gene_name = self.ref_gene_id
             if 'gene_type' in ref.attrs:
                 self.ref_gene_type = ref.attrs['gene_type']
             elif 'gene_biotype' in ref.attrs:                
@@ -252,7 +278,7 @@ class MatchStats(object):
             elif 'transcript_type' in ref.attrs:
                 self.ref_gene_type = ref.attrs['transcript_type']
             else:
-                raise KeyError("'gene_type' or 'gene_biotype' attribute missing from reference")
+                self.ref_gene_type = 'None'
         return self
 
     @staticmethod
@@ -424,6 +450,10 @@ def compare_locus(transcripts):
             match_stats.append(ms)
         # choose the best match
         best_match = MatchStats.choose_best(match_stats)
+        if best_match is None:
+            t.attrs['category'] = Category.to_str(Category.INTERGENIC)
+        else:
+            t.attrs['category'] = best_match.category
         yield (t, best_match, match_stats)
 
 def build_locus_trees(gtf_file):
@@ -561,15 +591,15 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
     intergenic_tmp_gtf_file = os.path.join(output_dir, 'intergenic.tmp.gtf')
     overlapping_file = os.path.join(output_dir, 'overlapping.tsv')
     overlapping_best_file = os.path.join(output_dir, 'overlapping.best.tsv')
-    overlapping_stats_file = os.path.join(output_dir, 'overlapping.stats.txt')
     overlapping_done_file = os.path.join(output_dir, 'overlapping.done')
+    stats_file = os.path.join(output_dir, 'stats.txt')
+    stats_obj = GlobalStats()
     if not os.path.exists(overlapping_done_file):
         logging.info("Comparing assemblies")
         gtf_fileh = open(overlapping_gtf_file, 'w')
         tmp_gtf_fileh = open(intergenic_tmp_gtf_file, 'w')
         overlapping_fileh = open(overlapping_file, 'w')
         overlapping_best_fileh = open(overlapping_best_file, 'w')
-        stats_obj = GlobalStats()
         for locus_transcripts in parse_gtf(open(merged_sorted_gtf_file)):
             locus_chrom = locus_transcripts[0].chrom
             locus_start = locus_transcripts[0].start
@@ -593,9 +623,10 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
                     print >>overlapping_best_fileh, str(best_match)
                     for ms in match_stats:
                         print >>overlapping_fileh, str(ms)
-            stats_obj += GlobalStats.compute(locus_transcripts)
-        logging.info("Reporting overlapping statistics")    
-        with open(overlapping_stats_file, "w") as f:
+            # compute global statistics
+            stats_obj.compute(locus_transcripts)
+        logging.info("Reporting global statistics")
+        with open(stats_file, 'w') as f:
             print >>f, stats_obj.report()
         gtf_fileh.close()
         tmp_gtf_fileh.close()
@@ -606,7 +637,6 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
     intergenic_gtf_file = os.path.join(output_dir, 'intergenic.gtf')
     intergenic_file = os.path.join(output_dir, 'intergenic.tsv')
     intergenic_best_file = os.path.join(output_dir, 'intergenic.best.tsv')
-    intergenic_stats_file = os.path.join(output_dir, 'intergenic.stats.txt')
     intergenic_done_file = os.path.join(output_dir, 'intergenic.done')
     if not os.path.exists(intergenic_done_file):
         logging.info("Building interval index")
@@ -615,9 +645,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
         gtf_fileh = open(intergenic_gtf_file, 'w')
         intergenic_fileh = open(intergenic_file, 'w')
         intergenic_best_fileh = open(intergenic_best_file, 'w')
-        stats_obj = GlobalStats()
         for locus_transcripts in parse_gtf(open(intergenic_tmp_gtf_file)):
-            stats_obj += GlobalStats.compute(locus_transcripts)
             for t in locus_transcripts:
                 # find nearest transcripts
                 nearest_transcripts = find_nearest_transcripts(t.chrom, t.start, t.end, t.strand, locus_trees)
@@ -647,10 +675,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
                 # write tab-delimited data
                 print >>intergenic_best_fileh, str(best_match)
                 for ms in match_stats:
-                    print >>intergenic_fileh, str(ms)                    
-        logging.info("Reporting intergenic statistics")    
-        with open(intergenic_stats_file, "w") as f:
-            print >>f, stats_obj.report()
+                    print >>intergenic_fileh, str(ms)
         gtf_fileh.close()
         intergenic_fileh.close()
         intergenic_best_fileh.close()
@@ -660,7 +685,6 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
     metadata_file = os.path.join(output_dir, 'metadata.txt')
     metadata_best_file = os.path.join(output_dir, 'metadata.best.txt')
     assembly_gtf_file = os.path.join(output_dir, 'assembly.cmp.gtf')
-    stats_file = os.path.join(output_dir, 'stats.txt')
     combine_done_file = os.path.join(output_dir, 'done')
     if not os.path.exists(combine_done_file):
         filenames = [overlapping_file, intergenic_file]
@@ -683,11 +707,6 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
                 with open(fname) as infile:
                     for line in infile:
                         outfile.write(line)
-        stats_obj = GlobalStats.from_file(overlapping_stats_file)
-        stats_obj += GlobalStats.from_file(intergenic_stats_file)
-        logging.info("Reporting global statistics")    
-        with open(stats_file, "w") as f:
-            print >>f, stats_obj.report()
         open(combine_done_file, 'w').close()
     # cleanup
     logging.info("Done")
