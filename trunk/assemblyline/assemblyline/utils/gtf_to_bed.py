@@ -43,6 +43,7 @@ def main():
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     # parse command line
     parser = argparse.ArgumentParser()
+    parser.add_argument('-g', dest='gene_id', action='store_true', default=False)
     parser.add_argument('gtf_file')
     args = parser.parse_args()
     # check command line parameters
@@ -50,9 +51,11 @@ def main():
         parser.error("gtf file %s not found" % (args.gtf_file))
     for transcripts in parse_gtf(open(args.gtf_file)):
         for t in transcripts:
-            gene_id = t.attrs['gene_id']
-            t_id = t.attrs['transcript_id']
-            fields = write_bed(t.chrom, '%s|%s' % (gene_id,t_id), t.strand, 1000, t.exons)
+            if args.gene_id:
+                name = '%s|%s' % (t.attrs['gene_id'], t.attrs['transcript_id'])
+            else:
+                name = t.attrs['transcript_id']
+            fields = write_bed(t.chrom, name, t.strand, 1000, t.exons)
             print '\t'.join(fields)
     return 0
 

@@ -32,6 +32,9 @@ def main():
         locus_start = min(t.start for t in locus_transcripts)
         locus_end = max(t.end for t in locus_transcripts)
         print >>locus_fileh, '\t'.join([locus_chrom, str(locus_start), str(locus_end)])
+        logging.debug("[LOCUS] %s:%d-%d %d transcripts" % 
+                      (locus_chrom, locus_start, locus_end, 
+                       len(locus_transcripts)))
         # cluster locus exons
         cluster_tree = ClusterTree(0,1)
         for t in locus_transcripts:
@@ -42,9 +45,9 @@ def main():
         for start,end,indexes in cluster_tree.getregions():
             exon_clusters.append((start,end))
         # get intronic regions
-        e1 = exon_clusters[0]
+        e1 = exon_clusters[0]        
         for j in xrange(1, len(exon_clusters)):
-            e2 = exon_clusters[1]
+            e2 = exon_clusters[j]
             introns.add((locus_chrom, e1[1], e2[0]))
             e1 = e2
     locus_fileh.close()
