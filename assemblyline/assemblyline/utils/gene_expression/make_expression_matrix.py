@@ -11,7 +11,7 @@ import collections
 import re
 import numpy as np
 
-from assemblyline.lib.gtf import GTFFeature
+from assemblyline.utils.gtf_transcript_metadata import DEFAULT_GTF_ATTRS, get_gtf_metadata
 
 MAP_MASS_RE = re.compile(r'Normalized Map Mass: (.+)$')
 FPKMTuple = collections.namedtuple('FPKMTuple', 
@@ -30,60 +30,6 @@ GTF_ATTRS = ['transcript_id',
              'nearest_gene_ids']
 GTF_ATTRS_SET = set(GTF_ATTRS)
 NUM_SIG_FIGS = 2
-
-class TranscriptMetadata(object):
-    def __init__(self):
-        self.chrom = None
-        self.start = 0
-        self.end = 0
-        self.strand = '.'
-        self.num_exons = 0
-        self.length = 0
-        for attr in GTF_ATTRS:
-            setattr(self, attr, '')
-
-def get_gtf_metadata(gtf_file, metadata_file):
-    # read gtf file and group by gene
-    metadata_dict = {}
-    for feature in GTFFeature.parse(open(gtf_file)):
-        if feature.feature_type != "exon":
-            continue
-        t_id = feature.attrs["transcript_id"]
-        if t_id not in metadata_dict:
-            # instantiate new metadata
-            m = TranscriptMetadata()
-            m.chrom = feature.seqid
-            m.strand = feature.strand
-            m.start = feature.start
-            m.end = feature.end
-            for attr in GTF_ATTRS_SET:
-                setattr(m, attr, feature.attrs.get(attr, ''))
-            metadata_dict[t_id] = m
-        else:
-            m = metadata_dict[t_id]
-        # update metadata
-        m.start = feature.start if feature.start < m.start else m.start
-        m.end = feature.end if feature.end > m.end else m.end
-        m.length += (feature.end - feature.start)
-        m.num_exons += 1
-    fileh = open(metadata_file, 'w')
-    header_fields = ['tracking_id', 'locus', 'strand', 'num_exons', 'transcript_length'] + GTF_ATTRS
-    print >>fileh, '\t'.join(header_fields)
-    tracking_ids = sorted(metadata_dict)
-    lengths = []
-    for t_id in tracking_ids:
-        m = metadata_dict[t_id]
-        fields = [t_id,
-                  '%s:%d-%d' % (m.chrom, m.start, m.end),
-                  m.strand,
-                  m.num_exons,
-                  m.length]
-        lengths.append(m.length)
-        for attr in GTF_ATTRS:
-            fields.append(getattr(m, attr))
-        print >>fileh, '\t'.join(map(str, fields))
-    fileh.close()
-    return tracking_ids, lengths
 
 def get_cufflinks_map_mass(cufflinks_log_file):
     for line in open(cufflinks_log_file):
@@ -166,14 +112,22 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", dest="mode", choices=['htseq', 'cufflinks'],
                         default='htseq')
-    parser.add_argument('--omit', dest="omit_list",
-                        default="exon_number,score,frac")
+    grp = parser.add_mutually_exclusive_group()
+    grp.add_argument('--default', action='store_true')
+    grp.add_argument('-a', '--attr', dest='gtf_attrs', action='append')
     parser.add_argument('gtf_file')
     parser.add_argument('library_table')
     parser.add_argument('input_dir')
     parser.add_argument('output_dir')
     args = parser.parse_args()
+    gtf_file = args.gtf_file
     # check args
+    if args.gtf_attrs is not None:
+        gtf_attrs = args.gtf_attrs
+    elif args.default:
+        gtf_attrs = DEFAULT_GTF_ATTRS
+    else:
+        gtf_attrs = []
     if not os.path.exists(args.gtf_file):
         parser.error("GTF file '%s' not found" % (args.gtf_file))
     if not os.path.exists(args.library_table):
@@ -186,11 +140,25 @@ def main():
     pheno_file = os.path.join(output_dir, 'phenos.txt')
     metadata_file = os.path.join(output_dir, 'metadata.txt')
     # collect transcript metadata from GTF file
-    logging.info("Reading GTF file")
-    tracking_ids, transcript_lengths = get_gtf_metadata(args.gtf_file, metadata_file)
+    logging.info("Reading GTF attributes")
+    metadata_dict = get_gtf_metadata(gtf_file, gtf_attrs)
+    # output to file
+    logging.info("Writing metadata table")
+    tracking_ids = []
+    transcript_lengths = []
+    with open(metadata_file, 'w') as fileh:
+        header_fields = ['transcript_id', 'chrom', 'start', 'end', 'strand', 
+                         'num_exons', 'transcript_length'] + gtf_attrs
+        print >>fileh, '\t'.join(header_fields)
+        for t_id in sorted(metadata_dict):
+            m = metadata_dict[t_id]
+            fields = [t_id, m.chrom, m.start, m.end, m.strand, m.num_exons, m.length]
+            for attr in gtf_attrs:
+                fields.append(getattr(m, attr))
+            print >>fileh, '\t'.join(map(str,fields))
+            tracking_ids.append(t_id)
+            transcript_lengths.append(m.length)
     logging.info("\tfound %d transcripts" % (len(tracking_ids)))
-    # write transcript lengths
-    os.path.join(output_dir)
     # collect library ids and write phenotypes file
     logging.info("Reading library table file")
     library_ids, library_map_masses = get_library_metadata(args.library_table, args.input_dir, pheno_file)

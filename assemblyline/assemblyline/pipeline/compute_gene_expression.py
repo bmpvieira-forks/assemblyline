@@ -158,7 +158,7 @@ def cufflinks(lib, gtf_file, config):
             "--max-frag-multihits", 1,
             "--no-effective-length-correction",
             "--max-bundle-length", 5000000,
-            "--max-bundle-frags", 2000000,
+            "--max-bundle-frags", 20000000,
             lib.bam_file,
             "> %s 2>&1" % (log_file)]
     command = ' '.join(map(str, args))
