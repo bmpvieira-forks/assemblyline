@@ -3,88 +3,62 @@ Created on Jan 8, 2014
 
 @author: mkiyer
 '''
-'''
-Created on Nov 25, 2013
-
-@author: mkiyer
-'''
 import argparse
 import logging
 import subprocess
 import collections
 import os
+import pysam
 
 from assemblyline.lib.base import which
 from assemblyline.lib.transcript import parse_gtf
-from assemblyline.lib.gtf import sort_gtf
 
-def write_bed(chrom, name, strand, score, exons):
-    assert all(exons[0].start < x.start for x in exons[1:])
-    assert all(exons[-1].end > x.end for x in exons[:-1])
-    tx_start = exons[0].start
-    tx_end = exons[-1].end    
-    block_sizes = []
-    block_starts = []
-    for e in exons:
-        block_starts.append(e.start - tx_start)
-        block_sizes.append(e.end - e.start)        
-    # make bed fields
-    fields = [chrom, 
-              str(tx_start), 
-              str(tx_end),
-              str(name),
-              str(score),
-              strand_int_to_str(strand),
-              str(tx_start),
-              str(tx_start),
-              '0',
-              str(len(exons)),
-              ','.join(map(str,block_sizes)) + ',',
-              ','.join(map(str,block_starts)) + ',']
-    return fields
-
-class Interval(object):
-    def __init__(self):
-        self.gene_id = None
-        self.chrom = None
-        self.start = None
-        self.end = None
-
-def get_gene_intervals(transcripts):
-    gene_map = collections.defaultdict(lambda: Interval())
-    for t in transcripts:
-        gene_id = t.attrs["gene_id"]
-        if gene_id not in gene_map:
-            g = Interval()
-            g.gene_id = gene_id
-            g.chrom = t.chrom
-            g.start = t.start
-            g.end = t.end
-            gene_map[gene_id] = g
-        else:
-            g = gene_map[gene_id]
-        # update interval
-        g.start = min(g.start, t.start)
-        g.end = max(g.end, t.end)
-    for g in gene_map.itervalues():
-        yield g
+PFAM_FILES = ['Pfam-A.hmm',
+              'Pfam-A.hmm.dat',
+              'Pfam-A.hmm.h3f',
+              'Pfam-A.hmm.h3i',
+              'Pfam-A.hmm.h3m',
+              'Pfam-A.hmm.h3p',
+              'Pfam-B.hmm',
+              'Pfam-B.hmm.dat',
+              'Pfam-B.hmm.h3f',
+              'Pfam-B.hmm.h3i',
+              'Pfam-B.hmm.h3m',
+              'Pfam-B.hmm.h3p']
+def check_pfam_dir(path):
+    for pfam_file in PFAM_FILES:
+        if not os.path.exists(os.path.join(path, pfam_file)):
+            return False
+    return True
     
 def main():
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     parser = argparse.ArgumentParser()
+    parser.add_argument('--pfam', dest='pfam_dir')
+    parser.add_argument('--genome-fasta', dest='genome_fasta_file')
     parser.add_argument('gtf_file')
-    parser.add_argument('excl_file')
-    parser.add_argument('chrom_sizes')
-    parser.add_argument("output_prefix")
     args = parser.parse_args()
-    prefix = args.output_prefix
-    excl_file = args.excl_file
-    chrom_sizes_file = args.chrom_sizes
+    # get args
+    pfam_dir = args.pfam_dir
+    genome_fasta_file = args.genome_fasta_file
     gtf_file = args.gtf_file
     # check command line parameters
-    if which('bedtools') is None:
-        parser.error('bedtools binary not found in PATH')
+    if which('pfamscan.pl') is None:
+        parser.error("'pfamscan.pl' not found in PATH")
+    if which('hmmscan') is None:
+        parser.error("'hmmscan' not found in PATH")
+    if which('signalp') is None:
+        parser.error("'signalp' not found in PATH")
+    if not check_pfam_dir(pfam_dir):
+        parser.error("Required Pfam-A and Pfam-B files not found at '%s'" % (pfam_dir))
+    if not os.path.exists(genome_fasta_file):
+        parser.error("Genome FASTA file '%s' not found" % (genome_fasta_file))
+    if not os.path.exists(gtf_file):
+        parser.error("GTF file '%s' not found" % (gtf_file))
+
+    return
+
     if not os.path.exists(chrom_sizes_file):
         parser.error('chrom sizes file %s not found' % (chrom_sizes_file))
     gene_intervals_file = prefix + '.gene_intervals.bed'
@@ -144,11 +118,8 @@ def main():
                 for e in t.exons:
                     e.start = new_start + (e.start - orig_start)
                     e.end = new_start + (e.end - orig_start)
-                
-                fields = write_bed(t.chrom, t.attrs['transcript_id'], t.strand, 1000, t.exons)
-                print '\t'.join(fields)                
-                #for f in t.to_gtf_features(source='shuffle'):
-                #    print >>fileh, str(f)
+                for f in t.to_gtf_features(source='shuffle'):
+                    print >>fileh, str(f)
     logging.info("Sorting GTF file")
     sort_gtf(shuffled_gtf_file, sorted_shuffled_gtf_file)
 
