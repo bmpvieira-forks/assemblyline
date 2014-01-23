@@ -562,6 +562,11 @@ def protein_coding_potential(gtf_file, genome_fasta_file, pfam_dir,
                 print >>unique_orf_bed_fileh, '\t'.join(orfinfo.to_bed(bed_name))
             orfinfo.orf_id = orf_id
             print >>outfileh, '\t'.join(orfinfo.to_table())
+    # handle last fasta line
+    lines = to_fasta(orf_id, current_orf.strip('*'))
+    print >>orf_fasta_files[orf_file_index], lines
+    orf_fasta_sizes[orf_file_index] += 1
+    # cleanup
     unique_orf_bed_fileh.close()
     outfileh.close()
     for i in xrange(num_processes):
