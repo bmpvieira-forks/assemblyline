@@ -485,7 +485,7 @@ def protein_coding_potential(gtf_file, genome_fasta_file, pfam_dir,
     sorted_orf_id_file = os.path.join(tmp_dir, 'transcript_orfs.sortbyorf.txt')
     signalp_file = os.path.join(output_dir, 'signalp.txt')
     pfam_file = os.path.join(output_dir, 'pfam.txt')
-    merged_orf_id_file = os.path.join(tmp_dir, 'transcript_orfs.sortbyorf.merged.txt')
+    merged_orf_id_file = os.path.join(output_dir, 'transcript_orfs.sortbyorf.merged.txt')
     sorted_merged_orf_id_file = os.path.join(output_dir, 'transcript_orfs.sortbytranscript.merged.txt')
     # open output files
     orf_fileh = open(orf_file, 'w')
@@ -504,8 +504,8 @@ def protein_coding_potential(gtf_file, genome_fasta_file, pfam_dir,
             if (num_finished % 10000) == 0:
                 logging.debug('Processed %d transcripts' % (num_finished))
             num_finished += 1
-        if num_finished > 10000:
-            break
+#        if num_finished > 10000:
+#            break
     # cleanup
     orf_fileh.close()
     orf_bed_fileh.close()
