@@ -504,7 +504,7 @@ def protein_coding_potential(gtf_file, genome_fasta_file, pfam_dir,
             if (num_finished % 10000) == 0:
                 logging.debug('Processed %d transcripts' % (num_finished))
             num_finished += 1
-        if num_finished > 100:
+        if num_finished > 10000:
             break
     # cleanup
     orf_fileh.close()
