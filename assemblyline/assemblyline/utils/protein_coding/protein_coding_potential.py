@@ -468,8 +468,8 @@ def merge_results(orf_table_file, signalp_file, pfam_file, output_file):
                 fields.extend(pfam_fields)
                 print >>outfile, '\t'.join(fields)
 
-def protein_coding_potential(gtf_file, genome_fasta_file, pfam_dir, 
-                             output_dir, min_orf_length, num_processes):
+def orf_analysis(gtf_file, genome_fasta_file, pfam_dir, 
+                 output_dir, min_orf_length, num_processes):
     #
     # extract transcript DNA sequences, translate to protein, and
     # search for ORFs
@@ -504,8 +504,6 @@ def protein_coding_potential(gtf_file, genome_fasta_file, pfam_dir,
             if (num_finished % 10000) == 0:
                 logging.debug('Processed %d transcripts' % (num_finished))
             num_finished += 1
-#        if num_finished > 10000:
-#            break
     # cleanup
     orf_fileh.close()
     orf_bed_fileh.close()
@@ -569,8 +567,6 @@ def protein_coding_potential(gtf_file, genome_fasta_file, pfam_dir,
     # cleanup
     unique_orf_bed_fileh.close()
     outfileh.close()
-    for i in xrange(num_processes):
-        orf_fasta_files[i].close()
     # get fasta files with lines written
     orf_fasta_file_names = []
     for i in xrange(len(orf_fasta_files)):
@@ -610,28 +606,56 @@ def protein_coding_potential(gtf_file, genome_fasta_file, pfam_dir,
                key=sort_by_transcript_id,
                buffer_size=SORT_BUFFER_SIZE,
                tempdirs=[sort_tmp_dir])
-    shutil.rmtree(sort_tmp_dir)    
-    #
-    # determine transcripts with no Pfam/signalp hits
-    #
-    
-        
-    return
+    shutil.rmtree(sort_tmp_dir)
+    # cleanup
+    ref_fa.close()
+    return 0
 
-    # resolve transcripts that lack a Pfam domain or a signal peptide
-    translated_fasta_file = os.path.join(output_dir, 'translated_transcripts.fasta')
-    translated_fileh = open(translated_fasta_file, 'w')
+def full_transcript_analysis(gtf_file, genome_fasta_file, pfam_dir, 
+                             output_dir, num_processes):
+    # output files    
+    pfam_file = os.path.join(output_dir, 'full_length_pfam.txt')
+    # open genome fasta file
+    ref_fa = pysam.Fastafile(genome_fasta_file)
+    # convert transcripts to amino acid sequences and write to fasta file
+    logging.debug('Writing transcript amino acid sequences to FASTA file(s)')
+    tmp_dir = os.path.join(output_dir, 'tmp')
+    os.makedirs(tmp_dir)
+    fasta_prefix = os.path.join(tmp_dir, 'full')
+    fasta_files = []
+    fasta_sizes = []
+    for i in xrange(num_processes):
+        fasta_files.append(open('%s%d.fasta' % (fasta_prefix, i), 'w'))
+        fasta_sizes.append(0)
     num_finished = 1
+    fasta_file_index = 0
     for locus_transcripts in parse_gtf(open(gtf_file)):
         for t in locus_transcripts:
-            # TODO: check if transcript is unresolved
+            # get amino acid sequences in all reading frames
+            aa_seqs = translate_transcript(t, ref_fa)
             for frame, aa_seq in enumerate(aa_seqs):
                 lines = to_fasta('%s|frame=%d' % (t.attrs['transcript_id'], frame), aa_seq)
-                print >>translated_fileh, lines    
+                print >>fasta_files[fasta_file_index], lines
+            fasta_sizes[fasta_file_index] += 1
+            fasta_file_index = (fasta_file_index + 1) % num_processes
+            if (num_finished % 10000) == 0:
+                logging.debug('Processed %d transcripts' % (num_finished))
+            num_finished += 1
+    # get fasta files with lines written
+    fasta_file_names = []
+    for i in xrange(len(fasta_files)):
+        fasta_files[i].close()
+        if fasta_sizes[i] > 0:
+            fasta_file_names.append(fasta_files[i].name)  
     # cleanup
-    translated_fileh.close()
     ref_fa.close()
-
+    #
+    # search FASTA file against Pfam
+    #
+    logging.error('Scanning for Pfam domains')
+    retcode = run_pfam(fasta_file_names, pfam_dir, pfam_file, tmp_dir)
+    if retcode != 0:
+        logging.error('Error running pfam_scan.pl')
 
 def main():
     logging.basicConfig(level=logging.DEBUG,
@@ -642,6 +666,7 @@ def main():
     parser.add_argument('--min-orf-length', dest='min_orf_length', type=int, default=30)
     parser.add_argument('-o', '--output-dir', dest='output_dir', default='out')
     parser.add_argument('-p', '--num-processes', dest='num_processes', type=int, default=1)
+    parser.add_argument('--mode', dest='mode', choices=['orf', 'full'], default='orf')
     parser.add_argument('gtf_file')
     args = parser.parse_args()
     # get args
@@ -651,6 +676,7 @@ def main():
     min_orf_length = args.min_orf_length
     num_processes = args.num_processes
     output_dir = args.output_dir
+    mode = args.mode
     # check command line parameters
     if which('pfam_scan.pl') is None:
         parser.error("'pfamscan.pl' not found in PATH")
@@ -668,16 +694,12 @@ def main():
         parser.error("Output directory '%s' already exists" % (output_dir))
     # create output dir
     os.makedirs(output_dir)
-
-    #sorted_orf_id_table_file = os.path.join(output_dir, 'transcript_orf_table.sortbyorf.orf_ids.txt')
-    #signalp_file = os.path.join(output_dir, 'signalp.txt')
-    #pfam_file = os.path.join(output_dir, 'pfam.txt')
-    #output_file = 'test.out'
-    #merge_results(sorted_orf_id_table_file, signalp_file, pfam_file, output_file)
-    #return 0
-    
-    protein_coding_potential(gtf_file, genome_fasta_file, pfam_dir, 
-                             output_dir, min_orf_length, num_processes)
+    if mode == 'orf':    
+        return orf_analysis(gtf_file, genome_fasta_file, pfam_dir, 
+                            output_dir, min_orf_length, num_processes)
+    else:
+        return full_transcript_analysis(gtf_file, genome_fasta_file, 
+                                        pfam_dir, output_dir, num_processes)
     return 0
 
 
