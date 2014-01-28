@@ -641,8 +641,6 @@ def full_transcript_analysis(gtf_file, genome_fasta_file, pfam_dir,
             if (num_finished % 10000) == 0:
                 logging.debug('Processed %d transcripts' % (num_finished))
             num_finished += 1
-        if num_finished > 100:
-            break
     # get fasta files with lines written
     fasta_file_names = []
     for i in xrange(len(fasta_files)):
