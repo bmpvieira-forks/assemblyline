@@ -641,6 +641,8 @@ def full_transcript_analysis(gtf_file, genome_fasta_file, pfam_dir,
             if (num_finished % 10000) == 0:
                 logging.debug('Processed %d transcripts' % (num_finished))
             num_finished += 1
+        if num_finished > 100:
+            break
     # get fasta files with lines written
     fasta_file_names = []
     for i in xrange(len(fasta_files)):
@@ -652,10 +654,12 @@ def full_transcript_analysis(gtf_file, genome_fasta_file, pfam_dir,
     #
     # search FASTA file against Pfam
     #
-    logging.error('Scanning for Pfam domains')
+    logging.debug('Scanning for Pfam domains')
     retcode = run_pfam(fasta_file_names, pfam_dir, pfam_file, tmp_dir)
     if retcode != 0:
         logging.error('Error running pfam_scan.pl')
+        return retcode
+    return 0
 
 def main():
     logging.basicConfig(level=logging.DEBUG,
@@ -679,7 +683,7 @@ def main():
     mode = args.mode
     # check command line parameters
     if which('pfam_scan.pl') is None:
-        parser.error("'pfamscan.pl' not found in PATH")
+        parser.error("'pfam_scan.pl' not found in PATH")
     if which('hmmscan') is None:
         parser.error("'hmmscan' not found in PATH")
     if which('signalp') is None:
