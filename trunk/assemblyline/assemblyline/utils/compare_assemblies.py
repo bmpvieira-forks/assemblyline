@@ -238,6 +238,12 @@ class MatchStats(object):
             fields.append(getattr(self, field))
         return '\t'.join(map(str,fields))
 
+    def copy(self):
+        other = MatchStats()
+        for field in MatchStats.header_fields():
+            setattr(other, field, getattr(self,field))
+        return other
+
     def add_gtf_attributes(self, feature):
         attrs = ['ref_transcript_id', 'ref_gene_id', 'ref_orig_gene_id', 
                  'ref_gene_name', 'ref_source', 'ref_gene_type', 
@@ -283,10 +289,7 @@ class MatchStats(object):
 
     @staticmethod
     def choose_best(lst):
-        if len(lst) == 0:
-            return None
         hits = []
-        same_strand_gene_ids = set()
         for m in lst:
             total_introns = m.num_introns + m.ref_num_introns
             if total_introns == 0:
@@ -295,26 +298,84 @@ class MatchStats(object):
                 intron_frac = float(m.shared_introns) / (total_introns - m.shared_introns)
             same_strand_frac = float(m.shared_same_strand_bp) / (m.length + m.ref_length - m.shared_same_strand_bp)
             opp_strand_frac = float(m.shared_opp_strand_bp) / (m.length + m.ref_length - m.shared_opp_strand_bp)
+            category_int = Category.to_int(m.category)
             hits.append((int(m.shared_splicing), intron_frac, 
                          same_strand_frac, opp_strand_frac, 
-                         int(m.category == Category.INTRONIC_SAME_STRAND),
-                         int(m.category == Category.INTRONIC_OPP_STRAND),                                 
-                         int(m.category == Category.INTERLEAVING_SAME_STRAND),
-                         int(m.category == Category.INTERLEAVING_OPP_STRAND),
-                         int(m.category == Category.ENCOMPASSING_SAME_STRAND),
-                         int(m.category == Category.ENCOMPASSING_OPP_STRAND),                                                         
-                         int(m.category == Category.INTERGENIC),                                                         
+                         int(category_int == Category.INTRONIC_SAME_STRAND),
+                         int(category_int == Category.INTRONIC_OPP_STRAND),                                 
+                         int(category_int == Category.INTERLEAVING_SAME_STRAND),
+                         int(category_int == Category.INTERLEAVING_OPP_STRAND),
+                         int(category_int == Category.ENCOMPASSING_SAME_STRAND),
+                         int(category_int == Category.ENCOMPASSING_OPP_STRAND),                                                         
+                         int(category_int == Category.INTERGENIC),                                                         
                          -abs(m.distance), m))
-            # check for read through transcripts enumerating the 
-            # same strand gene ids
-            if m.category == Category.SAME_STRAND:
-                same_strand_gene_ids.add(m.ref_gene_id)
         # sort matches
         hits.sort(reverse=True)
         hit = hits[0][-1]
-        if (hit.category == Category.SAME_STRAND) and (len(same_strand_gene_ids) > 1):
-            hit.category = Category.READ_THROUGH
         return hit
+
+    @staticmethod
+    def sort_genome(lst):
+        poslst = []
+        strands = []
+        for m in lst:
+            chrom, startend = m.ref_locus[:-3].split(':')
+            strands.append(m.ref_locus[-2])
+            start, end = map(int, startend.split('-'))
+            poslst.append((chrom, start, end, m))
+        reverse = any(x == '-' for x in strands)
+        poslst.sort(key=operator.itemgetter(0,1,2), reverse=reverse)
+        return [x[3] for x in poslst]
+    
+    @staticmethod
+    def consensus(lst):
+        if len(lst) == 0:
+            return None
+        # first check for read through transcripts involving multiple 
+        # reference genes
+        same_strand_hits = collections.defaultdict(lambda: [])
+        for m in lst:
+            category_int = Category.to_int(m.category)
+            if category_int == Category.SAME_STRAND:
+                same_strand_hits[m.ref_gene_id].append(m)
+        if len(same_strand_hits) <= 1:
+            # not a read through
+            hit = MatchStats.choose_best(lst)
+        else:           
+            # choose best match from each read-through gene
+            total_introns = lst[0].num_introns
+            total_length = lst[0].length
+            shared_introns = 0
+            shared_same_strand_bp = 0
+            hits = []
+            for genelst in same_strand_hits.itervalues():
+                m = MatchStats.choose_best(genelst)
+                total_introns += m.ref_num_introns
+                total_length += m.ref_length
+                shared_introns += m.shared_introns
+                shared_same_strand_bp += m.shared_same_strand_bp
+                hits.append(m)
+            # sort reference genes by position
+            hits = MatchStats.sort_genome(hits)
+            # make a new MatchStats object
+            hit = hits[0].copy()
+            hit.ref_transcript_id = ','.join(x.ref_transcript_id for x in hits)
+            hit.ref_gene_id = ','.join(x.ref_gene_id for x in hits)
+            hit.ref_orig_gene_id = ','.join(x.ref_orig_gene_id for x in hits)
+            hit.ref_gene_name = ','.join(x.ref_gene_name for x in hits)
+            hit.ref_source = ','.join(x.ref_source for x in hits)
+            hit.ref_gene_type = ','.join(x.ref_gene_type for x in hits)
+            hit.ref_locus = ','.join(x.ref_locus for x in hits)
+            hit.ref_length = ','.join(str(x.ref_length) for x in hits)
+            hit.ref_num_introns = ','.join(str(x.ref_num_introns) for x in hits)
+            hit.shared_same_strand_bp = shared_same_strand_bp
+            hit.shared_opp_strand_bp = 0
+            hit.shared_introns = shared_introns
+            hit.shared_splicing = any(m.shared_splicing for m in hits)
+            hit.distance = 0
+            hit.category = Category.to_str(Category.READ_THROUGH)            
+        return hit
+        
 
 def compare_locus(transcripts):
     # store reference introns
@@ -424,8 +485,6 @@ def compare_locus(transcripts):
                 assert num_opp_strand == 0
                 num_intronic = (num_intronic_same_strand +
                                 num_intronic_opp_strand)
-                #print t.attrs[GTFAttr.TRANSCRIPT_ID], ref_id, 'num_nodes', len(nodes), 'same strand', num_same_strand, 'opp', num_opp_strand, 'intronic same s', num_intronic_same_strand, 'intronic opp', num_intronic_opp_strand
-                #print t.attrs[GTFAttr.TRANSCRIPT_ID], ref_id, 'nodes', nodes
                 assert num_intronic > 0
                 if (num_intronic == len(nodes)):
                     # completely intronic
@@ -448,13 +507,7 @@ def compare_locus(transcripts):
             ms.category = Category.to_str(c)            
             ms.distance = 0
             match_stats.append(ms)
-        # choose the best match
-        best_match = MatchStats.choose_best(match_stats)
-        if best_match is None:
-            t.attrs['category'] = Category.to_str(Category.INTERGENIC)
-        else:
-            t.attrs['category'] = best_match.category
-        yield (t, best_match, match_stats)
+        yield (t, match_stats)
 
 def build_locus_trees(gtf_file):
     transcripts = []
@@ -590,7 +643,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
     overlapping_gtf_file = os.path.join(output_dir, 'overlapping.gtf')
     intergenic_tmp_gtf_file = os.path.join(output_dir, 'intergenic.tmp.gtf')
     overlapping_file = os.path.join(output_dir, 'overlapping.tsv')
-    overlapping_best_file = os.path.join(output_dir, 'overlapping.best.tsv')
+    overlapping_consensus_file = os.path.join(output_dir, 'overlapping.consensus.tsv')
     overlapping_done_file = os.path.join(output_dir, 'overlapping.done')
     stats_file = os.path.join(output_dir, 'stats.txt')
     stats_obj = GlobalStats()
@@ -599,7 +652,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
         gtf_fileh = open(overlapping_gtf_file, 'w')
         tmp_gtf_fileh = open(intergenic_tmp_gtf_file, 'w')
         overlapping_fileh = open(overlapping_file, 'w')
-        overlapping_best_fileh = open(overlapping_best_file, 'w')
+        overlapping_consensus_fileh = open(overlapping_consensus_file, 'w')
         for locus_transcripts in parse_gtf(open(merged_sorted_gtf_file)):
             locus_chrom = locus_transcripts[0].chrom
             locus_start = locus_transcripts[0].start
@@ -607,20 +660,23 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
             logging.debug("[LOCUS] %s:%d-%d %d transcripts" % 
                           (locus_chrom, locus_start, locus_end, 
                            len(locus_transcripts)))
-            for t, best_match, match_stats in compare_locus(locus_transcripts):
-                features = t.to_gtf_features(source='assembly')
+            for t, match_stats in compare_locus(locus_transcripts):
                 if len(match_stats) == 0:
                     # write intergenic transcripts to analyze separately
-                    for f in features:
+                    t.attrs['category'] = Category.to_str(Category.INTERGENIC)
+                    for f in t.to_gtf_features(source='assembly'):
                         print >>tmp_gtf_fileh, str(f)
                 else:
-                    assert best_match is not None
+                    # get consensus match information
+                    consensus_match = MatchStats.consensus(match_stats)                    
+                    assert consensus_match is not None
+                    t.attrs['category'] = consensus_match.category
                     # add gtf attributes and write
-                    for f in features:
-                        best_match.add_gtf_attributes(f)
+                    for f in t.to_gtf_features(source='assembly'):
+                        consensus_match.add_gtf_attributes(f)
                         print >>gtf_fileh, str(f)
                     # tab-delimited text output
-                    print >>overlapping_best_fileh, str(best_match)
+                    print >>overlapping_consensus_fileh, str(consensus_match)
                     for ms in match_stats:
                         print >>overlapping_fileh, str(ms)
             # compute global statistics
@@ -631,7 +687,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
         gtf_fileh.close()
         tmp_gtf_fileh.close()
         overlapping_fileh.close()
-        overlapping_best_fileh.close()
+        overlapping_consensus_fileh.close()
         open(overlapping_done_file, 'w').close()
     # resolve intergenic transcripts
     intergenic_gtf_file = os.path.join(output_dir, 'intergenic.gtf')
@@ -666,7 +722,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
                         ms.category = Category.to_str(category)
                         ms.distance = dist
                         match_stats.append(ms)
-                    # choose the best match
+                    # choose the consensus match
                     best_match = MatchStats.choose_best(match_stats)
                 # add gtf attributes and write
                 for f in t.to_gtf_features(source='assembly'):
@@ -683,7 +739,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
     # merge overlapping and intergenic results
     logging.info('Merging results')
     metadata_file = os.path.join(output_dir, 'metadata.txt')
-    metadata_best_file = os.path.join(output_dir, 'metadata.best.txt')
+    metadata_consensus_file = os.path.join(output_dir, 'metadata.consensus.txt')
     assembly_gtf_file = os.path.join(output_dir, 'assembly.cmp.gtf')
     combine_done_file = os.path.join(output_dir, 'done')
     if not os.path.exists(combine_done_file):
@@ -694,8 +750,8 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
                 with open(fname) as infile:
                     for line in infile:
                         outfile.write(line)
-        filenames = [overlapping_best_file, intergenic_best_file]
-        with open(metadata_best_file, 'w') as outfile:
+        filenames = [overlapping_consensus_file, intergenic_best_file]
+        with open(metadata_consensus_file, 'w') as outfile:
             print >>outfile, '\t'.join(MatchStats.header_fields())
             for fname in filenames:
                 with open(fname) as infile:

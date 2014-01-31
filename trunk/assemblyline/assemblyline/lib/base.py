@@ -62,13 +62,15 @@ class Category(object):
     INTERGENIC = 6
     NUM_CATEGORIES = 7
     CATEGORIES = range(0, NUM_CATEGORIES)
-    # only used when comparing against a "reference" assembly and
-    # a gene overlaps multiple genes in the SAME_STRAND category
+
+    # used when comparing assemblies
     INTERLEAVING_SAME_STRAND = 8
     INTERLEAVING_OPP_STRAND = 9
     ENCOMPASSING_SAME_STRAND = 10
     ENCOMPASSING_OPP_STRAND = 11
+    # used when a gene overlaps multiple independent genes in the SAME_STRAND category
     READ_THROUGH = 12
+
     # groups of categories
     INTRONIC_LIKE = set([INTRONIC_SAME_STRAND, INTRONIC_AMBIGUOUS])
     INTERGENIC_LIKE = set([OPP_STRAND, INTRONIC_OPP_STRAND, INTERLEAVING, 
