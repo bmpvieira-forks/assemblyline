@@ -9,7 +9,6 @@ import argparse
 import logging
 import subprocess
 import itertools
-import collections
 import shutil
 from multiprocessing import Process, Queue
 

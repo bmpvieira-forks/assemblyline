@@ -81,6 +81,84 @@ GENCODE_CATEGORY_MAP = {'IG_C_gene': 'protein_coding',
                      'unitary_pseudogene': 'pseudogene', 
                      'unprocessed_pseudogene': 'pseudogene'} 
 
+def impute_transcript_type(catint, length, gene_type, ref_gene_type):
+    if catint == Category.SAME_STRAND:
+        # impute gene type
+        transcript_type = ref_gene_type
+    else:
+        if gene_type == 'protein_coding':
+            # don't change protein coding genes
+            transcript_type = gene_type
+        elif length < 250:
+            # categorize small RNA separately
+            transcript_type = 'misc_RNA'
+        else:
+            if ref_gene_type == 'protein_coding':
+                # categorize based on overlap with reference
+                transcript_type = PROTEIN_CATEGORY_MAP[catint]
+            else:
+                # reference is also non-coding
+                transcript_type = 'lincRNA'
+    return transcript_type    
+
+def impute_transcript(t, gene_map, transcript_map):
+    catstr = t.attrs['category']
+    catint = Category.to_int(catstr)
+    length = t.length
+    gene_type = t.attrs.get('gene_type', None)
+    ref_gene_type = t.attrs['ref_gene_type']
+    if catint == Category.READ_THROUGH:
+        # in the case of read throughs ref_gene_type will be multiple 
+        # gene types separated by commas. convert into a set of 
+        # unique gene types
+        ref_gene_types = set(ref_gene_type.split(','))
+        transcript_types = set(impute_transcript_type(Category.SAME_STRAND, length, gene_type, x) for x in ref_gene_types)
+        transcript_categories = set(GENCODE_CATEGORY_MAP[x] for x in transcript_types)
+        # sorted and join unique types/categories to make conglomerated category assignments 
+        transcript_type = ','.join(sorted(transcript_types))
+        transcript_category = ','.join(sorted(transcript_categories))
+        # use first gene in read-through for name
+        #ref_gene_name = t.attrs['ref_gene_name'].split(',')[0]
+        # hyphenate read-through genes into long name
+        ref_gene_name = '-'.join(t.attrs['ref_gene_name'].split(','))
+    else:
+        # get transcript classifications
+        transcript_type = impute_transcript_type(catint, length, gene_type, ref_gene_type)
+        transcript_category = GENCODE_CATEGORY_MAP[transcript_type]
+        ref_gene_name = t.attrs['ref_gene_name']
+    # resolve upper/lower case issue with gene names from 
+    # different databases
+    transcript_name = ref_gene_name.upper()
+    # build transcript name
+    if transcript_name == 'NONE':
+        transcript_name = str(t.chrom)
+    # append category
+    if catint != Category.SAME_STRAND:
+        transcript_name = '%s.%s' % (transcript_name, catstr)
+    # transcript name string is key to a dictionary that
+    # associates each gene id with an integer number
+    gene_id = t.attrs['gene_id']
+    gene_dict = gene_map[transcript_name]
+    if gene_id not in gene_dict:
+        gene_num = len(gene_dict) + 1
+        gene_dict[gene_id] = gene_num
+    else:
+        gene_num = gene_dict[gene_id]
+    # append gene integers to name
+    transcript_name = '%s.%d' % (transcript_name, gene_num)
+    # gene id is also key to dict that associates each isoform
+    # of gene with integer number
+    t_id = t.attrs['transcript_id']
+    t_dict = transcript_map[transcript_name]
+    if t_id not in t_dict:
+        t_num = len(t_dict) + 1
+        t_dict[t_id] = t_num
+    else:
+        t_num = t_dict[t_id]
+    # append gene/transcript integers to gene name
+    transcript_name = '%s.%d' % (transcript_name, t_num)
+    return transcript_type, transcript_category, transcript_name
+
 def main():
     logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -97,65 +175,12 @@ def main():
     transcript_map = collections.defaultdict(lambda: {})
     for transcripts in parse_gtf(open(gtf_file)):
         for t in transcripts:
-            catstr = t.attrs['category']
-            catint = Category.to_int(catstr)
-            gene_type = t.attrs.get('gene_type', None)
-            ref_gene_type = t.attrs['ref_gene_type']
-            if catint == Category.SAME_STRAND:
-                # impute gene type
-                transcript_type = ref_gene_type
-            else:
-                if gene_type == 'protein_coding':
-                    # don't change protein coding genes
-                    transcript_type = gene_type
-                elif t.length < 250:
-                    # categorize small RNA separately
-                    transcript_type = 'misc_RNA'
-                else:
-                    if ref_gene_type == 'protein_coding':
-                        # categorize based on overlap with reference
-                        transcript_type = PROTEIN_CATEGORY_MAP[catint]
-                    else:
-                        # reference is also non-coding
-                        transcript_type = 'lincRNA'
-            # get gene category
-            transcript_category = GENCODE_CATEGORY_MAP[transcript_type]
-            # resolve upper/lower case issue with gene names from 
-            # different databases
-            transcript_name = t.attrs['ref_gene_name'].upper()
-            # build transcript name
-            if transcript_name == 'NONE':
-                transcript_name = str(t.chrom)
-            # append category
-            if catint != Category.SAME_STRAND:
-                transcript_name = '%s.%s' % (transcript_name, catstr)
-            # transcript name string is key to a dictionary that
-            # associates each gene id with an integer number
-            gene_id = t.attrs['gene_id']
-            gene_dict = gene_map[transcript_name]
-            if gene_id not in gene_dict:
-                gene_num = len(gene_dict) + 1
-                gene_dict[gene_id] = gene_num
-            else:
-                gene_num = gene_dict[gene_id]
-            # append gene integers to name
-            transcript_name = '%s.%d' % (transcript_name, gene_num)
-            # gene id is also key to dict that associates each isoform
-            # of gene with integer number
-            t_id = t.attrs['transcript_id']
-            t_dict = transcript_map[transcript_name]
-            if t_id not in t_dict:
-                t_num = len(t_dict) + 1
-                t_dict[t_id] = t_num
-            else:
-                t_num = t_dict[t_id]
-            # append gene/transcript integers to gene name
-            transcript_name = '%s.%d' % (transcript_name, t_num)
+            ttype, tcat, tname = impute_transcript(t, gene_map, transcript_map)
             # write new attributes
             for f in t.to_gtf_features(source='assemblyline', score=1000):
-                f.attrs['transcript_type'] = transcript_type
-                f.attrs['transcript_category'] = transcript_category 
-                f.attrs['transcript_name'] = transcript_name        
+                f.attrs['transcript_type'] = ttype
+                f.attrs['transcript_category'] = tcat 
+                f.attrs['transcript_name'] = tname
                 print str(f)
             num_transcripts += 1
     return 0

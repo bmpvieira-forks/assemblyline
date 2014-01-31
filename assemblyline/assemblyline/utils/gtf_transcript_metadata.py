@@ -10,25 +10,33 @@ import sys
 
 from assemblyline.lib.gtf import GTFFeature
 
+# DEFAULT_GTF_ATTRS = ['gene_id', 
+#                      'tss_id', 
+#                      'transcript_name', 
+#                      'transcript_category', 
+#                      'transcript_type', 
+#                      'ref_transcript_id', 
+#                      'ref_orig_gene_id', 
+#                      'ref_locus',
+#                      'ref_source',
+#                      'ref_gene_name',
+#                      'ref_gene_type',
+#                      'ref_length',
+#                      'ref_num_introns',
+#                      'category',
+#                      'distance',
+#                      'shared_same_strand_bp',
+#                      'shared_opp_strand_bp',
+#                      'shared_introns',
+#                      'shared_splicing']
+
 DEFAULT_GTF_ATTRS = ['gene_id', 
                      'tss_id', 
                      'transcript_name', 
                      'transcript_category', 
                      'transcript_type', 
-                     'ref_transcript_id', 
-                     'ref_orig_gene_id', 
-                     'ref_locus',
-                     'ref_source',
-                     'ref_gene_name',
-                     'ref_gene_type',
-                     'ref_length',
-                     'ref_num_introns',
                      'category',
-                     'distance',
-                     'shared_same_strand_bp',
-                     'shared_opp_strand_bp',
-                     'shared_introns',
-                     'shared_splicing']
+                     'distance']
 
 class TranscriptMetadata(object):
     def __init__(self, gtf_attrs=None):
