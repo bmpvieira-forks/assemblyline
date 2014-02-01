@@ -299,6 +299,22 @@ def get_transcript_orfs(t, aa_seqs, min_orf_length):
             orfinfo.seq = orf
             yield orfinfo
 
+def group_unique_orfs(line_iter):
+    cur_orfs = []
+    num_unique_orfs = 1
+    cur_orf_id = ORFInfo.make_orf_id(num_unique_orfs)
+    for line in line_iter:
+        orf = ORFInfo.from_table(line)
+        if (len(cur_orfs) > 0) and (cur_orfs[0].seq != orf.seq):
+            yield cur_orfs
+            cur_orfs = []
+            num_unique_orfs += 1
+            cur_orf_id = ORFInfo.make_orf_id(num_unique_orfs)
+        orf.orf_id = cur_orf_id
+        cur_orfs.append(orf)
+    if len(cur_orfs) > 0:
+        yield cur_orfs
+
 def run_signalp(fasta_files, output_file, tmp_dir):
     def _consumer(worker_index, worker_fasta_file, output_queue):
         # process with signalp
@@ -476,8 +492,11 @@ def orf_analysis(gtf_file, genome_fasta_file, pfam_dir,
     logging.debug('Finding ORFs in transcript sequences')
     # output files
     tmp_dir = os.path.join(output_dir, 'tmp')
-    os.makedirs(tmp_dir)
+    if not os.path.exists(tmp_dir):
+        logging.info("Creating tmp directory '%s'" % (tmp_dir))
+        os.makedirs(tmp_dir)
     orf_bed_file = os.path.join(output_dir, 'transcript_orfs.bed')
+    unique_orf_file = os.path.join(output_dir, 'unique_orfs.txt')
     unique_orf_bed_file = os.path.join(output_dir, 'unique_orfs.bed')
     orf_file = os.path.join(tmp_dir, 'transcript_orfs.no_ids.txt')
     sorted_orf_file = os.path.join(tmp_dir, 'transcript_orfs.no_ids.sortbyorf.txt')
@@ -533,36 +552,34 @@ def orf_analysis(gtf_file, genome_fasta_file, pfam_dir,
     for i in xrange(num_processes):
         orf_fasta_files.append(open('%s%d.fasta' % (orf_fasta_prefix, i), 'w'))
         orf_fasta_sizes.append(0)
-    outfileh = open(sorted_orf_id_file, 'w')
-    unique_orf_bed_fileh = open(unique_orf_bed_file, 'w')
-    num_orfs = 1
-    orf_id = ORFInfo.make_orf_id(num_orfs)
-    current_orf = None
     orf_file_index = 0
+    outfileh = open(sorted_orf_id_file, 'w')
+    unique_orf_fileh = open(unique_orf_file, 'w')
+    print >>unique_orf_fileh, '\t'.join(['orf_id', 'orf_length', 'total_occurrences', 'unique_genomic_occurrences'])
+    unique_orf_bed_fileh = open(unique_orf_bed_file, 'w')
     with open(sorted_orf_file) as infileh:
-        for line in infileh:
-            orfinfo = ORFInfo.from_table(line)
-            if current_orf != orfinfo.seq:
-                if current_orf != None:
-                    # write ORF to fasta file
-                    lines = to_fasta(orf_id, current_orf.strip('*'))
-                    print >>orf_fasta_files[orf_file_index], lines
-                    orf_fasta_sizes[orf_file_index] += 1
-                    # move to next fasta file
-                    orf_file_index = (orf_file_index + 1) % (num_processes)
-                    # increment orf id
-                    num_orfs += 1
-                    orf_id = ORFInfo.make_orf_id(num_orfs)
-                current_orf = orfinfo.seq
-                # output unique ORFs to BED
-                bed_name = '%s|length=%d' % (orf_id, len(current_orf))
-                print >>unique_orf_bed_fileh, '\t'.join(orfinfo.to_bed(bed_name))
-            orfinfo.orf_id = orf_id
-            print >>outfileh, '\t'.join(orfinfo.to_table())
-    # handle last fasta line
-    lines = to_fasta(orf_id, current_orf.strip('*'))
-    print >>orf_fasta_files[orf_file_index], lines
-    orf_fasta_sizes[orf_file_index] += 1
+        for orfs in group_unique_orfs(infileh):
+            # write to master transcript/ORF table
+            for orf in orfs:
+                print >>outfileh, '\t'.join(orfinfo.to_table())
+            # write ORF to fasta file
+            lines = to_fasta(orfs[0].orf_id, orfs[0].seq.strip('*'))
+            print >>orf_fasta_files[orf_file_index], lines
+            orf_fasta_sizes[orf_file_index] += 1
+            # advance to next fasta file
+            orf_file_index = (orf_file_index + 1) % (num_processes)
+            # group by genomic position and write ORFs to BED file
+            unique_genome_orfs = {}
+            for orf in orfs:
+                k = (orf.chrom, orf.strand, tuple(orf.exons))
+                if k in unique_genome_orfs:
+                    continue
+                unique_genome_orfs[k] = orf
+            for orf in unique_genome_orfs.itervalues():
+                print >>unique_orf_bed_fileh, '\t'.join(orf.to_bed(orf.orf_id))
+            # write unique ORF to tab-delimited text file
+            fields = [orfs[0].orf_id, len(orfs[0].seq), len(orfs), len(unique_genome_orfs)]
+            print >>unique_orf_fileh, '\t'.join(map(str,fields))
     # cleanup
     unique_orf_bed_fileh.close()
     outfileh.close()
@@ -571,7 +588,7 @@ def orf_analysis(gtf_file, genome_fasta_file, pfam_dir,
     for i in xrange(len(orf_fasta_files)):
         orf_fasta_files[i].close()
         if orf_fasta_sizes[i] > 0:
-            orf_fasta_file_names.append(orf_fasta_files[i].name)    
+            orf_fasta_file_names.append(orf_fasta_files[i].name)
     #
     # search FASTA file against signalp
     #
@@ -691,10 +708,12 @@ def main():
         parser.error("Genome FASTA file '%s' not found" % (genome_fasta_file))
     if not os.path.exists(gtf_file):
         parser.error("GTF file '%s' not found" % (gtf_file))
-    if os.path.exists(output_dir):
-        parser.error("Output directory '%s' already exists" % (output_dir))
+    #if os.path.exists(output_dir):
+    #    parser.error("Output directory '%s' already exists" % (output_dir))
     # create output dir
-    os.makedirs(output_dir)
+    if not os.path.exists(output_dir):
+        logging.info("Creating output directory '%s'" % (output_dir))
+        os.makedirs(output_dir)
     if mode == 'orf':    
         return orf_analysis(gtf_file, genome_fasta_file, pfam_dir, 
                             output_dir, min_orf_length, num_processes)
