@@ -41,11 +41,15 @@ PFAM_FILES = ['Pfam-A.hmm',
               'Pfam-B.hmm.h3i',
               'Pfam-B.hmm.h3m',
               'Pfam-B.hmm.h3p']
+
 def check_pfam_dir(path):
     for pfam_file in PFAM_FILES:
         if not os.path.exists(os.path.join(path, pfam_file)):
             return False
     return True
+
+def to_fasta(name, seq):
+    return '>%s\n%s' % (name, seq)
 
 def parse_fasta_file(fasta_file):
     with open(fasta_file) as f:
@@ -277,10 +281,10 @@ def translate_transcript(t, ref_fa):
         aa_seqs = translate_dna_3frames(seq)
     return aa_seqs
 
-def to_fasta(name, seq):
-    return '>%s\n%s' % (name, seq)
-
-def get_transcript_orfs(t, aa_seqs, min_orf_length):
+def get_all_transcript_orfs(t, ref_fa, min_orf_length):
+    # get amino acid sequences in all reading frames
+    aa_seqs = translate_transcript(t, ref_fa)
+    # get ORFs
     for frame, aa_seq in enumerate(aa_seqs):
         for aa_start, aa_end, orf in find_orfs(aa_seq):
             if len(orf) < min_orf_length:
@@ -298,6 +302,67 @@ def get_transcript_orfs(t, aa_seqs, min_orf_length):
             orfinfo.exons = orf_exons
             orfinfo.seq = orf
             yield orfinfo
+
+def get_first_transcript_orf(t, ref_fa):
+    def first_orf_to_genome(t, start, end):
+        reverse = (t.strand == NEG_STRAND)
+        g_orf_start = transcript_to_genome_pos(t, start, reverse)
+        g_orf_end = transcript_to_genome_pos(t, end, reverse)
+        if reverse:
+            g_orf_start, g_orf_end = g_orf_end, g_orf_start    
+        g_orf_end += 1 # end position is inclusive so adjust
+        orf_exons = genome_interval_to_exons(g_orf_start, g_orf_end, t)
+        return g_orf_start, g_orf_end, orf_exons
+
+    def translate_orf(seq):
+        aa_seq = []
+        for n in range(0, len(seq), 3):
+            codon = seq[n:n+3]
+            aa = GENETIC_CODE.get(codon, '.')
+            aa_seq.append(aa)
+            if aa == '*':
+                break
+        aa_seq = ''.join(aa_seq).rstrip('.')
+        return aa_seq
+    
+    def find_first_orf(t, ref_fa):
+        orf = ORFInfo()
+        orf.transcript_id = t.attrs['transcript_id']
+        orf.gene_id = t.attrs['gene_id']
+        orf.chrom = t.chrom
+        # get transcript sequence
+        seq = get_transcript_dna_sequence(t, ref_fa)
+        # find first ATG in sequence
+        start = seq.find('ATG')
+        if start == -1:
+            orf.start = t.start
+            orf.end = t.start
+            orf.strand = '.'
+            orf.exons = []
+            orf.seq = ''
+        else:
+            aa_seq = translate_orf(seq[start:])
+            end = start + 3 * len(aa_seq) - 1
+            orf_start, orf_end, orf_exons = \
+                orf_to_genome(t, start, end)
+            orf.start = orf_start
+            orf.end = orf_end
+            orf.strand = strand_int_to_str(t.strand)
+            orf.exons = orf_exons
+            orf.seq = aa_seq
+        return orf
+
+    if t.strand == NO_STRAND:
+        t.strand = POS_STRAND
+        orfpos = find_first_orf(t, ref_fa)
+        t.strand = NEG_STRAND
+        orfneg = find_first_orf(t, ref_fa)
+        if len(orfpos.seq) >= len(orfneg.seq):
+            return orfpos
+        else:
+            return orfneg 
+    else:
+        return find_first_orf(t, ref_fa)
 
 def group_unique_orfs(line_iter):
     cur_orfs = []
@@ -484,7 +549,8 @@ def merge_results(orf_table_file, signalp_file, pfam_file, output_file):
                 print >>outfile, '\t'.join(fields)
 
 def orf_analysis(gtf_file, genome_fasta_file, pfam_dir, 
-                 output_dir, min_orf_length, num_processes):
+                 output_dir, min_orf_length, first_orf_only, 
+                 num_processes):
     #
     # extract transcript DNA sequences, translate to protein, and
     # search for ORFs
@@ -513,12 +579,17 @@ def orf_analysis(gtf_file, genome_fasta_file, pfam_dir,
     num_finished = 1
     for locus_transcripts in parse_gtf(open(gtf_file)):
         for t in locus_transcripts:
-            # get amino acid sequences in all reading frames
-            aa_seqs = translate_transcript(t, ref_fa)
-            # get ORFs
-            for orfinfo in get_transcript_orfs(t, aa_seqs, min_orf_length):
-                print >>orf_fileh, '\t'.join(orfinfo.to_table())
-                print >>orf_bed_fileh, '\t'.join(orfinfo.to_bed())
+            if first_orf_only:
+                # get first ORF
+                orfinfo = get_first_transcript_orf(t, ref_fa)
+                if len(orfinfo.seq) >= min_orf_length:
+                    print >>orf_fileh, '\t'.join(orfinfo.to_table())
+                    print >>orf_bed_fileh, '\t'.join(orfinfo.to_bed())
+            else:
+                # get all ORFs
+                for orfinfo in get_all_transcript_orfs(t, ref_fa, min_orf_length):
+                    print >>orf_fileh, '\t'.join(orfinfo.to_table())
+                    print >>orf_bed_fileh, '\t'.join(orfinfo.to_bed())
             if (num_finished % 10000) == 0:
                 logging.debug('Processed %d transcripts' % (num_finished))
             num_finished += 1
@@ -684,7 +755,7 @@ def main():
     parser.add_argument('--min-orf-length', dest='min_orf_length', type=int, default=30)
     parser.add_argument('-o', '--output-dir', dest='output_dir', default='out')
     parser.add_argument('-p', '--num-processes', dest='num_processes', type=int, default=1)
-    parser.add_argument('--mode', dest='mode', choices=['orf', 'full'], default='orf')
+    parser.add_argument('--mode', dest='mode', choices=['orf', 'first_orf', 'full'], default='orf')
     parser.add_argument('gtf_file')
     args = parser.parse_args()
     # get args
@@ -714,12 +785,14 @@ def main():
     if not os.path.exists(output_dir):
         logging.info("Creating output directory '%s'" % (output_dir))
         os.makedirs(output_dir)
-    if mode == 'orf':    
-        return orf_analysis(gtf_file, genome_fasta_file, pfam_dir, 
-                            output_dir, min_orf_length, num_processes)
-    else:
+    if mode == 'full':
         return full_transcript_analysis(gtf_file, genome_fasta_file, 
                                         pfam_dir, output_dir, num_processes)
+    else:
+        first_orf_only = (mode == 'first_orf')
+        return orf_analysis(gtf_file, genome_fasta_file, pfam_dir, 
+                            output_dir, min_orf_length, first_orf_only, 
+                            num_processes)
     return 0
 
 

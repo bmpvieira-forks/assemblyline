@@ -5,7 +5,6 @@ Created on Jan 30, 2014
 '''
 import logging
 import argparse
-import os
 import sys
 
 from assemblyline.utils.conservation.base import BEDFeature
@@ -20,7 +19,6 @@ def main():
     args = parser.parse_args()
     bed_file = args.bed_file
     source = args.source
-    f_num = 1
     for x in BEDFeature.parse(open(bed_file)):
         f = GTFFeature()
         f.seqid = x.chrom
@@ -31,8 +29,8 @@ def main():
         f.score = x.score
         f.strand = x.strand
         f.phase = '.'
-        f.attrs = {'transcript_id': 'T%08d' % (f_num),
-                   'gene_id': 'G%08d' % (f_num)}
+        f.attrs = {'transcript_id': x.name,
+                   'gene_id': x.name}
         features = [f]
         for i,e in enumerate(x.exons):
             start, end = e
@@ -50,7 +48,6 @@ def main():
             features.append(f)
         for f in features:
             print str(f)
-        f_num += 1
 
 if __name__ == '__main__':
     sys.exit(main())
