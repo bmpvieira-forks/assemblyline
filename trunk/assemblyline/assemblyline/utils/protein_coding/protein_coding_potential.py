@@ -291,17 +291,17 @@ def get_all_transcript_orfs(t, ref_fa, min_orf_length):
                 continue
             orf_start, orf_end, orf_exons = \
                 orf_to_genome(t, frame, aa_start, aa_end)
-            orfinfo = ORFInfo()
-            orfinfo.transcript_id = t.attrs['transcript_id']
-            orfinfo.gene_id = t.attrs['gene_id']
-            orfinfo.frame = frame
-            orfinfo.chrom = t.chrom
-            orfinfo.start = orf_start
-            orfinfo.end = orf_end
-            orfinfo.strand = strand_int_to_str(t.strand)
-            orfinfo.exons = orf_exons
-            orfinfo.seq = orf
-            yield orfinfo
+            orf = ORFInfo()
+            orf.transcript_id = t.attrs['transcript_id']
+            orf.gene_id = t.attrs['gene_id']
+            orf.frame = frame
+            orf.chrom = t.chrom
+            orf.start = orf_start
+            orf.end = orf_end
+            orf.strand = strand_int_to_str(t.strand)
+            orf.exons = orf_exons
+            orf.seq = orf
+            yield orf
 
 def get_first_transcript_orf(t, ref_fa):
     def first_orf_to_genome(t, start, end):
@@ -538,14 +538,14 @@ def merge_results(orf_table_file, signalp_file, pfam_file, output_file):
             pfam_parser = SortedFileParser(open(pfam_file), key_col=0)
             signalp_parser = SortedFileParser(open(signalp_file), key_col=0)
             for line in infile:
-                orfinfo = ORFInfo.from_table(line)
-                signalp_fields = signalp_parser.seek(orfinfo.orf_id)
+                orf = ORFInfo.from_table(line)
+                signalp_fields = signalp_parser.seek(orf.orf_id)
                 if signalp_fields is None:
                     signalp_fields = ['None'] * len(SIGNALP_HEADER)
-                pfam_fields = pfam_parser.seek(orfinfo.orf_id)
+                pfam_fields = pfam_parser.seek(orf.orf_id)
                 if pfam_fields is None:
                     pfam_fields = ['None'] * len(PFAM_HEADER)
-                fields = orfinfo.to_table()
+                fields = orf.to_table()
                 fields.extend(signalp_fields)
                 fields.extend(pfam_fields)
                 print >>outfile, '\t'.join(fields)
@@ -583,15 +583,15 @@ def orf_analysis(gtf_file, genome_fasta_file, pfam_dir,
         for t in locus_transcripts:
             if first_orf_only:
                 # get first ORF
-                orfinfo = get_first_transcript_orf(t, ref_fa)
-                if len(orfinfo.seq) >= min_orf_length:
-                    print >>orf_fileh, '\t'.join(orfinfo.to_table())
-                    print >>orf_bed_fileh, '\t'.join(orfinfo.to_bed())
+                orf = get_first_transcript_orf(t, ref_fa)
+                if len(orf.seq) >= min_orf_length:
+                    print >>orf_fileh, '\t'.join(orf.to_table())
+                    print >>orf_bed_fileh, '\t'.join(orf.to_bed())
             else:
                 # get all ORFs
-                for orfinfo in get_all_transcript_orfs(t, ref_fa, min_orf_length):
-                    print >>orf_fileh, '\t'.join(orfinfo.to_table())
-                    print >>orf_bed_fileh, '\t'.join(orfinfo.to_bed())
+                for orf in get_all_transcript_orfs(t, ref_fa, min_orf_length):
+                    print >>orf_fileh, '\t'.join(orf.to_table())
+                    print >>orf_bed_fileh, '\t'.join(orf.to_bed())
             if (num_finished % 10000) == 0:
                 logging.debug('Processed %d transcripts' % (num_finished))
             num_finished += 1
@@ -634,7 +634,7 @@ def orf_analysis(gtf_file, genome_fasta_file, pfam_dir,
         for orfs in group_unique_orfs(infileh):
             # write to master transcript/ORF table
             for orf in orfs:
-                print >>outfileh, '\t'.join(orfinfo.to_table())
+                print >>outfileh, '\t'.join(orf.to_table())
             # write ORF to fasta file
             lines = to_fasta(orfs[0].orf_id, orfs[0].seq.strip('*'))
             print >>orf_fasta_files[orf_file_index], lines
