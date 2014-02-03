@@ -344,7 +344,7 @@ def get_first_transcript_orf(t, ref_fa):
             aa_seq = translate_orf(seq[start:])
             end = start + 3 * len(aa_seq) - 1
             orf_start, orf_end, orf_exons = \
-                orf_to_genome(t, start, end)
+                first_orf_to_genome(t, start, end)
             orf.start = orf_start
             orf.end = orf_end
             orf.strand = strand_int_to_str(t.strand)
