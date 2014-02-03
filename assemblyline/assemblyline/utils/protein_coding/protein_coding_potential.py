@@ -340,6 +340,7 @@ def get_first_transcript_orf(t, ref_fa):
             orf.strand = '.'
             orf.exons = []
             orf.seq = ''
+            orf.frame = 0
         else:
             aa_seq = translate_orf(seq[start:])
             end = start + 3 * len(aa_seq) - 1
@@ -350,6 +351,7 @@ def get_first_transcript_orf(t, ref_fa):
             orf.strand = strand_int_to_str(t.strand)
             orf.exons = orf_exons
             orf.seq = aa_seq
+            orf.frame = (start % 3)
         return orf
 
     if t.strand == NO_STRAND:
