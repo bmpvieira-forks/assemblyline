@@ -286,8 +286,8 @@ def get_all_transcript_orfs(t, ref_fa, min_orf_length):
     aa_seqs = translate_transcript(t, ref_fa)
     # get ORFs
     for frame, aa_seq in enumerate(aa_seqs):
-        for aa_start, aa_end, orf in find_orfs(aa_seq):
-            if len(orf) < min_orf_length:
+        for aa_start, aa_end, orf_seq in find_orfs(aa_seq):
+            if len(orf_seq) < min_orf_length:
                 continue
             orf_start, orf_end, orf_exons = \
                 orf_to_genome(t, frame, aa_start, aa_end)
@@ -300,7 +300,7 @@ def get_all_transcript_orfs(t, ref_fa, min_orf_length):
             orf.end = orf_end
             orf.strand = strand_int_to_str(t.strand)
             orf.exons = orf_exons
-            orf.seq = orf
+            orf.seq = orf_seq
             yield orf
 
 def get_first_transcript_orf(t, ref_fa):
