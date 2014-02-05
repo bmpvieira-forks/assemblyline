@@ -338,42 +338,44 @@ class MatchStats(object):
             category_int = Category.to_int(m.category)
             if category_int == Category.SAME_STRAND:
                 same_strand_hits[m.ref_gene_id].append(m)
-        if len(same_strand_hits) <= 1:
-            # not a read through
-            hit = MatchStats.choose_best(lst)
-        else:           
-            # choose best match from each read-through gene
-            total_introns = lst[0].num_introns
-            total_length = lst[0].length
-            shared_introns = 0
-            shared_same_strand_bp = 0
-            hits = []
-            for genelst in same_strand_hits.itervalues():
-                m = MatchStats.choose_best(genelst)
-                total_introns += m.ref_num_introns
-                total_length += m.ref_length
-                shared_introns += m.shared_introns
-                shared_same_strand_bp += m.shared_same_strand_bp
-                hits.append(m)
-            # sort reference genes by position
-            hits = MatchStats.sort_genome(hits)
-            # make a new MatchStats object
-            hit = hits[0].copy()
-            hit.ref_transcript_id = ','.join(x.ref_transcript_id for x in hits)
-            hit.ref_gene_id = ','.join(x.ref_gene_id for x in hits)
-            hit.ref_orig_gene_id = ','.join(x.ref_orig_gene_id for x in hits)
-            hit.ref_gene_name = ','.join(x.ref_gene_name for x in hits)
-            hit.ref_source = ','.join(x.ref_source for x in hits)
-            hit.ref_gene_type = ','.join(x.ref_gene_type for x in hits)
-            hit.ref_locus = ','.join(x.ref_locus for x in hits)
-            hit.ref_length = ','.join(str(x.ref_length) for x in hits)
-            hit.ref_num_introns = ','.join(str(x.ref_num_introns) for x in hits)
-            hit.shared_same_strand_bp = shared_same_strand_bp
-            hit.shared_opp_strand_bp = 0
-            hit.shared_introns = shared_introns
-            hit.shared_splicing = any(m.shared_splicing for m in hits)
-            hit.distance = 0
-            hit.category = Category.to_str(Category.READ_THROUGH)            
+        # no same strand matches so don't need to worry about
+        # read-throughs or multiple gene types
+        if len(same_strand_hits) == 0:
+            return MatchStats.choose_best(lst)
+        # get consensus match from same strand overlapping genes
+        total_introns = lst[0].num_introns
+        total_length = lst[0].length
+        shared_introns = 0
+        shared_same_strand_bp = 0
+        hits = []
+        for genelst in same_strand_hits.itervalues():
+            m = MatchStats.choose_best(genelst).copy()
+            m.ref_gene_type = ','.join(sorted(set(m.ref_gene_type for m in genelst)))           
+            total_introns += m.ref_num_introns
+            total_length += m.ref_length
+            shared_introns += m.shared_introns
+            shared_same_strand_bp += m.shared_same_strand_bp
+            hits.append(m)
+        # sort reference genes by position
+        hits = MatchStats.sort_genome(hits)
+        # make a new MatchStats object
+        hit = hits[0].copy()
+        hit.ref_transcript_id = ','.join(x.ref_transcript_id for x in hits)
+        hit.ref_gene_id = ','.join(x.ref_gene_id for x in hits)
+        hit.ref_orig_gene_id = ','.join(x.ref_orig_gene_id for x in hits)
+        hit.ref_gene_name = ','.join(x.ref_gene_name for x in hits)
+        hit.ref_source = ','.join(x.ref_source for x in hits)
+        hit.ref_gene_type = ','.join(x.ref_gene_type for x in hits)
+        hit.ref_locus = ','.join(x.ref_locus for x in hits)
+        hit.ref_length = ','.join(str(x.ref_length) for x in hits)
+        hit.ref_num_introns = ','.join(str(x.ref_num_introns) for x in hits)
+        hit.shared_same_strand_bp = shared_same_strand_bp
+        hit.shared_opp_strand_bp = 0
+        hit.shared_introns = shared_introns
+        hit.shared_splicing = any(m.shared_splicing for m in hits)
+        hit.distance = 0
+        if len(same_strand_hits) > 1:
+            hit.category = Category.to_str(Category.READ_THROUGH)
         return hit
         
 
