@@ -82,7 +82,8 @@ GENCODE_CATEGORY_MAP = {'IG_C_gene': 'protein_coding',
                      'unprocessed_pseudogene': 'pseudogene'} 
 
 def impute_transcript_type(catint, length, gene_type, ref_gene_type):
-    if catint == Category.SAME_STRAND:
+    if (catint == Category.SAME_STRAND or
+        catint == Category.READ_THROUGH):
         # impute gene type
         transcript_type = ref_gene_type
     else:
@@ -110,7 +111,7 @@ def impute_transcript(t, gene_map, transcript_map):
     # ref_gene_type can be  be multiple gene types separated by commas. 
     # convert into a set of unique gene types
     ref_gene_types = set(ref_gene_type.split(','))
-    transcript_types = set(impute_transcript_type(Category.SAME_STRAND, length, gene_type, x) for x in ref_gene_types)
+    transcript_types = set(impute_transcript_type(catint, length, gene_type, x) for x in ref_gene_types)
     transcript_categories = set(GENCODE_CATEGORY_MAP[x] for x in transcript_types)
     # sorted and join unique types/categories to make conglomerated category assignments 
     transcript_type = ','.join(sorted(transcript_types))
@@ -119,25 +120,6 @@ def impute_transcript(t, gene_map, transcript_map):
     #ref_gene_name = t.attrs['ref_gene_name'].split(',')[0]
     # hyphenate read-through genes into long name
     ref_gene_name = '-'.join(t.attrs['ref_gene_name'].split(','))
-#     if catint == Category.READ_THROUGH:
-#         # in the case of read throughs ref_gene_type will be multiple 
-#         # gene types separated by commas. convert into a set of 
-#         # unique gene types
-#         ref_gene_types = set(ref_gene_type.split(','))
-#         transcript_types = set(impute_transcript_type(Category.SAME_STRAND, length, gene_type, x) for x in ref_gene_types)
-#         transcript_categories = set(GENCODE_CATEGORY_MAP[x] for x in transcript_types)
-#         # sorted and join unique types/categories to make conglomerated category assignments 
-#         transcript_type = ','.join(sorted(transcript_types))
-#         transcript_category = ','.join(sorted(transcript_categories))
-#         # use first gene in read-through for name
-#         #ref_gene_name = t.attrs['ref_gene_name'].split(',')[0]
-#         # hyphenate read-through genes into long name
-#         ref_gene_name = '-'.join(t.attrs['ref_gene_name'].split(','))
-#     else:
-#         # get transcript classifications
-#         transcript_type = impute_transcript_type(catint, length, gene_type, ref_gene_type)
-#         transcript_category = GENCODE_CATEGORY_MAP[transcript_type]
-#         ref_gene_name = t.attrs['ref_gene_name']
     # resolve upper/lower case issue with gene names from 
     # different databases
     transcript_name = ref_gene_name.upper()

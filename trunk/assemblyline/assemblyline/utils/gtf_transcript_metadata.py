@@ -10,25 +10,25 @@ import sys
 
 from assemblyline.lib.gtf import GTFFeature
 
-# DEFAULT_GTF_ATTRS = ['gene_id', 
-#                      'tss_id', 
-#                      'transcript_name', 
-#                      'transcript_category', 
-#                      'transcript_type', 
-#                      'ref_transcript_id', 
-#                      'ref_orig_gene_id', 
-#                      'ref_locus',
-#                      'ref_source',
-#                      'ref_gene_name',
-#                      'ref_gene_type',
-#                      'ref_length',
-#                      'ref_num_introns',
-#                      'category',
-#                      'distance',
-#                      'shared_same_strand_bp',
-#                      'shared_opp_strand_bp',
-#                      'shared_introns',
-#                      'shared_splicing']
+FULL_GTF_ATTRS = ['gene_id', 
+                  'tss_id', 
+                  'transcript_name', 
+                  'transcript_category', 
+                  'transcript_type', 
+                  'ref_transcript_id', 
+                  'ref_orig_gene_id', 
+                  'ref_locus',
+                  'ref_source',
+                  'ref_gene_name',
+                  'ref_gene_type',
+                  'ref_length',
+                  'ref_num_introns',
+                  'category',
+                  'distance',
+                  'shared_same_strand_bp',
+                  'shared_opp_strand_bp',
+                  'shared_introns',
+                  'shared_splicing']
 
 DEFAULT_GTF_ATTRS = ['gene_id', 
                      'tss_id', 
@@ -87,6 +87,7 @@ def main():
     parser = argparse.ArgumentParser()
     grp = parser.add_mutually_exclusive_group()
     grp.add_argument('--default', action='store_true')
+    grp.add_argument('--full', action='store_true')    
     grp.add_argument('-a', '--attr', dest='gtf_attrs', action='append')
     parser.add_argument('gtf_file')
     args = parser.parse_args()
@@ -97,6 +98,8 @@ def main():
         gtf_attrs = args.gtf_attrs
     elif args.default:
         gtf_attrs = DEFAULT_GTF_ATTRS
+    elif args.full:
+        gtf_attrs = FULL_GTF_ATTRS
     else:
         gtf_attrs = []
     # collect transcript metadata from GTF file
