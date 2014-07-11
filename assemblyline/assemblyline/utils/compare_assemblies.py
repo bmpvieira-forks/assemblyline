@@ -649,6 +649,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
     overlapping_done_file = os.path.join(output_dir, 'overlapping.done')
     stats_file = os.path.join(output_dir, 'stats.txt')
     stats_obj = GlobalStats()
+    num_intergenic = 0
     if not os.path.exists(overlapping_done_file):
         logging.info("Comparing assemblies")
         gtf_fileh = open(overlapping_gtf_file, 'w')
@@ -668,6 +669,7 @@ def compare_assemblies(ref_gtf_file, test_gtf_file, output_dir):
                     t.attrs['category'] = Category.to_str(Category.INTERGENIC)
                     for f in t.to_gtf_features(source='assembly'):
                         print >>tmp_gtf_fileh, str(f)
+                    num_intergenic += 1
                 else:
                     # get consensus match information
                     consensus_match = MatchStats.consensus(match_stats)                    

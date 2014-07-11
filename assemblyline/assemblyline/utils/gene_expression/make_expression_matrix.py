@@ -112,6 +112,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", dest="mode", choices=['htseq', 'cufflinks'],
                         default='htseq')
+    parser.add_argument("--fpkm", dest='fpkm', action='store_true', default=False)
     grp = parser.add_mutually_exclusive_group()
     grp.add_argument('--default', action='store_true')
     grp.add_argument('-a', '--attr', dest='gtf_attrs', action='append')
@@ -121,6 +122,8 @@ def main():
     parser.add_argument('output_dir')
     args = parser.parse_args()
     gtf_file = args.gtf_file
+    report_fpkm = args.fpkm
+    output_dir = args.output_dir
     # check args
     if args.gtf_attrs is not None:
         gtf_attrs = args.gtf_attrs
@@ -134,7 +137,6 @@ def main():
         parser.error("Library table file '%s' not found" % (args.library_table))
     if not os.path.exists(args.input_dir):
         parser.error("Input directory '%s' not found" % (args.input_dir))
-    output_dir = args.output_dir
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     pheno_file = os.path.join(output_dir, 'phenos.txt')
@@ -170,25 +172,28 @@ def main():
         isoform_fpkm_file = os.path.join(args.input_dir, library_id, 'isoforms.fpkm_tracking')
         fpkm = get_isoform_fpkm_data(isoform_fpkm_file)
         fpkm = np.array([fpkm.get(x,np.nan) for x in tracking_ids], dtype='float32')
-        # convert to raw counts
-        map_mass = library_map_masses[j]
-        counts = fpkm_to_counts(fpkm, transcript_lengths, map_mass)        
-        mat[:,j] = counts
+        if report_fpkm:
+            mat[:,j] = fpkm
+        else:
+            # convert to raw counts
+            map_mass = library_map_masses[j]
+            counts = fpkm_to_counts(fpkm, transcript_lengths, map_mass)        
+            mat[:,j] = counts
     # write matrix and transpose to file
     logging.info('Writing memmap')
-    matrix_file = os.path.join(args.output_dir, 'isoform_counts.mmap')
+    matrix_file = os.path.join(args.output_dir, 'isoform_expression.mmap')
     fp = np.memmap(matrix_file, dtype='float32', mode='w+', 
                    shape=(len(tracking_ids),len(library_ids)))
     fp[:] = mat[:]
     del fp
     logging.info('Writing transpose memmap')
-    matrix_file = os.path.join(output_dir, 'isoform_counts.transpose.mmap')
+    matrix_file = os.path.join(output_dir, 'isoform_expression.transpose.mmap')
     fp = np.memmap(matrix_file, dtype='float32', mode='w+', 
                    shape=(len(library_ids),len(tracking_ids)))
     fp[:] = mat.T[:]
     # write to file
     logging.info("Writing to tab-delimited text file")
-    fileh = open(os.path.join(output_dir, 'isoform_counts.txt'), 'w')
+    fileh = open(os.path.join(output_dir, 'isoform_expression.txt'), 'w')
     header_fields = ['tracking_id']
     header_fields.extend(library_ids)
     print >>fileh, '\t'.join(header_fields)    
